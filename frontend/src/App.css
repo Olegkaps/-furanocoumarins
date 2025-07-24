@@ -1,42 +1,41 @@
 #root {
-  max-width: 1280px;
+  width: 80%;
   margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
 }
 
 .card {
-  padding: 2em;
+  width: 100%;
 }
 
-.read-the-docs {
-  color: #888;
+.main_form {
+  width: 100%;
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.main_form *:hover,
+.main_form *:focus,
+.main_form *:focus-visible,
+.main_form *:active {
+  border-color: blanchedalmond;
+}
+
+.search-teaxtarea {
+  width: 100%;
+  color: black;
+  font-size: 100%;
+  font-family: Arial;
+  font-size-adjust: auto;
+  background: linear-gradient(to right, pink, magenta);
+  border-color: antiquewhite;
+  border-radius: 3%;
+  margin: 0, auto;
+  height: 2em;
+  padding-left: 2%;
+}
+
+.search-submit {
+  width: 5%;
+  background-color: lightgreen;
+  border-color: beige;
 }
