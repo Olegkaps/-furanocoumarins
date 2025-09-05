@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: main-proxy
+spec:
+  rules:
+  - host: localhost
+    http:
+      paths:
+      - path: /alpa
+        pathType: Prefix
+        backend:
+          service:
+            name: search-alpha
+            port:
+              number: 80
+      - path: /beta
+        pathType: Prefix
+        backend:
+          service:
+            name: search-beta
+            port:
+              number: 80
+      - path: /auth
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-auth
+            port:
+              number: 80
