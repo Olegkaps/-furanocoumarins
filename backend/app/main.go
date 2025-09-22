@@ -1,12 +1,29 @@
 package main
 
 import (
+	"log"
+	"os"
+
+	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2"
 )
 
 func main() {
+	args := os.Args
+
+	cassandra_host := args[1]
+	cluster := gocql.NewCluster(cassandra_host)
+
+	log.Println("Creating session with Cassandra on host: ", cassandra_host)
+	session, err := cluster.CreateSession()
+	if err != nil {
+		panic(err)
+	}
+	log.Println("Session successfully passed")
+	defer session.Close()
+
 	app := fiber.New(fiber.Config{
-		Prefork:       true,
+		Prefork:       false,
 		ServerHeader:  "GO",
 		CaseSensitive: true,
 		StrictRouting: true,
@@ -16,5 +33,5 @@ func main() {
 		return c.JSON(fiber.Map{"Hello": "World!"})
 	})
 
-	app.Listen(":80")
+	log.Fatal(app.Listen(":8080"))
 }

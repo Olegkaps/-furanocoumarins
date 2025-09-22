@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+ name: search-alpha
+ labels:
+   app: search-alpha
+spec:
+ replicas: 2
+ selector:
+   matchLabels:
+     app: search-alpha
+ template:
+   metadata:
+     labels:
+       app: search-alpha
+   spec:
+     containers:
+     - name: search-alpha
+       image: olegkaps/chem-back:1.1
+       ports:
+       - containerPort: 8080
+       imagePullPolicy: IfNotPresent
+ strategy:
+   type: RollingUpdate
+   rollingUpdate:
+     maxSurge: 1
+     maxUnavailable: 1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: search-alpha
+spec:
+  type: ClusterIP
+  selector:
+    app: search-alpha
+  ports:
+  - port: 80
+    targetPort: 8080

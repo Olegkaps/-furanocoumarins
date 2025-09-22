@@ -30,8 +30,8 @@
   font-size: 100%;
   font-family: Arial;
   font-size-adjust: auto;
-  background: linear-gradient(to right, pink, magenta);
-  border-color: antiquewhite;
+  background: linear-gradient(to right, rgb(218, 214, 249), rgb(254, 204, 254));
+  border-color: rgb(79, 76, 74);
   border-radius: 3%;
   margin: 0, auto;
   height: 2em;
@@ -40,8 +40,9 @@
 
 .search-submit {
   width: 5%;
-  background-color: lightgreen;
-  border-color: beige;
+  background-color: #fae6b0;
+  border: 1px solid rgb(65, 65, 38);
+  border-radius: 10%;
 }
 
 table {

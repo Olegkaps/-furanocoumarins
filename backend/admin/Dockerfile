@@ -15,4 +15,4 @@ WORKDIR /usr/src/app
 COPY --from=compiler /usr/src/app/main_app ./
 
 EXPOSE 80
-CMD [ "./main_app", "cassandra" ]
+CMD [ "./main_app" ]
