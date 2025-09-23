@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {ChevronRight} from '@gravity-ui/icons';
 import config from '../config';
 import DataMeta from './DataMeta';
+import { useNavigate } from 'react-router-dom';
 
 
 function isEmpty(obj: object) {
@@ -281,7 +282,18 @@ function SearchApp() {
     new DataMeta("smiles", "SMILES", ""),
   ]
 
+  let navigate = useNavigate();
+
   return <>
+    <div>
+      <button onClick={() => {navigate("/admin")}}>admin</button>
+      <br></br>
+      <button onClick={() => {navigate("/login")}}>login</button>
+      <br></br>
+      <button onClick={() => {navigate('/admit/psw-12')}}>confirm change password</button>
+      <br></br>
+      <button onClick={() => {navigate('/admit/lin-12')}}>confirm email</button>
+    </div>
     <br></br>
     <SearchLine />
     <b></b> {/* this doent works */}

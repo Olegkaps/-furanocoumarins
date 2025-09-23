@@ -10,14 +10,14 @@ spec:
   - host: kubernetes.docker.internal  # furanocoumarins.belozersky.msu.ru
     http:
       paths:
-      - path: /search-alpha/?(.*)
+      - path: /api/search-alpha/?(.*)
         pathType: ImplementationSpecific
         backend:
           service:
             name: search-alpha
             port:
               number: 80
-      - path: /admin/?(.*)
+      - path: /api/admin/?(.*)
         pathType: ImplementationSpecific
         backend:
           service:

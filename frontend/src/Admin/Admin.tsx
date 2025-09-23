@@ -1,12 +1,12 @@
-import React from "react";
+// import React from "react";
 import {
-    Link,
+//    Link,
     useParams,
     Navigate,
 } from "react-router-dom";
 
 import {ArrowRightFromSquare} from '@gravity-ui/icons';
-import { jwtDecode } from 'jwt-decode';
+//import { jwtDecode } from 'jwt-decode';
 
 import { api, getToken, setToken } from "./utils";
 import LoginForm from "./LoginForm";
@@ -14,12 +14,12 @@ import ResetPasswordForm from "./ResetPasswordForm";
 import PasswordConfirmForm from "./AdmitPassword";
 
 
-interface JwtPayload {
-    username: string,
-    role: string,
-    timestamp: number,
-    ttl: number,
-}
+// interface JwtPayload {
+//     username: string,
+//     role: string,
+//     timestamp: number,
+//     ttl: number,
+// }
 
 
 class AdminApp {
@@ -34,7 +34,7 @@ class AdminApp {
     }
 
     App() {
-        let token = getToken()
+        // let token = getToken()
         // if (!token) {
         //     return <Navigate to="/login" />
         // }
@@ -113,8 +113,6 @@ class AdminApp {
             return <PasswordConfirmForm {...{word: code}} />
         } else if (code?.startsWith("lin")) {
             return <p>login by email</p>
-        } else if (code?.startsWith("acc")) {
-            return <p>confirm account</p>
         }
         return <p>wrong code</p>
     }
