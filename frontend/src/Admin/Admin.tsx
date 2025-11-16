@@ -1,25 +1,15 @@
-// import React from "react";
 import {
-//    Link,
     useParams,
     Navigate,
 } from "react-router-dom";
 
 import {ArrowRightFromSquare} from '@gravity-ui/icons';
-//import { jwtDecode } from 'jwt-decode';
 
-import { api, getToken, setToken } from "./utils";
-import LoginForm from "./LoginForm";
+import { delToken, getName, isTokenExists} from "./utils";
+import LoginForm, { MailAdmit } from "./LoginForm";
 import ResetPasswordForm from "./ResetPasswordForm";
 import PasswordConfirmForm from "./AdmitPassword";
-
-
-// interface JwtPayload {
-//     username: string,
-//     role: string,
-//     timestamp: number,
-//     ttl: number,
-// }
+import AdminPage from "./AdminUI";
 
 
 class AdminApp {
@@ -29,29 +19,8 @@ class AdminApp {
         this.response = undefined
     }
 
-    async renew_token(token: string){
-        return await api.post('/renew-token', { headers: { Authorization: `Bearer ${token}` } }).catch((err) => {return err.response});
-    }
-
     App() {
-        // let token = getToken()
-        // if (!token) {
-        //     return <Navigate to="/login" />
-        // }
-        // let user_data = jwtDecode<JwtPayload>(token)
-
-
-        // if (Date.now() - user_data.timestamp > user_data.ttl / 2) {
-        //     this.renew_token(token).then(resp => this.response = resp)
-        //     const response = this.response
-        //     if (response?.status === 200) {
-        //         setToken(response.data.token);    
-        //     } else if (response?.status === 401) {
-        //         return <Navigate to="/login" />
-        //     }
-        // }
-        // let username = user_data.username
-        let username = "Admin_oleg"
+        let username = getName()
 
         return <div>
             <div style={{
@@ -85,20 +54,19 @@ class AdminApp {
                     Logout <ArrowRightFromSquare />
                 </a>
             </div>
-            <p>Admin</p>
+            <AdminPage />
         </div>
     }
 
     Login() {
-        let token = getToken()
-        if (token) {
+        if (isTokenExists()) {
             return <Navigate to="/admin" />
         }
         return <LoginForm />
     }
 
     Logout() {
-        setToken("")
+        delToken()
         return <Navigate to="/login" />
     }
 
@@ -112,7 +80,7 @@ class AdminApp {
         if (code?.startsWith("psw")) {
             return <PasswordConfirmForm {...{word: code}} />
         } else if (code?.startsWith("lin")) {
-            return <p>login by email</p>
+            return <MailAdmit {...{word: code}}/>
         }
         return <p>wrong code</p>
     }

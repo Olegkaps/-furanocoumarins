@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 import { api, setToken } from "./utils";
 
@@ -11,21 +11,30 @@ const LoginForm: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoginMode, setIsLoginMode] = useState(true);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const url = isLoginMode ? '/login' : '/login-mail';
-    const data = isLoginMode
-    ? { uname_or_email, password }
-    : { uname_or_email, };
+    
+    var bodyFormData = new FormData();
+    bodyFormData.append("uname_or_email", uname_or_email)
+    if (isLoginMode) {
+      bodyFormData.append("password", password)
+    }
 
-    const response = await api.post(url, data).catch((err) => {return err.response});
+    const response = await api.post(url, bodyFormData).catch((err) => {return err.response});
 
-    if (response?.status === 401) {
+    if (response?.status === 401 || response?.status === 400) {
         setError('Incorrect email login data, check it out');
-    } else if (response?.status === 200) {
-        setToken(response.data.token);    
-        return <Navigate to="/admin" />
+    } else if (response?.status > 199 && response?.status < 400) {
+        setError("")
+        if (isLoginMode) {
+          setToken(response.data.token);
+          navigate("/admin")
+        } else {
+          alert("Mail sent")
+        }
     } else {
         setError('Cannot process request')
     }
@@ -103,3 +112,26 @@ const LoginForm: React.FC = () => {
 };
 
 export default LoginForm;
+
+export const MailAdmit: React.FC<{word: string}> = (props) => {
+  var bodyFormData = new FormData();
+  bodyFormData.append("word", props.word)
+  const [result, setResult] = useState('bad');
+
+  useEffect(() => {
+    async function _() {
+      var response = await api.post('/confirm-login-mail', bodyFormData).catch((err) => {return err.response});
+      if (response?.status > 199 && response?.status < 400) {
+          setToken(response.data.token);
+          setResult("ok")
+      }
+    }
+    _().then(() => {})
+  }, [])
+
+  if (result == "ok") {
+      return <Navigate to="/admin" />
+  } else {
+      return <p>Incorrect link</p>
+  }
+}

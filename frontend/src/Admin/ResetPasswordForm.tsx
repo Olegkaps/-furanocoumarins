@@ -9,12 +9,14 @@ const ResetPasswordForm: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const response = await api.post('/change-password', { loginOrEmail }).catch((err) => {return err.response});
+        var bodyFormData = new FormData();
+        bodyFormData.append("uname_or_email", loginOrEmail)
+        const response = await api.post('/change-password', bodyFormData).catch((err) => {return err.response});
         
         if (response?.status === 200) {
             setSuccess('The confirmation email has been sent');
             setError('');
-        } else if (response?.status === 404) {
+        } else if (response?.status === 404 || response?.status === 400) {
             setError('User not found');
             setSuccess('');
         } else {

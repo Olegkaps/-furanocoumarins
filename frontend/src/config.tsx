@@ -1,6 +1,6 @@
 let config = {
     "FONT_SIZE": 'small',
-    "BASE_URL": 'http://localhost',
+    "BASE_URL": 'http://localhost:8081',
 }
 
 

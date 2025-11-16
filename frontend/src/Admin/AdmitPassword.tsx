@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { api } from './utils';
-import { Navigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 
 const PasswordConfirmForm: React.FC<{word: string}> = (props) => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   const isValidPassword = (password: string) => {
-    const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&\-])[A-Za-z\d@$!%*?&\-]{8,}$/;
     return regex.test(password);
   };
 
@@ -26,11 +27,13 @@ const PasswordConfirmForm: React.FC<{word: string}> = (props) => {
       return;
     }
 
-    let word = props.word
-    const response = await api.post('/confirm-password-change', { word, newPassword }).catch((err) => {return err.response});
+    var bodyFormData = new FormData();
+    bodyFormData.append("password", newPassword)
+    bodyFormData.append("word", props.word)
+    const response = await api.post('/confirm-password-change', bodyFormData).catch((err) => {return err.response});
     
-    if (response?.status === 200) {
-        return <Navigate to="/admin" />
+    if (response?.status < 400) {
+        navigate("/login")
     } else {
         setError('Cannot process request');
     }
