@@ -1,3 +1,5 @@
+backend/cassandra/nf-data-explorer/
+docker-compose.yaml
 backend/secrets/
 ignores/
 
