@@ -1,0 +1,127 @@
+services:
+  # nginx:
+  #   image: nginx:latest
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx/conf.d:/etc/nginx/conf.d
+  #   depends_on:
+  #     - go-auth
+  #     - go-search
+  #     # - python-app
+
+  go-auth:
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "localhost/ping"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    build:
+      context: ./backend/admin
+    ports:
+      - "8081:80"
+    environment:
+      - BACKEND_VERSION=v1
+      - SECRET_KEY=
+      - ALLOW_ORIGIN=
+      - REDIS_PASSWORD=
+      - PG_USER=
+      - PG_PASSWORD=
+      - PG_DB=
+      - CASSANDRA_HOST=
+      - MAIL=
+      - MAIL_SECRET=
+      - MAIL_PASSWORD=
+      - DOMAIN_PREF=  # without / at the end
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - back
+  
+  redis:
+    hostname: redis
+    image: redis:latest
+    environment:
+      - REDIS_PASSWORD=
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - appnet
+      - back
+
+  postgres:
+    restart: always
+    image: postgres:latest
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=
+      - POSTGRES_USER=
+      - POSTGRES_PASSWORD=
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ps
+      - back
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - postgres
+    networks:
+      - ps
+
+  cassandra:
+    hostname: cassandra
+    image: cassandra:3.11.9
+    ports:
+      - "9042:9042"
+      - "53:53"
+    volumes:
+      - cassandra3_data:/var/lib/cassandra
+    networks:
+      - appnet
+      - back
+
+  neflix-explorer:
+    hostname: netflix-explorer
+    platform: linux/arm64/v8
+    image: olegkaps/nf-data-explorer:v1
+    depends_on:
+      - cassandra
+      - redis
+    ports:
+      - '5050:80'
+    command: yarn start
+    networks:
+      - appnet
+    env_file:
+      - backend/cassandra/nf-data-explorer/.env  # git clone nf-data-explorer to 'backend/cassandra/'
+    environment:
+      - CASSANDRA_HOST=cassandra
+      - REDIS_HOST=redis
+    volumes:
+      - neflix_explorer_data:/apps/nf-data-explorer/data
+
+# TO DO: probably add opensearch + grafana
+
+volumes:
+  postgres_data:
+  redis-data:
+  cassandra3_data:
+  neflix_explorer_data:
+  # kafka_data:
+  # elasticsearch_data:
+
+networks:
+  appnet:
+  back:
+  ps:
