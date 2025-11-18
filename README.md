@@ -3,6 +3,14 @@
 A web‑based platform for analyzing the content of furanocoumarins and other substances in plants.
 It allows you to download data from Google Tables, build phylogenetic trees and analyze the distribution of substances by taxanomy.
 
+Below is an example of the site's UI (home page): search bar, phylogenetic tree, and results table.
+
+![app ui](./img/fuco_ui.png)
+
+Which data will be displayed on the website is completely determined by the administrator through the settings in the Google Sheet, as shown below. Using the __LIST__ type, a list of sheets that contain data of the same type is registered, and all columns that will be displayed on the website are specified for them
+
+![settings in Google sheets](./img/fuco_sheets.png)
+
 ## Key features
 
 - **Importing data**: downloading data from Google Tables.
