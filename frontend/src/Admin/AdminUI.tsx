@@ -1,32 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { api, getToken, isTokenExists } from './utils';
 import { Navigate } from 'react-router-dom';
-import {CirclePlus} from '@gravity-ui/icons';
+import {CirclePlus, TrashBin, CrownDiamond} from '@gravity-ui/icons';
 
 class Table {
-    id: string
-    name: string
-    timestamp: string
-    rowsCount: number
+    version: string
+    created_at: string
+    is_active: boolean
+    is_ok: boolean
 
     constructor(
-        id: string,
-        name: string,
-        timestamp: string,
-        rowsCount: number
+        version: string,
+        created_at: string,
+        is_active: boolean,
+        is_ok: boolean,
     ) {
-        this.id = id
-        this.name = name
-        this.timestamp = timestamp
-        this.rowsCount = rowsCount
+        this.version = version
+        this.created_at = created_at
+        this.is_active = is_active
+        this.is_ok = is_ok
     }
 }
 
 
 const AdminPage: React.FC = () => {
     const [tables, setTables] = useState(Array<Table>);
-    const [activeTable, setActiveTable] = useState('');
-    const [tableId, setTableID] = useState('');
 
     const [showCreateForm, setShowCreateForm] = useState(false);
     
@@ -44,10 +42,13 @@ const AdminPage: React.FC = () => {
             headers: { Authorization: `Bearer ${token}` }
         }).catch((err) => {return err.response});
 
-        return
-
-        setTables(response.data.tables.sort((a: any, b: any) => b.timestamp - a.timestamp));
-        setActiveTable(response.data.activeTable);
+        setTables(response.data?.sort(
+            (a: any, b: any) => {
+            let date_b = new Date(b.created_at)
+            let date_a = new Date(a.created_at)
+            if (date_a < date_b) return -1;
+            if (date_a > date_b) return 1;
+        }));
 
         if (response?.status === 401) {
             setTimeout(() => window.location.href = '/login', 3000);
@@ -85,23 +86,39 @@ const AdminPage: React.FC = () => {
         fetchTables();
     };
 
-    const handleSetActiveTable = async (e: React.FormEvent) => {
+    const handleSetActiveTable = async (e: React.FormEvent, tableTimestamp: string) => {
         e.preventDefault();
         let token = getToken();
+        var bodyFormData = new FormData();
         
-        await api.post('/set-active-table', {  // rewrite
-            tableId,
+        bodyFormData.append("table_timestamp", tableTimestamp)
+        console.log(tableTimestamp)
+        await api.post('/make-table-active', bodyFormData, {
             headers: { Authorization: `Bearer ${token}` }
         }).catch((err) => {return err.response});
 
         setTimeout(() => fetchTables(), 5000);
     };
 
-    const handleDeleteTable = async (e: React.FormEvent) => {
+    const handleDeleteTable = async (e: React.FormEvent, tableTimestamp: string) => {
         e.preventDefault();
         let token = getToken();
-        
-        await api.post(`/delete-table/${tableId}`, {  // rewrite
+        var bodyFormData = new FormData();
+
+        bodyFormData.append("table_timestamp", tableTimestamp)
+        await api.post(`/delete-table`, bodyFormData, {
+            headers: { Authorization: `Bearer ${token}` }
+        }).catch((err) => {return err.response});
+
+        setTimeout(() => fetchTables(), 5000);
+    };
+
+    const handleDeleteBadTables = async (e: React.FormEvent) => {
+        e.preventDefault();
+        let token = getToken();
+        var bodyFormData = new FormData();
+
+        await api.post(`/delete-tables`, bodyFormData, {
             headers: { Authorization: `Bearer ${token}` }
         }).catch((err) => {return err.response});
 
@@ -110,7 +127,22 @@ const AdminPage: React.FC = () => {
 
     return (
         <div style={{ padding: '20px' }}>
-            <h2 style={{ fontSize: 'xx-large', position: 'absolute', top: '5%', left: '40%' }}>Existing Tables</h2>
+            <h2 style={{ fontSize: 'xx-large', position: 'absolute', top: '5%', left: '40%' }}>Existing Tables: {tables.length}/10</h2>
+            <div style={{border: '1px solid #99a4a7ff', borderRadius: "10%", backgroundColor: "#e9fafeff", width: "15%", padding: "10px"}}>
+                <p style={{paddingLeft: "15px"}}><b>Clear tables</b></p>
+                <button onClick={handleDeleteBadTables}
+                    style={{
+                        borderRadius: "15%",
+                        backgroundColor: "#f4fff2ff",
+                        borderColor: "grey",
+                        marginLeft: "35%",
+                        marginRight: "35%",
+                    }}>
+                    <i className="fas fa-trash"></i> <TrashBin {...{style: {width: '30px', height: '30px'}}}/>
+                </button>
+            </div>
+
+            <div style={{height: "90px"}}></div>
 
             {showCreateForm && (
                 <form onSubmit={handleCreateTable}
@@ -157,35 +189,53 @@ const AdminPage: React.FC = () => {
                 </form>
             )}
 
+            { !showCreateForm &&
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '20px' }}>
-                {tables.map(table => (
+                {tables?.map(table => (
                     <div 
-                        key={table.id} 
+                        key={table.created_at}
                         style={{ 
-                            padding: '20px', 
-                            border: table.name === activeTable ? '2px solid blue' : '1px solid #ccc', 
-                            background: table.name === activeTable ? '#f0f8ff' : '#fff'
+                            padding: '20px',
+                            borderRadius: '10%',
+                            border: table.is_active ? '2px solid yellow' : (table.is_ok ? '1px solid blue' : '1px solid red'), 
+                            background: table.is_active ? '#f9ffd1ff' : (table.is_ok ? '#f0f8ff' : '#ffd0d0ff')
                         }}
                     >
-                        {table.name === activeTable && <div style={{ color: 'blue' }}>active</div>}
-                        <h3>{table.name}</h3>
-                        <p>Created: {table.timestamp}</p>
-                        <p>Rows: {table.rowsCount}</p>
+                        { table.is_active && <div style={{position: 'absolute', width: '100%', height: '100%'}}><CrownDiamond {...{style: {width: '40px', height: '40px', color: '#afac08ff', position: 'relative',  top: "-2%", left: "4.4%"}}} /></div>}
+                        <h3>Created:</h3> 
+                        <h3>{table.created_at.replace("T", " ").replace("Z", "")}</h3>
+                        <p>Version: {table.version}</p>
 
-                        {table.name !== activeTable && (
-                            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                                <button onClick={() => setTableID(table.id)}>
-                                    {/* also show form 'are you sure?' */}
-                                    <i className="fas fa-crown"></i> Make active
-                                </button>
-                                <button onClick={() => setTableID(table.id)}>
-                                    <i className="fas fa-trash"></i> Delete
-                                </button>
-                            </div>
-                        )}
+                        { !table.is_active &&
+                        <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                            { table.is_ok &&
+                            <button onClick={(e) => {handleSetActiveTable(e, table.created_at)}}
+                                style={{
+                                    borderRadius: "15%",
+                                    backgroundColor: "#fdffd1ff",
+                                    borderColor: "yellow",
+                                    color: '#afac08ff'
+                                }}>
+                                {/* TO DO: also show form 'are you sure?' */}
+                                <i className="fas fa-crown"></i> Activate
+                            </button>
+                            } { CheckTimeBeforeDeletion(table.created_at) &&
+                            <button onClick={(e) => {handleDeleteTable(e, table.created_at)}}
+                                style={{
+                                    borderRadius: "15%",
+                                    backgroundColor: "#fddcdcff",
+                                    borderColor: "red"
+                                }}>
+                                {/* TO DO: also show form 'are you sure?' */}
+                                <i className="fas fa-trash"></i> <TrashBin {...{style: {width: '30px', height: '30px', color: 'red'}}}/>
+                            </button>
+                            }
+                        </div>
+                        }
                     </div>
                 ))}
 
+                { tables.length < 10 &&
                 <div 
                     style={{ 
                         padding: '20px', 
@@ -201,9 +251,19 @@ const AdminPage: React.FC = () => {
                     <CirclePlus {...{style: {width: '50px', height: '50px', alignSelf: 'center'}}} />
                     <h5>Create Table</h5>
                 </div>
+                }
             </div>
+            }
         </div>
     );
 };
+
+const CheckTimeBeforeDeletion = (time: string) => {
+    var date = new Date(time)
+    var curr_time = new Date()
+    curr_time.setMinutes(curr_time.getMinutes() - 5);
+
+    return date < curr_time
+}
 
 export default AdminPage;
