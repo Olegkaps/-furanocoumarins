@@ -13,7 +13,7 @@ func BatchInsertData(
 	tableName string,
 	columnDefs []string, // col_name TYPE
 	primaryKeys []string, // col_name
-	data [][]string, // serialized_string
+	data [][]any, // serialized_string or set or smth else
 ) error {
 	var columns []string
 	for _, col := range columnDefs {
@@ -22,7 +22,7 @@ func BatchInsertData(
 
 	primaryKeyClause := fmt.Sprintf("PRIMARY KEY (%s)", strings.Join(primaryKeys, ", "))
 	createTableQuery := fmt.Sprintf(
-		"CREATE TABLE IF NOT EXISTS %s (%s, %s); WITH caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'};",
+		"CREATE TABLE IF NOT EXISTS %s (%s, %s) WITH caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'};",
 		tableName,
 		strings.Join(columnDefs, ", "),
 		primaryKeyClause,
@@ -32,7 +32,7 @@ func BatchInsertData(
 		return fmt.Errorf("error while creating table %s: %w", tableName, err)
 	}
 
-	batch := session.NewBatch(gocql.LoggedBatch)
+	batch := NewExecutor(session, 100)
 
 	columnsStr := strings.Join(columns, ", ")
 	placeholders := strings.Repeat("?, ", len(columns)-1) + "?"
@@ -42,10 +42,10 @@ func BatchInsertData(
 		if len(row) != len(columns) {
 			return fmt.Errorf("different length of data rows in table %q: want %d, given %d", tableName, len(columns), len(row))
 		}
-		batch.Query(insertQuery, row)
+		batch.Query(insertQuery, row...)
 	}
 
-	if err := session.ExecuteBatch(batch); err != nil {
+	if err := batch.Execute(); err != nil {
 		return fmt.Errorf("error in batch insert into %s: %w", tableName, err)
 	}
 

@@ -30,7 +30,7 @@ const AdminPage: React.FC = () => {
 
     const [showCreateForm, setShowCreateForm] = useState(false);
     
-    const [googleLink, setGoogleLink] = useState('');
+    const [googleSheetFile, setGoogleSheetFile] = useState<File>();
     const [googleMetaList, setGoogleMetaList] = useState('');
 
     if (!isTokenExists()) {
@@ -65,7 +65,12 @@ const AdminPage: React.FC = () => {
         e.preventDefault();
         let token = getToken();
         var bodyFormData = new FormData();
-        bodyFormData.append("link", googleLink)
+        
+        if (!googleSheetFile) {
+            alert("error: no file")
+            return;
+        }
+        bodyFormData.append("file", googleSheetFile)
         bodyFormData.append("meta", googleMetaList)
 
         let response = await api.post('/create-table', bodyFormData, {
@@ -123,12 +128,12 @@ const AdminPage: React.FC = () => {
                         top: '35%',
                         left: '40%',
                     }}>
-                        <p style={{ color: '#e6dedeff' }}>Create table from Google Sheet</p>
+                        <p style={{ color: '#e6dedeff' }}>Create table from XLSX file</p>
                         <input 
-                            type="text" 
-                            value={googleLink} 
-                            onChange={(e) => setGoogleLink(e.target.value)} 
-                            placeholder="link to Google sheet"
+                            type="file" 
+                            required={true}
+                            onChange={(e) => setGoogleSheetFile(e.target.files?.[0])} 
+                            placeholder="Google sheet file"
                             style={{ 
                                 padding: '10px',
                                 marginBottom: '10px',
@@ -137,6 +142,7 @@ const AdminPage: React.FC = () => {
                         <br></br>
                         <input 
                             type="text" 
+                            required={true}
                             value={googleMetaList} 
                             onChange={(e) => setGoogleMetaList(e.target.value)} 
                             placeholder="List with metadata"

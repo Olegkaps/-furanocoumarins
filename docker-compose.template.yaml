@@ -23,7 +23,6 @@ services:
     ports:
       - "8081:80"
     environment:
-      - BACKEND_VERSION=v1
       - SECRET_KEY=
       - ALLOW_ORIGIN=
       - REDIS_PASSWORD=

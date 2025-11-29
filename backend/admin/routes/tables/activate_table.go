@@ -47,6 +47,7 @@ func Activate_table(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
+	// wtf ?
 	deactivateQuery := `
 		UPDATE chemdb.tables
 		SET is_active = false

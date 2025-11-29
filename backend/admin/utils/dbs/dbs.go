@@ -3,6 +3,7 @@ package dbs
 import (
 	"context"
 	"database/sql"
+	"strings"
 
 	"github.com/redis/go-redis/v9"
 
@@ -26,4 +27,12 @@ func OpenDB() (*sql.DB, error) {
 		"postgres",
 		settings.POSTGRES_SOURCE,
 	)
+}
+
+func FixCassandraTimestamp(s string) string {
+	s = strings.ReplaceAll(s, "-", "_")
+	s = strings.ReplaceAll(s, ":", "_")
+	s = strings.ReplaceAll(s, ".", "_")
+
+	return s
 }

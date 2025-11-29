@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
 
 	"github.com/gocql/gocql"
@@ -80,13 +81,13 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 
 	sendErrorBadMetaMail := func(column, c_decr, c_desr_old, c_type, c_type_old string) {
 		message := fmt.Sprintf(
-			"Column '%s' has different definitions in different rows:\n",
+			"Column '%s' has different descriptions in different rows:\n",
 			column,
 		) + fmt.Sprintf(
 			" - Descriptions:\n\t'%s'\n\t'%s'\n",
 			c_decr, c_desr_old,
 		) + fmt.Sprintf(
-			" - Types:\n\t'%s'\n\t'%s'\n",
+			" - Types (may differ only by primary/external):\n\t'%s'\n\t'%s'\n",
 			c_type, c_type_old,
 		)
 		common.WriteLog(message)
@@ -103,9 +104,11 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 	defer session.Close()
 
 	curr_time := time.Now().Format("2006-01-02T15:04:05.000")
-	table_meta_name := "meta_" + curr_time
-	table_data_name := "data_" + curr_time
-	table_species_name := "species_" + curr_time
+
+	fixed_curr_time := dbs.FixCassandraTimestamp(curr_time)
+	table_meta_name := "chemdb." + "meta_" + fixed_curr_time
+	table_data_name := "chemdb." + "data_" + fixed_curr_time
+	table_species_name := "chemdb." + "species_" + fixed_curr_time
 
 	// init tables data
 	err = session.Query(fmt.Sprintf(
@@ -140,34 +143,38 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 	}
 
 	// insert meta in db
-	var meta_data [][]string
+	var meta_data [][]any
 	var meta_keys = make(map[string]string)
 	for _, row := range meta_result {
+		sheet := row[0]
 		column := row[1]
 		c_type := row[2]
 		c_decr := row[3]
-		if strings.HasPrefix(column, "__") {
+		if strings.HasPrefix(sheet, "__") {
 			continue
 		}
 
 		if val, exists := meta_keys[column]; exists {
-			if val != c_type+"@"+c_decr {
-				c_type_old := strings.Split(val, "@")[0]
-				c_desr_old := strings.Split(val, "@")[0]
+			c_type_old := strings.Split(val, "\t")[0]
+			c_desr_old := strings.Split(val, "\t")[1]
+
+			var is_types_identical bool = check_is_types_equal(c_type_old, c_type)
+
+			if c_desr_old != c_decr || !is_types_identical {
 				sendErrorBadMetaMail(column, c_decr, c_desr_old, c_type, c_type_old)
 				return
 			}
 		} else {
-			meta_data = append(meta_data, []string{column, c_type, c_decr})
+			meta_data = append(meta_data, []any{sheet, column, c_type, c_decr})
 		}
 
-		meta_keys[column] = c_type + "@" + c_decr
+		meta_keys[column] = c_type + "\t" + c_decr
 	}
 
 	err = cassandra.BatchInsertData(
 		session,
 		table_meta_name,
-		[]string{"column TEXT", "type TEXT", "description TEXT"},
+		[]string{"sheet TEXT", "column TEXT", "type TEXT", "description TEXT"},
 		[]string{"column"},
 		meta_data,
 	)
@@ -212,8 +219,8 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 
 		column_name := row[1]
 		column_type := row[2]
-		parsed_meta[name].ColumnNames = append(parsed_meta[name].RealSheetNames, column_name)
-		parsed_meta[name].ColumnTypes = append(parsed_meta[name].RealSheetNames, column_type)
+		parsed_meta[name].ColumnNames = append(parsed_meta[name].ColumnNames, column_name)
+		parsed_meta[name].ColumnTypes = append(parsed_meta[name].ColumnTypes, column_type)
 
 		if strings.Contains(column_type, "primary") {
 			parsed_meta[name].KeyColumn = column_name
@@ -227,7 +234,12 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 			sendErrorMail(err.Error())
 			return
 		}
-		v_sheet.Postprocess()
+		err = v_sheet.Postprocess()
+		if err != nil {
+			common.WriteLog(err.Error())
+			sendErrorMail(err.Error())
+			return
+		}
 	}
 
 	// insert species
@@ -240,12 +252,23 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 		return
 	}
 
+	used_uuids := make(map[string]struct{}, len(species_sheet.Rows))
+	id := uuid.New().String()
+
 	sp_columns := species_sheet.ColumnCassTypes
 	sp_columns = append(sp_columns, "uuid UUID")
-	sp_data := make([][]string, len(species_sheet.Rows))
+	sp_data := make([][]any, len(species_sheet.Rows))
 	i := 0
 	for _, row := range species_sheet.Rows {
-		sp_data[i] = append(row, "uuid()")
+		for {
+			if _, exists := used_uuids[id]; !exists {
+				break
+			}
+			id = uuid.New().String()
+		}
+
+		sp_data[i] = append(row, id)
+		used_uuids[id] = struct{}{}
 		i++
 	}
 
@@ -282,8 +305,8 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 
 	for len(stack_of_lists) > 0 {
 		curr_sheet := stack_of_lists[len(stack_of_lists)-1]
-		ind := sheet_to_count[main_sheet]
-		sheet_to_count[main_sheet]++
+		ind := sheet_to_count[curr_sheet]
+		sheet_to_count[curr_sheet]++
 
 		if len(curr_sheet.ArrangeOfExternals) <= ind {
 			stack_of_lists = stack_of_lists[:len(stack_of_lists)-1]
@@ -306,19 +329,30 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 				sendErrorMail(err_message)
 			}
 
-			sheet_to_count[main_sheet] = 0
+			sheet_to_count[next_sheet] = 0
 			stack_of_lists = append(stack_of_lists, next_sheet)
 		}
 	}
 
 	// WARN: joins almost repeats
 	// join data of all sheets
-	joined_data := [][]string{}
-	var joined_row []string
+	joined_data := [][]any{}
+	var joined_row []any
+	not_found_primary_key_messages := make(map[string]struct{})
+
+	used_uuids = make(map[string]struct{}, len(main_sheet.Rows))
+	id = uuid.New().String()
 
 	for key := range main_sheet.Rows {
-		joined_row = make([]string, len(data_columns))
-		joined_row[0] = "uuid()"
+		joined_row = make([]any, len(data_columns))
+		for {
+			if _, exists := used_uuids[id]; !exists {
+				break
+			}
+			id = uuid.New().String()
+		}
+		joined_row[0] = id
+		used_uuids[id] = struct{}{}
 		row_ind := 1
 
 		sheet_to_count = make(map[*VirtualSheet]int)
@@ -330,8 +364,8 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 		for len(stack_of_lists) > 0 {
 			curr_sheet := stack_of_lists[len(stack_of_lists)-1]
 			curr_primary_key := stack_of_primary_keys[len(stack_of_primary_keys)-1]
-			ind := sheet_to_count[main_sheet]
-			sheet_to_count[main_sheet]++
+			ind := sheet_to_count[curr_sheet]
+			sheet_to_count[curr_sheet]++
 
 			if len(curr_sheet.ArrangeOfExternals) <= ind {
 				stack_of_lists = stack_of_lists[:len(stack_of_lists)-1]
@@ -341,8 +375,15 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 
 			curr_arrange := curr_sheet.ArrangeOfExternals[ind]
 			if curr_arrange == "" {
+				if _, ok := curr_sheet.Rows[curr_primary_key]; !ok {
+					message := fmt.Sprintf("Not found primary key '%s' in sheet with key column '%s'",
+						curr_primary_key, curr_sheet.KeyColumn)
+					not_found_primary_key_messages[message] = struct{}{}
+					break
+				}
 				joined_row[row_ind] = curr_sheet.Rows[curr_primary_key][ind]
 				row_ind++
+
 			} else {
 				next_sheet, ok := parsed_meta[curr_arrange]
 				if !ok {
@@ -356,13 +397,26 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 					sendErrorMail(err_message)
 				}
 
-				sheet_to_count[main_sheet] = 0
+				sheet_to_count[next_sheet] = 0
 				stack_of_lists = append(stack_of_lists, next_sheet)
-				stack_of_primary_keys = append(stack_of_primary_keys, curr_primary_key)
+
+				next_primary_key := curr_sheet.Rows[curr_primary_key][ind].(string)
+				stack_of_primary_keys = append(stack_of_primary_keys, next_primary_key)
 			}
 		}
 
 		joined_data = append(joined_data, joined_row)
+	}
+
+	if len(not_found_primary_key_messages) > 0 {
+		messages := make([]string, 0, len(not_found_primary_key_messages))
+		for message := range not_found_primary_key_messages {
+			messages = append(messages, message)
+		}
+		err_message := strings.Join(messages, "\n")
+		common.WriteLog(err_message)
+		sendErrorMail(err_message)
+		return
 	}
 
 	data_primary_keys := []string{"uuid"}
@@ -407,6 +461,33 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 	)
 }
 
+func check_is_types_equal(c_type_old, c_type_new string) bool {
+	old_list := strings.Split(c_type_old, " ")
+	new_list := strings.Split(c_type_new, " ")
+
+	if len(new_list) != len(old_list) {
+		return false
+	}
+
+	c_types_old_map := make(map[string]struct{})
+	for _, _type := range old_list {
+		if _type == "primary" || strings.Contains(_type, "external[") {
+			continue
+		}
+		c_types_old_map[_type] = struct{}{}
+	}
+	for _, _type := range new_list {
+		if _type == "primary" || strings.Contains(_type, "external[") {
+			continue
+		}
+		if _, exists := c_types_old_map[_type]; !exists {
+			return false
+		}
+	}
+
+	return true
+}
+
 type VirtualSheet struct {
 	ArrangeOfExternals []string // shows how to join data from different sheets
 	RealSheetNames     []string
@@ -414,7 +495,7 @@ type VirtualSheet struct {
 	ColumnTypes        []string // unprocessed types
 	ColumnCassTypes    []string // types to use in Cassandra
 	KeyColumn          string
-	Rows               map[string][]string
+	Rows               map[string][]any
 	is_postprocessed   bool
 }
 
@@ -426,31 +507,53 @@ func NewVirtualSheet() *VirtualSheet {
 		[]string{},
 		[]string{},
 		"",
-		make(map[string][]string),
+		make(map[string][]any),
 		false,
 	}
 }
 
 func (v_sheet *VirtualSheet) ReadFile(file *excelize.File) error {
 	rows, err := excel.ReadXLSXToMapMerged(file, v_sheet.RealSheetNames, v_sheet.ColumnNames, v_sheet.KeyColumn)
-	v_sheet.Rows = rows
+	v_sheet.Rows = map[string][]any(rows)
 	return err
 }
 
-func (v_sheet *VirtualSheet) Postprocess() {
+func (v_sheet *VirtualSheet) Postprocess() error {
 	if v_sheet.is_postprocessed {
-		return
+		return nil
 	}
+	error_messages := []string{}
 
 	for key, row := range v_sheet.Rows {
 		for j, item := range row {
+
+			if strings.Contains(v_sheet.ColumnTypes[j], "external[") && item == "" {
+				error_messages = append(error_messages, fmt.Sprintf(
+					"missing external key in row with primary key '%s' for column '%s'",
+					key, v_sheet.ColumnNames[j],
+				))
+				continue
+			}
+
 			if strings.Contains(v_sheet.ColumnTypes[j], "set") {
-				list_values := strings.Split(item, " ")
-				v_sheet.Rows[key][j] = "{" + strings.Join(list_values, ", ") + "}"
-			} else { // default type
-				v_sheet.Rows[key][j] = "'" + item + "'"
+				set_values := make(map[string]struct{})
+				for val := range strings.SplitSeq(item.(string), " ") {
+					set_values[val] = struct{}{}
+				}
+				v_sheet.Rows[key][j] = set_values
+			} else { // default
+				if item == "" {
+					v_sheet.Rows[key][j] = " "
+				}
 			}
 		}
+	}
+
+	if len(error_messages) > 0 {
+		return fmt.Errorf("errors in sheet with key column '%s':\n%s",
+			v_sheet.KeyColumn,
+			strings.Join(error_messages, "\n"),
+		)
 	}
 
 	v_sheet.ColumnCassTypes = make([]string, len(v_sheet.ColumnTypes))
@@ -478,4 +581,5 @@ func (v_sheet *VirtualSheet) Postprocess() {
 	}
 
 	v_sheet.is_postprocessed = true
+	return nil
 }

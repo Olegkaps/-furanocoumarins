@@ -17,14 +17,20 @@ func ReadXLSXToMap(file *excelize.File, sheetName string, columnNames []string, 
 		return map[string][]string{}, nil
 	}
 
+	error_messages := []string{}
 	header := rows[0]
 	colIndices := make(map[string]int)
 	for _, colName := range columnNames {
 		idx := findColumnIndex(header, colName)
 		if idx == -1 {
-			return nil, fmt.Errorf("column %q not found in sheet %q", colName, sheetName)
+			error_messages = append(error_messages, fmt.Sprintf("column %q not found", colName))
+			continue
 		}
 		colIndices[colName] = idx
+	}
+
+	if len(error_messages) > 0 {
+		return nil, fmt.Errorf("errors in sheet %q:\n%s", sheetName, strings.Join(error_messages, "\n"))
 	}
 
 	var keyIdx int
@@ -43,7 +49,7 @@ func ReadXLSXToMap(file *excelize.File, sheetName string, columnNames []string, 
 		for i, colName := range columnNames {
 			idx := colIndices[colName]
 			if idx < len(row) {
-				values[i] = row[idx]
+				values[i] = strings.Trim(row[idx], " ")
 			} else {
 				values[i] = ""
 			}
@@ -51,23 +57,33 @@ func ReadXLSXToMap(file *excelize.File, sheetName string, columnNames []string, 
 
 		var key string
 		if keyColumn == "" {
-			key = strings.Join(values, "@")
+			key = strings.Join(values, "\t")
 		} else {
 			if keyIdx >= len(row) {
-				return nil, fmt.Errorf("missing key %q in row %d", keyColumn, rowNum+2)
+				error_messages = append(error_messages, fmt.Sprintf("missing key %q in row %d", keyColumn, rowNum+2))
+				continue
 			}
-			key = row[keyIdx]
+			key = strings.Trim(row[keyIdx], " ")
 		}
 
 		if key == "" {
-			return nil, fmt.Errorf("empty key %q in row %d", keyColumn, rowNum+2)
+			if strings.Join(values, "") == "" {
+				continue
+			}
+			error_messages = append(error_messages, fmt.Sprintf("empty key %q in row %d", keyColumn, rowNum+2))
+			continue
 		}
 		if _, exists := keySet[key]; exists {
-			return nil, fmt.Errorf("not unique key %q (duplicate at %d row)", key, rowNum+2)
+			error_messages = append(error_messages, fmt.Sprintf("not unique key %q (duplicate at %d row)", key, rowNum+2))
+			continue
 		}
 		keySet[key] = struct{}{}
 
 		result[key] = values
+	}
+
+	if len(error_messages) > 0 {
+		return nil, fmt.Errorf("errors in sheet %q:\n%s", sheetName, strings.Join(error_messages, "\n"))
 	}
 
 	return result, nil
@@ -82,8 +98,8 @@ func findColumnIndex(header []string, colName string) int {
 	return -1
 }
 
-func ReadXLSXToMapMerged(file *excelize.File, sheetNames []string, columnNames []string, keyColumn string) (map[string][]string, error) {
-	result := make(map[string][]string)
+func ReadXLSXToMapMerged(file *excelize.File, sheetNames []string, columnNames []string, keyColumn string) (map[string][]any, error) {
+	result := make(map[string][]any)
 
 	for _, sheet := range sheetNames {
 		curr_result, err := ReadXLSXToMap(file, sheet, columnNames, keyColumn)
@@ -95,7 +111,11 @@ func ReadXLSXToMapMerged(file *excelize.File, sheetNames []string, columnNames [
 			if _, exists := result[key]; exists {
 				return nil, fmt.Errorf("not unique key %q while merging sheet %q", key, sheet)
 			}
-			result[key] = val
+			typedVal := make([]any, len(val))
+			for i, v := range val {
+				typedVal[i] = v
+			}
+			result[key] = typedVal
 		}
 	}
 
