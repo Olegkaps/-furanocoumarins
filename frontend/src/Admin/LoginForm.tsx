@@ -44,7 +44,7 @@ const LoginForm: React.FC = () => {
     <div style={{
       width: '300px',
       margin: 'auto',
-      padding: '20px',
+      padding: '40px',
       border: '1px solid #ccc',
       borderRadius: '5px',
       backgroundColor: '#f9f9f9'

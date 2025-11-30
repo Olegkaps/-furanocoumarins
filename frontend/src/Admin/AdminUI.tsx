@@ -126,7 +126,7 @@ const AdminPage: React.FC = () => {
     };
 
     return (
-        <div style={{ padding: '20px' }}>
+        <div style={{ margin: '20px', }}>
             <h2 style={{ fontSize: 'xx-large', position: 'absolute', top: '5%', left: '40%' }}>Existing Tables: {tables.length}/{config["MAX_TABLES_COUNT"]}</h2>
             <div style={{border: '1px solid #818485ff', borderRadius: "10%", backgroundColor: "#e9fafeff", width: "10%", padding: "10px", position: 'absolute', top: "2%", left: "10%"}}>
                 <p style={{paddingLeft: "15px"}}><b>Clear tables</b></p>
@@ -190,7 +190,14 @@ const AdminPage: React.FC = () => {
             )}
 
             { !showCreateForm &&
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '20px' }}>
+            <div style={{
+                padding: '20px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(5, 1fr)',
+                gap: '20px',
+                background: `linear-gradient( #f4feffff, #fffaffff)`,
+                borderRadius: '30px',
+            }}>
                 {tables?.map(table => (
                     <div 
                         key={table.created_at}

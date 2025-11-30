@@ -25,10 +25,10 @@ class AdminApp {
         return <div>
             <div style={{
                 position: 'absolute',
-                top: '5%',
+                top: '4%',
                 right: '3%',
-                backgroundColor: '#f0e68c',
-                border: 'none',
+                backgroundColor: '#fffacdff',
+                border: '1px solid grey',
                 borderRadius: '8px',
                 padding: '10px 16px',
                 display: 'flex',
@@ -44,9 +44,9 @@ class AdminApp {
                         alignItems: 'center',
                         gap: '5px',
                         padding: '8px 16px',
-                        backgroundColor: '#fae6b0',
+                        backgroundColor: '#f9eccaff',
                         color: 'black',
-                        border: 'none',
+                        border: '1px solid grey',
                         borderRadius: '8px',
                         cursor: 'pointer'
                     }}
