@@ -60,6 +60,9 @@ func ReadXLSXToMap(file *excelize.File, sheetName string, columnNames []string, 
 			key = strings.Join(values, "\t")
 		} else {
 			if keyIdx >= len(row) {
+				if strings.Join(values, "") == "" {
+					continue
+				}
 				error_messages = append(error_messages, fmt.Sprintf("missing key %q in row %d", keyColumn, rowNum+2))
 				continue
 			}

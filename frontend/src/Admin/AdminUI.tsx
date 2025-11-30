@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api, getToken, isTokenExists } from './utils';
 import { Navigate } from 'react-router-dom';
 import {CirclePlus, TrashBin, CrownDiamond} from '@gravity-ui/icons';
+import config from '../config';
 
 class Table {
     version: string
@@ -127,8 +128,8 @@ const AdminPage: React.FC = () => {
 
     return (
         <div style={{ padding: '20px' }}>
-            <h2 style={{ fontSize: 'xx-large', position: 'absolute', top: '5%', left: '40%' }}>Existing Tables: {tables.length}/10</h2>
-            <div style={{border: '1px solid #818485ff', borderRadius: "10%", backgroundColor: "#e9fafeff", width: "10%", padding: "10px", position: 'absolute', top: "5%", left: "10%"}}>
+            <h2 style={{ fontSize: 'xx-large', position: 'absolute', top: '5%', left: '40%' }}>Existing Tables: {tables.length}/{config["MAX_TABLES_COUNT"]}</h2>
+            <div style={{border: '1px solid #818485ff', borderRadius: "10%", backgroundColor: "#e9fafeff", width: "10%", padding: "10px", position: 'absolute', top: "2%", left: "10%"}}>
                 <p style={{paddingLeft: "15px"}}><b>Clear tables</b></p>
                 <button onClick={handleDeleteBadTables}
                     style={{
@@ -142,7 +143,7 @@ const AdminPage: React.FC = () => {
                 </button>
             </div>
 
-            <div style={{height: "90px"}}></div>
+            <div style={{height: "110px"}}></div>
 
             {showCreateForm && (
                 <form onSubmit={handleCreateTable}
@@ -214,7 +215,8 @@ const AdminPage: React.FC = () => {
                                     borderRadius: "15%",
                                     backgroundColor: "#fdffd1ff",
                                     borderColor: "yellow",
-                                    color: '#afac08ff'
+                                    color: '#afac08ff',
+                                    minHeight: '40px',
                                 }}>
                                 {/* TO DO: also show form 'are you sure?' */}
                                 <i className="fas fa-crown"></i> Activate
@@ -235,7 +237,7 @@ const AdminPage: React.FC = () => {
                     </div>
                 ))}
 
-                { tables.length < 10 &&
+                { tables.length < config["MAX_TABLES_COUNT"] &&
                 <div 
                     style={{ 
                         padding: '20px', 
@@ -246,6 +248,7 @@ const AdminPage: React.FC = () => {
                         display: 'flex',
                         justifyContent: 'center',
                         alignItems: 'center',
+                        minHeight: '200px',
                     }}
                     onClick={() => setShowCreateForm(true)}
                 >
