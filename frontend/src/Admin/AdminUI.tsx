@@ -93,12 +93,11 @@ const AdminPage: React.FC = () => {
         var bodyFormData = new FormData();
         
         bodyFormData.append("table_timestamp", tableTimestamp)
-        console.log(tableTimestamp)
         await api.post('/make-table-active', bodyFormData, {
             headers: { Authorization: `Bearer ${token}` }
         }).catch((err) => {return err.response});
 
-        setTimeout(() => fetchTables(), 5000);
+        setTimeout(() => fetchTables(), 3000);
     };
 
     const handleDeleteTable = async (e: React.FormEvent, tableTimestamp: string) => {
@@ -111,7 +110,7 @@ const AdminPage: React.FC = () => {
             headers: { Authorization: `Bearer ${token}` }
         }).catch((err) => {return err.response});
 
-        setTimeout(() => fetchTables(), 5000);
+        setTimeout(() => fetchTables(), 3000);
     };
 
     const handleDeleteBadTables = async (e: React.FormEvent) => {
@@ -202,7 +201,7 @@ const AdminPage: React.FC = () => {
                             background: table.is_active ? '#f9ffd1ff' : (table.is_ok ? '#f0f8ff' : '#ffd0d0ff')
                         }}
                     >
-                        { table.is_active && <div style={{position: 'absolute', width: '100%', height: '100%'}}><CrownDiamond {...{style: {width: '40px', height: '40px', color: '#afac08ff', position: 'relative',  top: "-2%", left: "4.4%"}}} /></div>}
+                        <div style={{position: 'relative', top: '-15%', left: '37%'}}>{ table.is_active && <div style={{position: 'absolute',}}><CrownDiamond {...{style: {width: '40px', height: '40px', color: '#afac08ff', position: 'relative',  top: "-2%", left: "4.4%"}}} /></div>}</div>
                         <h3>Created:</h3> 
                         <h3>{table.created_at.replace("T", " ").replace("Z", "")}</h3>
                         <p>Version: {table.version}</p>
@@ -238,23 +237,23 @@ const AdminPage: React.FC = () => {
                 ))}
 
                 { tables.length < config["MAX_TABLES_COUNT"] &&
-                <div 
+                <button 
                     style={{ 
                         padding: '20px', 
                         border: '1px dashed #000', 
                         borderRadius: '10%',
                         cursor: 'pointer',
-                        backgroundColor: '#b7ffb3ff',
+                        backgroundColor: '#c3ffc0ff',
                         display: 'flex',
                         justifyContent: 'center',
                         alignItems: 'center',
-                        minHeight: '200px',
+                        minHeight: '250px',
                     }}
                     onClick={() => setShowCreateForm(true)}
                 >
                     <CirclePlus {...{style: {width: '50px', height: '50px', alignSelf: 'center'}}} />
                     <h5>Create Table</h5>
-                </div>
+                </button>
                 }
             </div>
             }

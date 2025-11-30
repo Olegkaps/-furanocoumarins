@@ -40,7 +40,6 @@ func main() {
 	app.Post("/create-table", create.Create_table)
 	app.Post("/get-tables-list", tables.Get_tables_list)
 	app.Post("/make-table-active", tables.Activate_table)
-	app.Post("/deactivate-table", tables.Deactivate_table)
 	app.Post("/delete-table", tables.Delete_table)
 	app.Post("/delete-tables", tables.Delete_all_bad_tables)
 

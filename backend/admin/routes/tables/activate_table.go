@@ -3,15 +3,26 @@ package tables
 import (
 	"admin/settings"
 	"admin/utils/common"
+	"time"
 
 	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2"
 )
 
-func Activate_table(c *fiber.Ctx) error { // TO DO: set is_active = False for another
+func Activate_table(c *fiber.Ctx) error {
 	tableTimestamp := c.FormValue("table_timestamp")
+
 	if tableTimestamp == "" {
 		return c.SendStatus(fiber.StatusBadRequest)
+	}
+
+	table_time, err := time.Parse("2006-01-02T15:04:05.000Z", tableTimestamp)
+	if err != nil {
+		table_time, err = time.Parse("2006-01-02T15:04:05.00Z", tableTimestamp)
+		if err != nil {
+			common.WriteLog(err.Error())
+			return c.SendStatus(fiber.StatusBadRequest)
+		}
 	}
 
 	cluster := gocql.NewCluster(settings.CASSANDRA_HOST)
@@ -22,43 +33,55 @@ func Activate_table(c *fiber.Ctx) error { // TO DO: set is_active = False for an
 	}
 	defer session.Close()
 
-	query := `
-		UPDATE chemdb.tables 
-		SET is_active = true 
+	activateQuery := `
+		UPDATE chemdb.tables
+		SET is_active = true
 		WHERE created_at = ?
 		IF is_ok = true AND is_active = false
 	`
 
-	var applied bool
-	var currentIsOK bool
-	var currentIsActive bool
-
-	iter := session.Query(query, tableTimestamp).Iter()
-	if !iter.Scan(&applied, &currentIsOK, &currentIsActive) {
+	if err = session.Query(activateQuery, table_time).Exec(); err != nil {
+		common.WriteLog(err.Error())
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	if err := iter.Close(); err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+	selectQuery := `
+		SELECT created_at
+		FROM chemdb.tables
+		WHERE is_active = true
+		ALLOW FILTERING
+	`
+
+	var applied bool
+	var active_tables []time.Time
+	var curr_table_timestamp time.Time
+
+	iter := session.Query(selectQuery).Iter()
+	for iter.Scan(&curr_table_timestamp) {
+		if curr_table_timestamp.Equal(table_time) {
+			applied = true
+			continue
+		}
+		active_tables = append(active_tables, curr_table_timestamp)
 	}
 
 	if !applied {
+		common.WriteLog("failed to set activate table %v", tableTimestamp)
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	// wtf ?
 	deactivateQuery := `
 		UPDATE chemdb.tables
 		SET is_active = false
 		WHERE created_at = ?
-		IF EXISTS
 	`
 
-	err = session.Query(deactivateQuery, tableTimestamp).Exec()
-	if err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+	for _, curr_curr_table_timestamp := range active_tables {
+		err = session.Query(deactivateQuery, curr_curr_table_timestamp).Exec()
+		if err != nil {
+			common.WriteLog(err.Error())
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
 	}
 
 	return c.SendStatus(fiber.StatusOK)
