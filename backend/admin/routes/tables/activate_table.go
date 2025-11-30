@@ -8,7 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func Activate_table(c *fiber.Ctx) error {
+func Activate_table(c *fiber.Ctx) error { // TO DO: set is_active = False for another
 	tableTimestamp := c.FormValue("table_timestamp")
 	if tableTimestamp == "" {
 		return c.SendStatus(fiber.StatusBadRequest)

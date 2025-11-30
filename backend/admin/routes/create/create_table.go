@@ -22,7 +22,7 @@ import (
 	"admin/utils/mail"
 )
 
-func Create_table(c *fiber.Ctx) error {
+func Create_table(c *fiber.Ctx) error { // TO DO: no more than 10 tables
 	db, err := dbs.OpenDB()
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)

@@ -83,7 +83,7 @@ const AdminPage: React.FC = () => {
         }
 
         setShowCreateForm(false);
-        fetchTables();
+        setTimeout(() => fetchTables(), 10000);
     };
 
     const handleSetActiveTable = async (e: React.FormEvent, tableTimestamp: string) => {
@@ -122,13 +122,13 @@ const AdminPage: React.FC = () => {
             headers: { Authorization: `Bearer ${token}` }
         }).catch((err) => {return err.response});
 
-        setTimeout(() => fetchTables(), 5000);
+        setTimeout(() => fetchTables(), 10000);
     };
 
     return (
         <div style={{ padding: '20px' }}>
             <h2 style={{ fontSize: 'xx-large', position: 'absolute', top: '5%', left: '40%' }}>Existing Tables: {tables.length}/10</h2>
-            <div style={{border: '1px solid #99a4a7ff', borderRadius: "10%", backgroundColor: "#e9fafeff", width: "15%", padding: "10px"}}>
+            <div style={{border: '1px solid #818485ff', borderRadius: "10%", backgroundColor: "#e9fafeff", width: "10%", padding: "10px", position: 'absolute', top: "5%", left: "10%"}}>
                 <p style={{paddingLeft: "15px"}}><b>Clear tables</b></p>
                 <button onClick={handleDeleteBadTables}
                     style={{
@@ -240,8 +240,9 @@ const AdminPage: React.FC = () => {
                     style={{ 
                         padding: '20px', 
                         border: '1px dashed #000', 
+                        borderRadius: '10%',
                         cursor: 'pointer',
-                        backgroundColor: '#56f64eff',
+                        backgroundColor: '#b7ffb3ff',
                         display: 'flex',
                         justifyContent: 'center',
                         alignItems: 'center',

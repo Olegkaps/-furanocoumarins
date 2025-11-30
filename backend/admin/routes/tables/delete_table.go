@@ -3,16 +3,11 @@ package tables
 import (
 	"admin/settings"
 	"admin/utils/common"
+	"time"
 
 	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2"
 )
-
-type TableMetadata struct {
-	TableMeta    string `json:"table_meta"`
-	TableData    string `json:"table_data"`
-	TableSpecies string `json:"table_species"`
-}
 
 func Delete_table(c *fiber.Ctx) error {
 	tableTimestamp := c.FormValue("table_timestamp")
@@ -20,11 +15,66 @@ func Delete_table(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
+	go delete_table_by_timestamp(tableTimestamp)
+
+	return c.SendStatus(fiber.StatusOK)
+}
+
+func Delete_all_bad_tables(c *fiber.Ctx) error {
 	cluster := gocql.NewCluster(settings.CASSANDRA_HOST)
 	session, err := cluster.CreateSession()
 	if err != nil {
 		common.WriteLog(err.Error())
 		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+	defer session.Close()
+
+	selectQuery := `
+		SELECT created_at
+		FROM chemdb.tables
+		WHERE is_ok = false
+		ALLOW FILTERING
+	`
+
+	var tableTimestamp time.Time
+	iter := session.Query(selectQuery).Iter()
+	for iter.Scan(&tableTimestamp) {
+		go delete_table_by_timestamp(tableTimestamp.Format("2006-01-02T15:04:05.000Z"))
+	}
+
+	if err := iter.Close(); err != nil {
+		common.WriteLog(err.Error())
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	return c.SendStatus(fiber.StatusOK)
+}
+
+type TableMetadata struct {
+	TableMeta    string `json:"table_meta"`
+	TableData    string `json:"table_data"`
+	TableSpecies string `json:"table_species"`
+}
+
+func delete_table_by_timestamp(tableTimestamp string) {
+	table_time, err := time.Parse("2006-01-02T15:04:05.000Z", tableTimestamp)
+	if err != nil {
+		table_time, err = time.Parse("2006-01-02T15:04:05.00Z", tableTimestamp)
+		if err != nil {
+			common.WriteLog(err.Error())
+			return
+		}
+	}
+	if table_time.After(time.Now().Add(-5 * time.Minute)) {
+		common.WriteLog("trying to delete table %v too early", tableTimestamp)
+		return
+	}
+
+	cluster := gocql.NewCluster(settings.CASSANDRA_HOST)
+	session, err := cluster.CreateSession()
+	if err != nil {
+		common.WriteLog(err.Error())
+		return
 	}
 	defer session.Close()
 
@@ -35,45 +85,38 @@ func Delete_table(c *fiber.Ctx) error {
 		IF is_active = false
 	`
 
-	var applied bool
-	var currentIsActive bool
-
-	iter := session.Query(updateQuery, tableTimestamp).Iter()
-
-	if !iter.Scan(&applied, &currentIsActive) {
-		return c.SendStatus(fiber.StatusBadRequest)
-	}
-
-	if err := iter.Close(); err != nil {
+	err = session.Query(updateQuery, table_time).Exec()
+	if err != nil {
 		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	if !applied {
-		return c.SendStatus(fiber.StatusBadRequest)
+		return
 	}
 
 	selectQuery := `
-		SELECT table_meta, table_data, table_species
+		SELECT table_meta, table_data, table_species, is_ok
 		FROM chemdb.tables
 		WHERE created_at = ?
 	`
 
+	var curr_is_ok bool
 	var metadata TableMetadata
-	err = session.Query(selectQuery, tableTimestamp).Scan(
+	err = session.Query(selectQuery, table_time).Scan(
 		&metadata.TableMeta,
 		&metadata.TableData,
 		&metadata.TableSpecies,
+		&curr_is_ok,
 	)
 	if err != nil {
 		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return
+	}
+	if curr_is_ok {
+		return
 	}
 
 	tablesToDrop := []string{
-		"chemdb." + metadata.TableMeta,
-		"chemdb." + metadata.TableData,
-		"chemdb." + metadata.TableSpecies,
+		metadata.TableMeta,
+		metadata.TableData,
+		metadata.TableSpecies,
 	}
 
 	is_failed := false
@@ -86,15 +129,13 @@ func Delete_table(c *fiber.Ctx) error {
 		}
 	}
 	if is_failed {
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return
 	}
 
 	deleteQuery := `DELETE FROM chemdb.tables WHERE created_at = ?`
-	err = session.Query(deleteQuery, tableTimestamp).Exec()
+	err = session.Query(deleteQuery, table_time).Exec()
 	if err != nil {
 		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return
 	}
-
-	return c.SendStatus(fiber.StatusOK)
 }
