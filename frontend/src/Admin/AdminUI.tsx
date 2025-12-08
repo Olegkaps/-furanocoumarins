@@ -110,7 +110,7 @@ const AdminPage: React.FC = () => {
             headers: { Authorization: `Bearer ${token}` }
         }).catch((err) => {return err.response});
 
-        setTimeout(() => fetchTables(), 3000);
+        setTimeout(() => fetchTables(), 5000);
     };
 
     const handleDeleteBadTables = async (e: React.FormEvent) => {

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {ChevronRight} from '@gravity-ui/icons';
 import config from '../config';
 import DataMeta from './DataMeta';
+import { api } from '../Admin/utils';
 
 
 function isEmpty(obj: object) {
@@ -211,10 +212,18 @@ function ResultTable({ rows, meta }: {rows: Array<Array<string>>, meta: Array<Da
 }
 
 
+const fetchSEarchResult = async (e: React.FormEvent, seqrch_req: string) => {
+  e.preventDefault();
+  var bodyFormData = new FormData();
+
+  bodyFormData.append("search_request", seqrch_req)
+  await api.post('/search', bodyFormData).catch((err) => {return err.response});
+}
+
 function SearchLine() {
   const [request, setRequest] = useState("")
   return <div className="card">
-      <form className="main_form" onSubmit={() => alert("your request is: " + request)}>
+      <form className="main_form" onSubmit={(e) => fetchSEarchResult(e, request)}>
         <input type="text" className="search-teaxtarea" onChange={(text) => setRequest(text.target.value)} style={{fontSize: config["FONT_SIZE"]}}></input>
         <div className="search-submit">
           <div style={{

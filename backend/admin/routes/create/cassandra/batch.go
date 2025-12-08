@@ -32,7 +32,7 @@ func BatchInsertData(
 		return fmt.Errorf("error while creating table %s: %w", tableName, err)
 	}
 
-	batch := NewExecutor(session, 100)
+	batch := NewExecutor(session, 50)
 
 	columnsStr := strings.Join(columns, ", ")
 	placeholders := strings.Repeat("?, ", len(columns)-1) + "?"

@@ -8,9 +8,12 @@ import (
 
 func Validate_request(searchRequest string, columns []ColumnMeta) error {
 	// TODO: validate order
-	allowedWords := []string{"AND", "OR", "LIKE", "CONTAINS", "(", ")", "=", "<", ">", "<=", ">=", "<>"}
+	allowedWords := []string{"AND", "OR", "LIKE", "CONTAINS", "(", ")", "=", "<", ">", "<=", ">="}
+	for i := range allowedWords {
+		allowedWords[i] = `\s` + allowedWords[i] + `\s`
+	}
 	allowedPatterns := strings.Join(allowedWords, "|")
-	regex := regexp.MustCompile(`(?i)\b(` + allowedPatterns + `)\b`)
+	regex := regexp.MustCompile(allowedPatterns)
 
 	// check white list
 	cleanedRequest := regex.ReplaceAllString(searchRequest, "")
@@ -19,7 +22,7 @@ func Validate_request(searchRequest string, columns []ColumnMeta) error {
 	}
 	cleanedRequest = strings.TrimSpace(cleanedRequest)
 
-	regex = regexp.MustCompile(`\d+(?:\.\d+)?|'[^']*'|"[^"]*"`)
+	regex = regexp.MustCompile(`\d+(?:\.\d+)?|'[^']*'|"[^"]*"`) // TO DO: disable "", allow sets
 	cleanedRequest = regex.ReplaceAllString(cleanedRequest, "")
 
 	// expect empty string

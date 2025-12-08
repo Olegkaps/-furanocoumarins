@@ -48,6 +48,7 @@ func Search_main_app(c *fiber.Ctx) error {
 		SELECT table_meta, table_data 
 		FROM chemdb.tables
 		WHERE is_active = true
+		ALLOW FILTERING
 	`).Iter()
 
 	var results []struct {
@@ -78,7 +79,7 @@ func Search_main_app(c *fiber.Ctx) error {
 
 	// get table_meta (definitions of columns)
 	var columns []ColumnMeta
-	metaQuery := "SELECT column, type, description FROM chemdb." + activeTable.TableMeta
+	metaQuery := "SELECT column, type, description FROM " + activeTable.TableMeta
 
 	iter = session.Query(metaQuery).Iter()
 
@@ -118,12 +119,11 @@ func Search_main_app(c *fiber.Ctx) error {
 	}
 
 	selectClause := strings.Join(selectedColumns, ", ")
-	fullTable := "chemdb." + activeTable.TableData
 
 	finalQuery := fmt.Sprintf(
-		"SELECT %s FROM %s WHERE %s",
+		"SELECT %s FROM %s WHERE %s ALLOW FILTERING",
 		selectClause,
-		fullTable,
+		activeTable.TableData,
 		searchRequest,
 	)
 

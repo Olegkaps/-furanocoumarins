@@ -276,7 +276,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 		session,
 		table_species_name,
 		sp_columns,
-		append(species_sheet.ColumnNames, "uuid"),
+		[]string{"uuid"},
 		sp_data,
 	)
 	if err != nil {
@@ -420,18 +420,12 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 	}
 
 	data_primary_keys := []string{"uuid"}
-	for i, arrange := range main_sheet.ArrangeOfExternals {
-		if arrange != "classification" {
-			data_primary_keys = append(data_primary_keys, main_sheet.ColumnNames[i])
-		}
-	}
-	data_primary_keys = append(data_primary_keys, species_sheet.ColumnNames...)
 
 	err = cassandra.BatchInsertData(
 		session,
 		table_data_name,
 		data_columns,
-		data_primary_keys, // TO DO: maybe add authors and smth else
+		data_primary_keys,
 		joined_data,
 	)
 	if err != nil {

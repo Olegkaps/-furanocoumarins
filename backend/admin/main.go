@@ -21,6 +21,7 @@ func main() {
 	app.Use(cors.New(settings.CORS_SETTINGS))
 
 	app.Post("/search", search.Search_main_app)
+	// TO DO: nice to have metadata for autocompletion
 
 	app.Get("/ping", func(c *fiber.Ctx) error { return c.SendStatus(200) })
 	app.Post("/login", auth.Login)
