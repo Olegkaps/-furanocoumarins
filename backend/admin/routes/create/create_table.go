@@ -62,13 +62,14 @@ func Create_table(c *fiber.Ctx) error { // TO DO: no more than 10 tables
 	}
 
 	meta := c.FormValue("meta")
+	table_name := c.FormValue("name")
 
-	go make_create_table(xlsx, meta, mail)
+	go make_create_table(xlsx, meta, mail, table_name)
 
 	return c.SendStatus(fiber.StatusCreated)
 }
 
-func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string) {
+func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileName string) {
 	defer TableFile.Close()
 
 	sendErrorMail := func(err_message string) {
@@ -114,14 +115,16 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail string
 	err = session.Query(fmt.Sprintf(
 		`INSERT INTO chemdb.tables (
 			created_at,
+			name,
 			version,
 			table_meta,
 			table_data,
 			table_species,
 			is_active,
 			is_ok
-		) VALUES ('%s', '%s', '%s', '%s', '%s', false, false);`,
+		) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', false, false);`,
 		curr_time,
+		FileName,
 		settings.BACK_VERSION,
 		table_meta_name,
 		table_data_name,

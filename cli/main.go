@@ -23,6 +23,7 @@ const (
 	cassandraKeySpace = `CREATE KEYSPACE IF NOT EXISTS chemdb WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};`
 	cassandraSchema   = `CREATE TABLE IF NOT EXISTS chemdb.tables (
     created_at TIMESTAMP,
+	name TEXT,
 	version TEXT,
 	table_meta TEXT,
 	table_data TEXT,

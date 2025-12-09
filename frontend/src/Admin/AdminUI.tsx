@@ -6,17 +6,20 @@ import config from '../config';
 
 class Table {
     version: string
+    name: string
     created_at: string
     is_active: boolean
     is_ok: boolean
 
     constructor(
         version: string,
+        name: string,
         created_at: string,
         is_active: boolean,
         is_ok: boolean,
     ) {
         this.version = version
+        this.name = name
         this.created_at = created_at
         this.is_active = is_active
         this.is_ok = is_ok
@@ -30,6 +33,7 @@ const AdminPage: React.FC = () => {
     const [showCreateForm, setShowCreateForm] = useState(false);
     
     const [googleSheetFile, setGoogleSheetFile] = useState<File>();
+    const [googleSheetName, setGoogleSheetName] = useState('');
     const [googleMetaList, setGoogleMetaList] = useState('');
 
     if (!isTokenExists()) {
@@ -74,6 +78,7 @@ const AdminPage: React.FC = () => {
         }
         bodyFormData.append("file", googleSheetFile)
         bodyFormData.append("meta", googleMetaList)
+        bodyFormData.append("name", googleSheetName)
 
         let response = await api.post('/create-table', bodyFormData, {
             headers: { Authorization: `Bearer ${token}` }
@@ -84,7 +89,7 @@ const AdminPage: React.FC = () => {
         }
 
         setShowCreateForm(false);
-        setTimeout(() => fetchTables(), 10000);
+        setTimeout(() => fetchTables(), 15000);
     };
 
     const handleSetActiveTable = async (e: React.FormEvent, tableTimestamp: string) => {
@@ -175,6 +180,18 @@ const AdminPage: React.FC = () => {
                         <input 
                             type="text" 
                             required={true}
+                            value={googleSheetName} 
+                            onChange={(e) => setGoogleSheetName(e.target.value)} 
+                            placeholder="Name of table"
+                            style={{ 
+                                padding: '10px',
+                                marginBottom: '10px',
+                            }}
+                        />
+                        <br></br>
+                        <input 
+                            type="text" 
+                            required={true}
                             value={googleMetaList} 
                             onChange={(e) => setGoogleMetaList(e.target.value)} 
                             placeholder="List with metadata"
@@ -209,8 +226,8 @@ const AdminPage: React.FC = () => {
                         }}
                     >
                         <div style={{position: 'relative', top: '-15%', left: '37%'}}>{ table.is_active && <div style={{position: 'absolute',}}><CrownDiamond {...{style: {width: '40px', height: '40px', color: '#afac08ff', position: 'relative',  top: "-2%", left: "4.4%"}}} /></div>}</div>
-                        <h3>Created:</h3> 
-                        <h3>{table.created_at.replace("T", " ").replace("Z", "")}</h3>
+                        <h3>{table.name}</h3>
+                        <p><div><b>Created:</b></div> {table.created_at.replace("T", " ").replace("Z", "")}</p>
                         <p>Version: {table.version}</p>
 
                         { !table.is_active &&
