@@ -2,6 +2,7 @@ package create
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -515,6 +516,10 @@ func (v_sheet *VirtualSheet) ReadFile(file *excelize.File) error {
 	return err
 }
 
+func split_set(r rune) bool {
+	return slices.Contains(settings.CASSANDRA_COLLECTION_SEPARATORS, r)
+}
+
 func (v_sheet *VirtualSheet) Postprocess() error {
 	if v_sheet.is_postprocessed {
 		return nil
@@ -534,7 +539,7 @@ func (v_sheet *VirtualSheet) Postprocess() error {
 
 			if strings.Contains(v_sheet.ColumnTypes[j], "set") {
 				set_values := make(map[string]struct{})
-				for val := range strings.SplitSeq(item.(string), " ") {
+				for _, val := range strings.FieldsFunc(item.(string), split_set) {
 					set_values[val] = struct{}{}
 				}
 				v_sheet.Rows[key][j] = set_values
