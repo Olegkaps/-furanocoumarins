@@ -224,7 +224,7 @@ function SearchLine() {
   const [request, setRequest] = useState("")
   return <div className="card">
       <form className="main_form" onSubmit={(e) => fetchSEarchResult(e, request)}>
-        <input type="text" className="search-teaxtarea" onChange={(text) => setRequest(text.target.value)} style={{fontSize: config["FONT_SIZE"]}}></input>
+        <input type="text" className="search-teaxtarea" onChange={(text) => setRequest(text.target.value)} style={{fontSize: 'large'}}></input>
         <div className="search-submit">
           <div style={{
             position: "relative",

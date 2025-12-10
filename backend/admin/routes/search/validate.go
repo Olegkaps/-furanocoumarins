@@ -7,11 +7,13 @@ import (
 )
 
 func Validate_request(searchRequest string, columns []ColumnMeta) error {
-	// TODO: validate order
-	allowedWords := []string{"AND", "OR", "LIKE", "CONTAINS", "(", ")", "=", "<", ">", "<=", ">="}
+	// TO DO: validate order
+	// TO DO: mayby add 'OR' and 'LIKE'
+	allowedWords := []string{"AND", "IN", "CONTAINS", "=", "!=", "<", ">", "<=", ">="}
 	for i := range allowedWords {
 		allowedWords[i] = `\s` + allowedWords[i] + `\s`
 	}
+	allowedWords = append(allowedWords, `\(`, `\)`, `,`)
 	allowedPatterns := strings.Join(allowedWords, "|")
 	regex := regexp.MustCompile(allowedPatterns)
 
@@ -22,12 +24,13 @@ func Validate_request(searchRequest string, columns []ColumnMeta) error {
 	}
 	cleanedRequest = strings.TrimSpace(cleanedRequest)
 
-	regex = regexp.MustCompile(`\d+(?:\.\d+)?|'[^']*'|"[^"]*"`) // TO DO: disable "", allow sets
+	// only 'strings'
+	regex = regexp.MustCompile(`'[^']*'|\s`)
 	cleanedRequest = regex.ReplaceAllString(cleanedRequest, "")
 
 	// expect empty string
 	if cleanedRequest != "" {
-		return fmt.Errorf("request have incorrect words (merged): %s", ""+cleanedRequest)
+		return fmt.Errorf("request have incorrect words (merged): %v", ""+cleanedRequest)
 	}
 	return nil
 }

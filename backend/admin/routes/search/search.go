@@ -100,7 +100,7 @@ func Search_main_app(c *fiber.Ctx) error {
 	err = Validate_request(searchRequest, columns)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid search request — contains prohibited terms",
+			"error": err.Error(),
 		})
 	}
 
@@ -141,7 +141,7 @@ func Search_main_app(c *fiber.Ctx) error {
 	if err = iter.Close(); err != nil {
 		common.WriteLog("Search query failed: " + err.Error())
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "search query execution failed",
+			"error": err.Error(),
 		})
 	}
 
