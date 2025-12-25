@@ -128,7 +128,7 @@ func Search_main_app(c *fiber.Ctx) error {
 	)
 
 	// Search request
-	var searchResults []map[string]interface{}
+	searchResults := make([]map[string]interface{}, 0)
 	iter = session.Query(finalQuery).Iter()
 
 	row := make(map[string]interface{})

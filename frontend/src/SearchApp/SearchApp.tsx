@@ -4,172 +4,11 @@ import {ChevronRight} from '@gravity-ui/icons';
 import config from '../config';
 import DataMeta from './DataMeta';
 import { api } from '../Admin/utils';
+import PhilogeneticTreeOrNull from './PhilogeneticTree';
 
 
 function isEmpty(obj: object) {
   return Object.keys(obj).length === 0;
-}
-
-
-class Specie {
-  values_count: number
-  clades: Array<string>
-
-  constructor(count: number, clades: Array<string>) {
-    this.values_count = count
-    this.clades = clades
-  }
-}
-
-
-class PhilogeneticTreeNode {
-  clade_name: string
-  childs: {[key: string]: PhilogeneticTreeNode;}
-  childs_num: number
-  clades_num: number
-  is_visible: boolean
-
-  constructor(clade_name: string) {
-    this.clade_name = clade_name
-    this.childs = {}
-    this.childs_num = 0
-    this.clades_num = 0
-    this.is_visible = true
-  }
-
-  add_child(clades: Array<string>, count: number) {
-    let curr_clade = clades[0]
-    if (!(curr_clade in this.childs)) {
-      this.childs[curr_clade] = new PhilogeneticTreeNode(curr_clade)
-    }
-    this.clades_num += 1
-    this.childs_num += count
-
-    if(clades.length > 1) {
-      this.childs[curr_clade].add_child(clades.slice(1), count)
-    } else {
-      this.childs[curr_clade].clades_num = 1
-      this.childs[curr_clade].childs_num = count
-    }
-  }
-
-  click_visible() {
-    this.is_visible = !this.is_visible
-  }
-
-  render(meta: Array<string>, meta_ind: number = 0, child_ind: number = 0, total_bros: number = 0) {
-    return <div key={meta[meta_ind] + "_" + this.clade_name}
-      style={{
-        width: '100%',
-        backgroundColor: 'white',
-        display: 'table',
-      }}>
-    
-      <div style={{
-          display: 'table-cell',
-          verticalAlign: 'middle',
-          height: 30 * this.clades_num,
-          borderColor: 'white',
-      }}>
-        <TreeCladesAdapter {...{
-          drawLeftBorder: meta_ind === 0 || child_ind === 0
-        }} />
-        <TreeCladeLine />
-        <div style={{
-          position: 'relative',
-          top: '-40px',
-          right: '-70%',
-        }}>
-          <p style={{
-            position: 'absolute',
-            fontSize: config["FONT_SIZE"],
-            fontWeight: 600,
-          }}>
-            {this.clade_name.replace(' ', '\u00A0')}
-          </p>
-        </div>
-        {!(Object.keys(this.childs).length <= 1 && total_bros === 1)
-        && <div style={{
-          position: 'relative',
-          top: '-15px',
-          right: '25px',
-        }}>
-          <CountButton {...{color: '#fae6b0', number: this.childs_num}} />
-        </div>}
-        <TreeCladesAdapter {...{
-          drawLeftBorder: meta_ind === 0 || child_ind === total_bros - 1
-        }} />
-      </div>
-      <div style={{display: 'table-cell', verticalAlign: 'middle'}}>{ isEmpty(this.childs) || !this.is_visible
-        ?
-          <div style={{
-              position: 'relative',
-              paddingBottom: '35px',
-              top: '5px',
-          }}>
-            <CountButton {...{color: '#007bff', number: this.childs_num}} />
-          </div>
-        :
-          <div>{
-            Object.keys(this.childs).map((name, ind) => (
-              <div>
-                {this.childs[name].render(meta, meta_ind+1, ind, Object.keys(this.childs).length)}
-              </div>
-            ))
-          }</div>
-      }</div>
-    </div>
-  }
-}
-
-
-function TreeCladesAdapter({drawLeftBorder}: {drawLeftBorder: boolean}) {
-  return <div style={
-    drawLeftBorder
-    ?
-    {height: '50%'}
-    :
-    {height: '50%', borderLeft: '2px solid black'}
-  }>
-    &nbsp;
-  </div>
-}
-
-
-function TreeCladeLine() {
-  return <hr style={{borderColor: 'black', width: '100%', margin: 0}}></hr>
-}
-
-
-function CountButton({color, number}: {color: string, number: number}) {
-  return <button
-    onClick={() => {}}
-    style={{
-      backgroundColor: color,
-      padding: '4px 5px 6px 5px',
-      border: '0',
-      borderRadius: '40%',
-      position: 'absolute',
-      fontSize: config["FONT_SIZE"],
-      fontWeight: 700,
-      width: '50px',
-    }}>
-      {number}
-    </button>
-}
-
-
-function PhilogeneticTree({ species, meta }: {species: Array<Specie>, meta: Array<string>}) {
-  // TO DO: all nested arrays must have same lenght eith meta
-  // TO DO: all arrays must be unique
-  let root = new PhilogeneticTreeNode("")
-  for(let specie of species) {
-    root.add_child(specie.clades, specie.values_count)
-  }
-
-  // TO DO: Add visibility for branches and clades
-
-  return <div className="tree" style={{marginRight: '50px',}}>{root.render(meta)}</div>
 }
 
 
@@ -203,27 +42,41 @@ function ResultTableBody({ rows, meta }: {rows: Array<Array<string>>, meta: Arra
 
 
 function ResultTable({ rows, meta }: {rows: Array<Array<string>>, meta: Array<DataMeta>}) {
+  if (meta.length === 0) {
+    return <div></div>
+  }
+
   return <div className='table'>
-    <table style={{margin: 'auto',}}>
+    <table style={{margin: 'auto'}}>
       <ResultTableHead {...{meta: meta}} />
       <ResultTableBody {...{meta: meta, rows: rows}} />
+      {rows.length === 0 &&
+        <caption style={{padding: '20%', border: '1px solid #d4d4d4ff', fontSize: config["FONT_SIZE"], backgroundColor: 'white'}}>No data for given request</caption>
+      }
     </table>
   </div>
 }
 
 
-const fetchSEarchResult = async (e: React.FormEvent, seqrch_req: string) => {
+const fetchSEarchResult = async (e: React.FormEvent, seqrch_req: string, setSearchResponse: React.Dispatch<React.SetStateAction<{}>>) => {
   e.preventDefault();
   var bodyFormData = new FormData();
 
   bodyFormData.append("search_request", seqrch_req)
-  await api.post('/search', bodyFormData).catch((err) => {return err.response});
+  var response = await api.post('/search', bodyFormData).catch((err) => {return err.response});
+
+  if (response && response.status === 200) {
+    setSearchResponse(response.data)
+  } else {
+    // TO DO: better error handling
+    alert("Error: " + response.status + " - " + response.data.error)
+  }
 }
 
-function SearchLine() {
+function SearchLine({setSearchResponse}: {setSearchResponse: React.Dispatch<React.SetStateAction<{}>>}) {
   const [request, setRequest] = useState("")
   return <div className="card">
-      <form className="main_form" onSubmit={(e) => fetchSEarchResult(e, request)}>
+      <form className="main_form" onSubmit={(e) => fetchSEarchResult(e, request, setSearchResponse)}>
         <input type="text" className="search-teaxtarea" onChange={(text) => setRequest(text.target.value)} style={{fontSize: 'large'}}></input>
         <div className="search-submit">
           <div style={{
@@ -257,27 +110,24 @@ function SearchLine() {
 
 
 function SearchApp() {
-  let species = [
-    new Specie(6, ["A", "ASGARD", "gr 1"]),
-    new Specie(1, ["A", "ASGARD", "gr 2"]),
-    new Specie(5, ["A", "???", "E"]),
-    new Specie(1, ["B", "C", "D"]),
-    new Specie(3, ["Y", "Plant", "Rose"]),
-    new Specie(10, ["Y", "Plant", "Amarant"]),
-    new Specie(506, ["Y", "Plant", "Arabidopsis"]),
-    new Specie(45, ["Y", "Plant", "Mais"]),
-    new Specie(1, ["Y", "Plant", "ndjfd"]),
-    new Specie(23, ["Y", "Plant", "pl 1"]),
-    new Specie(1, ["Y", "Plant", "pl 2"]),
-    new Specie(3, ["Y", "Animal", "Bear"]),
-    new Specie(1, ["Y", "Animal", "Fish"]),
-  ]
-  let species_meta = [
-    "root",
-    "Domain",
-    "reign",
-    "tribe"
-  ]
+  const [searchResponse, setSearchResponse] = useState<{[index: string]:any}>({})
+
+  return <>
+    <br></br>
+    <SearchLine {...{setSearchResponse: setSearchResponse}} />
+    <b></b> {/* this doent works */}
+    <PhilogeneticTreeOrNull {...searchResponse} />
+    <br></br>
+    <ResultTableOrNull {...searchResponse} />
+  </>
+}
+
+
+function ResultTableOrNull(response: {[index: string]: any}) {
+  if (isEmpty(response)) {
+    return <div></div>
+  }
+
   let data = [
     ["ID1", "Plant sp.", "c=c"],
     ["ID2", "Plant sp.", "cc"],
@@ -290,15 +140,98 @@ function SearchApp() {
     new DataMeta("smiles", "SMILES", ""),
   ]
 
-  return <>
-    <br></br>
-    <SearchLine />
-    <b></b> {/* this doent works */}
-    <PhilogeneticTree {...{species: species, meta: species_meta}} />
-    <br></br>
-    <ResultTable {...{rows: data, meta: data_meta}}/>
-  </>
-}
+  // if (!isEmpty(response)) { // debug
+  //   data = response["data"] // parse
+  // }
+  let _response = {
+    "metadata": [
+    {
+      "column": "domain",
+      "type": "clas[0]",
+      "description": "Genus (according to original article)"
+    },
+    {
+      "column": "reidn",
+      "type": "clas[1]",
+      "description": "Subtribe"
+    },
+    {
+      "column": "tribe",
+      "type": "clas[2]",
+      "description": "tribe"
+    },
+    {
+      "column": "comment_pimenov",
+      "type": "clas[0][pimenov]",
+      "description": "Species (according to Pimenov)"
+    },
+    {
+      "column": "species_accepted_author",
+      "type": "",
+      "description": "Author of accepted species according to POWO"
+    },
+    {
+      "column": "genome",
+      "type": "link[%s]",
+      "description": "NCBI, whole genomic data"
+    },
+    {
+      "column": "number_substituents",
+      "type": "invisible",
+      "description": "Number of substituents in coumarin nucleus"
+    },
+    {
+      "column": "lsid_original",
+      "type": "primary link[https://www.ipni.org/n/%s]",
+      "description": "IPNI or POWO Life Sciences Identifier (according to original article)"
+    },
+    {
+      "column": "smiles",
+      "type": "SMILES",
+      "description": "SMILES-code"
+    },
+    {
+      "column": "type_structure",
+      "type": "set invisible",
+      "description": "Type of structure"
+    },
+  ],
+  "data": [
+    {
+      "domain": "E",
+      "reidn": "Tordyliinae",
+      "tribe": "Tordylieae",
+    },
+    {
+      "domain": "E",
+      "reidn": "Tordyliinae",
+      "tribe": "Tordylieae",
+    },
+    {
+      "domain": "E",
+      "reidn": "Tordyliinae",
+      "tribe": "Tordylieae",
+    },
+    {
+      "domain": "E",
+      "reidn": "Tordyliinae",
+      "tribe": "Abc",
+    },
+    {
+      "domain": "----",
+      "reidn": "!-",
+      "tribe": "abc",
+    },
+    {
+      "domain": "----",
+      "reidn": "!-",
+      "tribe": "abc",
+    },
+  ]
+  }
 
+
+  return <ResultTable {...{rows: data, meta: data_meta}}/>
+}
 
 export default SearchApp
