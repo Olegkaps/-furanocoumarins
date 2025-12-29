@@ -229,6 +229,9 @@ function PhilogeneticTreeOrNull({response, tag}: {response: {[index: string]: an
   Object.entries(counts).forEach(([joined_clades, count]) => {
     species.push(new Specie(count, joined_clades.split("@")))
   });
+  if (species.length <= 1) {
+    return <div></div>
+  }
 
   return <PhilogeneticTree {...{species: species, meta: species_meta}} />
 }
