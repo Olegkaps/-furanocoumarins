@@ -7,6 +7,7 @@ class DataMeta {
   additional_data: string
 
   constructor(type: string, name: string, data: string) {
+    // TO DO: validate type
     this.type = type
     this.name = name
     this.additional_data = data
@@ -15,7 +16,7 @@ class DataMeta {
   render(value: string) { // rewrite to classes
     if (this.type === "link") {
       return this.render_link(value)
-    } else if (this.type === "cls") {
+    } else if (this.type === "clas") {
       return this.render_cls(value)
     } else if (this.type === "smiles") {
       return this.render_smiles(value)

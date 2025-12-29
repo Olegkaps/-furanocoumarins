@@ -1,9 +1,6 @@
+import { isEmpty, ZoomableContainer } from "../Admin/utils";
 import config from "../config";
 
-
-function isEmpty(obj: object) {
-  return Object.keys(obj).length === 0;
-}
 
 class Specie {
   values_count: number
@@ -106,7 +103,9 @@ class PhilogeneticTreeNode {
           </div>
         :
           <div>{
-            Object.keys(this.childs).map((name, ind) => (
+            Object.keys(this.childs).sort(
+              (a, b) => Object.keys(a).length - Object.keys(b).length
+            ).map((name, ind) => (
               <div>
                 {this.childs[name].render(meta, meta_ind+1, ind, Object.keys(this.childs).length)}
               </div>
@@ -153,8 +152,6 @@ function CountButton({color, number}: {color: string, number: number}) {
     </button>
 }
 
-import { useState, useRef, useEffect } from 'react';
-
 
 function PhilogeneticTree({ species, meta }: {species: Array<Specie>, meta: Array<string>}) {
   if (species.length === 0) {
@@ -169,51 +166,8 @@ function PhilogeneticTree({ species, meta }: {species: Array<Specie>, meta: Arra
 
   // TO DO: Add visibility for branches and clades
 
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const containerRef = useRef<HTMLDivElement>(null);
 
-  const handleWheel = (e: WheelEvent) => {
-    e.preventDefault();
-
-    const delta = e.deltaY;
-    const newZoom = zoomLevel + (delta > 0 ? -0.1 : 0.1);
-    let clampedZoom = Math.max(0.5, Math.min(newZoom, 1.1)); // 0.5x … 3x
-
-    setZoomLevel(clampedZoom);
-  };
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (container) {
-      container.addEventListener('wheel', handleWheel, { passive: false });
-      return () => container.removeEventListener('wheel', handleWheel);
-    }
-  }, [zoomLevel]);
-
-  return <div className="tree"
-    style={{
-        backgroundColor: 'white',
-        padding: '30px',
-        paddingRight: '70px',
-        border: '1px solid #d4d4d4ff',
-        borderRadius: '20px',
-        maxHeight: '600px',
-        maxWidth: '100%',
-        overflow: 'scroll',
-        position: 'relative',
-    }}>
-      <div
-        ref={containerRef}
-        className="smart-zoom-container"
-        style={{
-          zoom: zoomLevel,
-          //WebkitZoom: zoomLevel, // for Safari
-          display: 'block',
-          width: '100%',
-          backgroundColor: '#f9f9f9',
-        }}
-      >{root.render(meta)}</div>
-    </div>
+  return <ZoomableContainer>{root.render(meta)}</ZoomableContainer>
 }
 
 

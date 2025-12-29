@@ -2,7 +2,13 @@ import axios from "axios"
 import { jwtDecode } from 'jwt-decode';
 
 import config from "../config"
+import { useEffect, useRef, useState } from "react";
 
+
+
+export function isEmpty(obj: object) {
+  return Object.keys(obj).length === 0;
+}
 
 interface JwtPayload {
     name: string,
@@ -64,4 +70,51 @@ export function setToken(token_value: string) {
 
 export function getName() {
     return localStorage.getItem(NAME)
+}
+
+export function ZoomableContainer({children}: {children: React.ReactNode}) {
+    const [zoomLevel, setZoomLevel] = useState(1);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    const handleWheel = (e: WheelEvent) => {
+        e.preventDefault();
+
+        const delta = e.deltaY;
+        const newZoom = zoomLevel + (delta > 0 ? -0.1 : 0.1);
+        let clampedZoom = Math.max(0.5, Math.min(newZoom, 1.1)); // 0.5x … 3x
+
+        setZoomLevel(clampedZoom);
+    };
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (container) {
+            container.addEventListener('wheel', handleWheel, { passive: false });
+            return () => container.removeEventListener('wheel', handleWheel);
+        }
+    }, [zoomLevel]);
+
+    return <div className="tree"
+    style={{
+        backgroundColor: 'white',
+        padding: '30px',
+        paddingRight: '70px',
+        border: '1px solid #d4d4d4ff',
+        borderRadius: '20px',
+        maxHeight: '600px',
+        maxWidth: '100%',
+        overflow: 'scroll',
+        position: 'relative',
+    }}>
+      <div
+        ref={containerRef}
+        className="smart-zoom-container"
+        style={{
+          zoom: zoomLevel,
+          //WebkitZoom: zoomLevel, // for Safari
+          display: 'block',
+          width: '100%',
+          backgroundColor: '#f9f9f9',
+        }}
+      >{children}</div></div>
 }
