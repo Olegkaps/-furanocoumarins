@@ -39,10 +39,13 @@ function ResultTable({ rows, meta }: {rows: Array<Array<string>>, meta: Array<Da
 
   return <ZoomableContainer><div className='table'>
     <table style={{margin: 'auto'}}>
-      <ResultTableHead {...{meta: meta}} />
-      <ResultTableBody {...{meta: meta, rows: rows}} />
-      {rows.length === 0 &&
-        <caption style={{padding: '20%', border: '1px solid #d4d4d4ff', fontSize: config["FONT_SIZE"], backgroundColor: 'white'}}>No data for given request</caption>
+      {rows.length === 0 ?
+        <caption style={{padding: '20%', border: '1px solid #d4d4d4ff', fontSize: config["FONT_SIZE"], backgroundColor: 'white', minWidth: '300px'}}>No data for given request</caption>
+      :
+      <>
+        <ResultTableHead {...{meta: meta}} />
+        <ResultTableBody {...{meta: meta, rows: rows}} />
+      </>
       }
     </table>
   </div></ZoomableContainer>
