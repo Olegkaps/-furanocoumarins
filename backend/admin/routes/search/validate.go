@@ -9,6 +9,7 @@ import (
 func Validate_request(searchRequest string, columns []ColumnMeta) error {
 	// TO DO: validate order
 	// TO DO: mayby add 'OR' and 'LIKE'
+	// TO DO: fix 'IN not supported for non-primary columns' error
 	allowedWords := []string{"AND", "IN", "CONTAINS", "=", "!=", "<", ">", "<=", ">="}
 	for i := range allowedWords {
 		allowedWords[i] = `\s` + allowedWords[i] + `\s`

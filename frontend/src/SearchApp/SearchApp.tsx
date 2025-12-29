@@ -111,12 +111,13 @@ function SearchLine({setSearchResponse}: {setSearchResponse: React.Dispatch<Reac
 
 function SearchApp() {
   const [searchResponse, setSearchResponse] = useState<{[index: string]:any}>({})
+  let classification_tag = "default" // TO DO: swithcher
 
   return <>
     <br></br>
     <SearchLine {...{setSearchResponse: setSearchResponse}} />
     <b></b> {/* this doent works */}
-    <PhilogeneticTreeOrNull {...searchResponse} />
+    <PhilogeneticTreeOrNull {...{response: searchResponse, tag: classification_tag}} />
     <br></br>
     <ResultTableOrNull {...searchResponse} />
   </>

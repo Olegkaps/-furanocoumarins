@@ -217,7 +217,7 @@ function PhilogeneticTree({ species, meta }: {species: Array<Specie>, meta: Arra
 }
 
 
-function PhilogeneticTreeOrNull(response: {[index: string]: any}) {
+function PhilogeneticTreeOrNull({response, tag}: {response: {[index: string]: any}, tag: string}) {
   if (isEmpty(response)) {
     return <div></div>
   }
@@ -234,10 +234,22 @@ function PhilogeneticTreeOrNull(response: {[index: string]: any}) {
 
   let species_meta = ["__root__"]
   metadata_response.forEach((meta_item: {[index: string]: any}) => {
-    if (meta_item["type"].startsWith("clas[")) {
-      let clade_name = meta_item["column"]
-      species_meta.push(clade_name)
+    // e.g 'clas[00]', 'clas[02][powo]', ...
+    let _type = meta_item["type"]    
+    if (!_type.startsWith("clas[")) {
+      return
     }
+  
+    let curr_tag = "default"
+    if (_type.includes("][")) {
+      curr_tag = _type.split("][")[1].split("]")[0]
+    }
+    if (curr_tag !== tag) {
+      return
+    }
+
+    let clade_name = meta_item["column"]
+    species_meta.push(clade_name)
   })
 
   let counts: {[index: string]: number} = {}
