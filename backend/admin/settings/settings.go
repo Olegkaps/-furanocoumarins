@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9/maintnotifications"
 )
 
 var BACK_VERSION = "v1"
@@ -31,6 +32,9 @@ var REDIS_SOURCE = &redis.Options{
 	DialTimeout:  10 * time.Second,
 	ReadTimeout:  5 * time.Second,
 	WriteTimeout: 5 * time.Second,
+	MaintNotificationsConfig: &maintnotifications.Config{
+		Mode: maintnotifications.ModeDisabled,
+	},
 }
 
 var CORS_SETTINGS = cors.Config{
