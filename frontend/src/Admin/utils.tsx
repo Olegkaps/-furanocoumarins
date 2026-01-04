@@ -73,7 +73,7 @@ export function getName() {
 }
 
 export function ZoomableContainer({children}: {children: React.ReactNode}) {
-    const [zoomLevel, setZoomLevel] = useState(1);
+    const [zoomLevel, setZoomLevel] = useState(0.7);
     const containerRef = useRef<HTMLDivElement>(null);
 
     const handleWheel = (e: WheelEvent) => {

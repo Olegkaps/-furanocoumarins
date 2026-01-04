@@ -94,13 +94,7 @@ class PhilogeneticTreeNode {
       </div>
       <div style={{display: 'table-cell', verticalAlign: 'middle'}}>{ isEmpty(this.childs) || !this.is_visible
         ?
-          <div style={{
-              position: 'relative',
-              paddingBottom: '35px',
-              top: '5px',
-          }}>
-            <CountButton {...{color: '#007bff', number: this.childs_num}} />
-          </div>
+          <div></div>
         :
           <div>{
             Object.keys(this.childs).sort(
@@ -171,7 +165,12 @@ function PhilogeneticTree({ species, meta }: {species: Array<Specie>, meta: Arra
 }
 
 
-function PhilogeneticTreeOrNull({response, tag}: {response: {[index: string]: any}, tag: string}) {
+function PhilogeneticTreeOrNull(
+    {response, tag, setTag}:
+    {response: {[index: string]: any},
+    tag: string,
+    setTag: React.Dispatch<React.SetStateAction<string>>},
+  ) {
   if (isEmpty(response)) {
     return <div></div>
   }
@@ -187,6 +186,13 @@ function PhilogeneticTreeOrNull({response, tag}: {response: {[index: string]: an
   })
 
   let species_meta = ["__root__"]
+  let meta_default_cols = [""]
+  let class_num_to_tag: {[val: string]: string} = {}
+
+  let all_tags = new Set<string>()
+  all_tags.add("default")
+  all_tags.add(tag)
+
   metadata_response.forEach((meta_item: {[index: string]: any}) => {
     // e.g 'clas[00]', 'clas[02][powo]', ...
     let _type = meta_item["type"]    
@@ -194,16 +200,29 @@ function PhilogeneticTreeOrNull({response, tag}: {response: {[index: string]: an
       return
     }
   
+    let curr_num: string = _type.split("[")[1].split("]")[0]
+
     let curr_tag = "default"
     if (_type.includes("][")) {
       curr_tag = _type.split("][")[1].split("]")[0]
     }
-    if (curr_tag !== tag) {
+  
+    if (curr_tag === "default") {
+      meta_default_cols.push(meta_item["column"])
+    }
+  
+    all_tags.add(curr_tag)
+    if (curr_tag === "default" && !(curr_num in class_num_to_tag)) {
+      //
+    } else if (curr_tag === tag && curr_num in class_num_to_tag) {
+      species_meta.pop()
+    } else if (curr_tag !== tag) {
       return
     }
 
     let clade_name = meta_item["column"]
     species_meta.push(clade_name)
+    class_num_to_tag[curr_num] = curr_tag
   })
 
   let counts: {[index: string]: number} = {}
@@ -215,7 +234,11 @@ function PhilogeneticTreeOrNull({response, tag}: {response: {[index: string]: an
       if (ind === 0) {
         return
       }
-      clades.push(row[clade_name])
+      let value = row[clade_name]
+      if (value.replaceAll(" ", "") === "") {
+        value = row[meta_default_cols[ind]]
+      }
+      clades.push(value)
     })
 
     let joined_clades = clades.join("@")
@@ -233,7 +256,19 @@ function PhilogeneticTreeOrNull({response, tag}: {response: {[index: string]: an
     return <div></div>
   }
 
-  return <PhilogeneticTree {...{species: species, meta: species_meta}} />
+  return <div style={{marginTop: '20px'}}>
+    <div style={{marginLeft: '25px', marginRight: '25px', border: '1px dashed grey', borderRadius: '5px', padding: '4px', paddingLeft: '20px'}}>
+      <span style={{}}>Classification: </span>
+      {Array(...all_tags).sort().map((item, _) => (
+        <button
+          style={item !== tag ? 
+            {padding: '7px', border: '1px solid blue', borderRadius: '4px', marginLeft: '10px', backgroundColor: '#e5e2ffff',}
+          : {padding: '7px', border: '1px solid yellow', borderRadius: '4px', marginLeft: '10px', backgroundColor: '#fcffe2ff',}}
+          onClick={() => {setTag(item)}}
+        >{item}</button>
+      ))}</div>
+    <PhilogeneticTree {...{species: species, meta: species_meta}} />
+  </div>
 }
 
 export default PhilogeneticTreeOrNull;
