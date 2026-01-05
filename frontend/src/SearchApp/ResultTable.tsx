@@ -61,9 +61,6 @@ function ResultTableOrNull(response: {[index: string]: any}) {
   let data: Array<Array<string>> = []
 
   response["metadata"].forEach((meta_item: {[index: string]: any}) => {
-    if (meta_item["type"].includes("invisible")) {
-        return
-    }
 
     let data_name = meta_item["column"]
     let data_type = "clas"  // TO DO: parse type

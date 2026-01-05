@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import {ChevronRight} from '@gravity-ui/icons';
-import { api } from '../Admin/utils';
+import { api, isEmpty } from '../Admin/utils';
 import PhilogeneticTreeOrNull from './PhilogeneticTree';
 import ResultTableOrNull from './ResultTable';
 
@@ -58,18 +58,80 @@ function SearchLine({setSearchResponse}: {setSearchResponse: React.Dispatch<Reac
 }
 
 
+function filterResponse(searchResponse: {[index: string]: any;}) {
+  if (isEmpty(searchResponse)) {
+    return searchResponse
+  }
+
+  let resultResponse: {[index: string]: any} = {}
+
+  resultResponse["metadata"] = []
+  searchResponse["metadata"].forEach((meta_item: {[index: string]: any}) => {
+    if (!meta_item["type"].includes("invisible")) {
+      resultResponse["metadata"].push(meta_item)
+    }}
+  )
+
+  resultResponse["data"] = []
+
+  let meta_defaults: {[ind: string]: any} = {}
+  searchResponse["metadata"].forEach((meta_item: {[index: string]: any}) => {
+    // e.g 'clas[00]', 'clas[02][powo]', ...
+    let _type = meta_item["type"]    
+    if (!_type.startsWith("clas[") || _type.includes("invisible")) {
+      return
+    }
+  
+    let curr_num: string = _type.split("[")[1].split("]")[0]
+    if (!(curr_num in meta_defaults)) {
+      meta_defaults[curr_num] = {"default": "", "custom": []}
+    }
+
+    let curr_tag = "default"
+    if (_type.includes("][")) {
+      curr_tag = _type.split("][")[1].split("]")[0]
+    }
+  
+    if (curr_tag === "default") {
+      meta_defaults[curr_num]["default"] = meta_item["column"]
+    } else {
+      meta_defaults[curr_num]["custom"].push(meta_item["column"])
+    }
+  })
+  
+  searchResponse["data"].forEach((row: {[index: string]: string}) => {
+    Object.values(meta_defaults).forEach((obj: {[index: string]: any}) => {
+
+      let default_col: string = obj["default"]
+      obj["custom"].forEach((col: string) => {
+        let value = row[col]
+        if (value.replaceAll(" ", "") === "") {
+          row[col] = row[default_col]
+        }
+      })
+
+      resultResponse["data"].push(row)
+    })
+  })
+
+  return resultResponse
+}
+
+
 function SearchApp() {
   const [searchResponse, setSearchResponse] = useState<{[index: string]:any}>({})
   let [classificationTag, setClassificationTag] = useState("default")
+
+  let filteredResponse = filterResponse(searchResponse)
 
   return <>
     <br></br>
     <SearchLine {...{setSearchResponse: setSearchResponse}} />
     <b></b> {/* this doent works */}
     <div></div>
-    <PhilogeneticTreeOrNull {...{response: searchResponse, tag: classificationTag, setTag: setClassificationTag}} />
+    <PhilogeneticTreeOrNull {...{response: filteredResponse, tag: classificationTag, setTag: setClassificationTag}} />
     <br></br>
-    <ResultTableOrNull {...searchResponse} />
+    <ResultTableOrNull {...filteredResponse} />
   </>
 }
 

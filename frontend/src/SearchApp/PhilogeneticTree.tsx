@@ -186,7 +186,6 @@ function PhilogeneticTreeOrNull(
   })
 
   let species_meta = ["__root__"]
-  let meta_default_cols = [""]
   let class_num_to_tag: {[val: string]: string} = {}
 
   let all_tags = new Set<string>()
@@ -205,10 +204,6 @@ function PhilogeneticTreeOrNull(
     let curr_tag = "default"
     if (_type.includes("][")) {
       curr_tag = _type.split("][")[1].split("]")[0]
-    }
-  
-    if (curr_tag === "default") {
-      meta_default_cols.push(meta_item["column"])
     }
   
     all_tags.add(curr_tag)
@@ -235,9 +230,6 @@ function PhilogeneticTreeOrNull(
         return
       }
       let value = row[clade_name]
-      if (value.replaceAll(" ", "") === "") {
-        value = row[meta_default_cols[ind]]
-      }
       clades.push(value)
     })
 
