@@ -1,4 +1,4 @@
-import { isEmpty, ZoomableContainer } from "../Admin/utils";
+import { isEmpty, ScrollableContainer } from "../Admin/utils";
 import config from "../config";
 import DataMeta from "./DataMeta";
 
@@ -21,7 +21,7 @@ function ResultTableBody({ rows, meta }: {rows: Array<Array<string>>, meta: Arra
     { rows.map((row, row_ind) => (
       <tr key={"row_" + row_ind}>
         { row.map((value, ind) => (
-          <td key={"item_" + row_ind + "_" + ind}>
+          <td key={"item_" + row_ind + "_" + ind} style={{minWidth: '120px'}}>
             {meta[ind].render(value)}
           </td>
         ))}
@@ -37,7 +37,7 @@ function ResultTable({ rows, meta }: {rows: Array<Array<string>>, meta: Array<Da
     return <div></div>
   }
 
-  return <ZoomableContainer><div className='table'>
+  return <ScrollableContainer><div className='table'>
     <table style={{margin: 'auto'}}>
       {rows.length === 0 ?
         <caption style={{padding: '20%', border: '1px solid #d4d4d4ff', fontSize: config["FONT_SIZE"], backgroundColor: 'white', minWidth: '300px'}}>No data for given request</caption>
@@ -48,7 +48,7 @@ function ResultTable({ rows, meta }: {rows: Array<Array<string>>, meta: Array<Da
       </>
       }
     </table>
-  </div></ZoomableContainer>
+  </div></ScrollableContainer>
 }
 
 
@@ -63,8 +63,18 @@ function ResultTableOrNull(response: {[index: string]: any}) {
   response["metadata"].forEach((meta_item: {[index: string]: any}) => {
 
     let data_name = meta_item["column"]
-    let data_type = "clas"  // TO DO: parse type
+    let data_type = ""
     let additional_data = ""
+  
+    let full_type = meta_item["type"]
+    if (full_type.includes("link")) {
+      data_type = "link"
+      additional_data = full_type.split("link[")[1].split("]")[0]
+    } else if (full_type.includes("clas")) {
+      data_type = "clas"
+    } else if (full_type.includes("smiles")) {
+      data_type = "smiles"
+    }
 
     data_meta.push(new DataMeta(data_type, data_name, additional_data))
   })

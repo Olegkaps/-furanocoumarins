@@ -72,6 +72,21 @@ export function getName() {
     return localStorage.getItem(NAME)
 }
 
+export function ScrollableContainer({children}: {children: React.ReactNode}) {
+    return <div className="tree"
+    style={{
+        backgroundColor: 'white',
+        padding: '30px',
+        paddingRight: '70px',
+        border: '1px solid #d4d4d4ff',
+        borderRadius: '20px',
+        maxHeight: '600px',
+        maxWidth: '100%',
+        overflow: 'scroll',
+        position: 'relative',
+    }}>{children}</div>
+}
+
 export function ZoomableContainer({children}: {children: React.ReactNode}) {
     const [zoomLevel, setZoomLevel] = useState(0.7);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -94,18 +109,7 @@ export function ZoomableContainer({children}: {children: React.ReactNode}) {
         }
     }, [zoomLevel]);
 
-    return <div className="tree"
-    style={{
-        backgroundColor: 'white',
-        padding: '30px',
-        paddingRight: '70px',
-        border: '1px solid #d4d4d4ff',
-        borderRadius: '20px',
-        maxHeight: '600px',
-        maxWidth: '100%',
-        overflow: 'scroll',
-        position: 'relative',
-    }}>
+    return <ScrollableContainer>
       <div
         ref={containerRef}
         className="smart-zoom-container"
@@ -116,5 +120,5 @@ export function ZoomableContainer({children}: {children: React.ReactNode}) {
           width: '100%',
           backgroundColor: '#f9f9f9',
         }}
-      >{children}</div></div>
+      >{children}</div></ScrollableContainer>
 }

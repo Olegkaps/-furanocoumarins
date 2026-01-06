@@ -1,5 +1,16 @@
 import config from "../config"
+import {ArrowUpRightFromSquare} from '@gravity-ui/icons';
 
+
+class Link{
+  id: string
+  text: string
+
+  constructor(id: string, text: string) {
+    this.id = id
+    this.text = text
+  }
+}
 
 class DataMeta {
   type: string
@@ -14,7 +25,9 @@ class DataMeta {
   }
 
   render(value: string) { // rewrite to classes
-    if (this.type === "link") {
+    if (this.type == "") {
+      return this.render_default(value)
+    } else if (this.type === "link") {
       return this.render_link(value)
     } else if (this.type === "clas") {
       return this.render_cls(value)
@@ -27,22 +40,51 @@ class DataMeta {
     }
   }
 
+  render_default(value: string, max_length: number = 30, extra_item: React.ReactNode = <></>) {
+    let text_value = value
+    if (value.length > max_length) {
+      text_value = value.slice(0, max_length) + "..."
+    }
+
+    return <p 
+      style={{fontSize: config["FONT_SIZE"], textAlign: 'center'}}
+      title={value}
+    >{text_value}{extra_item}</p>
+  }
+
   render_link(value: string) {
+    if (value.replaceAll(" ", "") === "") {
+      return <></>
+    }
+
+    let links: Array<Link> = []
+    value.split(", ").forEach((val: string) => {
+      let text_val = val
+
+      if (val.includes(": ")) {
+        let splitted_arr = val.split(": ")
+        text_val = splitted_arr[0]
+        val = splitted_arr[1]
+      }
+
+      links.push(new Link(val, text_val))
+    })
+
     return <>
-      <a style={{fontSize: config["FONT_SIZE"],}} href={this.additional_data + "/" + value}>{value}</a>
-    </> // TO DO
+      {links.map((link, _) => (
+      <a href={this.additional_data.replace("%s", link.id)}>
+        {this.render_default(link.text, 70, <>&nbsp;<ArrowUpRightFromSquare /></>)}
+      </a>
+    ))}
+    </>
   }
 
   render_cls(value: string) {
-    return <>
-      <p style={{fontSize: config["FONT_SIZE"],}}>{value}</p>
-    </> // TO DO
+    return this.render_default(value) // TO DO
   }
 
   render_smiles(value: string) {
-    return <>
-      <p style={{fontSize: config["FONT_SIZE"],}}>{value}</p>
-    </> // TO DO
+    return this.render_default(value) // TO DO
   }
 }
 
