@@ -4,11 +4,13 @@ import DataMeta from "./DataMeta";
 
 
 function ResultTableHead({meta}: {meta: Array<DataMeta>}) {
-  return <thead>
+  return <thead style={{position: 'sticky', top: 0,}}>
     <tr key={"meta"}>
       { meta.map((curr_meta, ind) => (
-        <th scope='col' key={"meta" + ind}>
-          <p style={{fontSize: config["FONT_SIZE"],}}>{curr_meta.name}</p>
+        <th scope='col' key={"meta" + ind} style={{backgroundColor: "#ccd8b7ff", padding: 0}}>
+          <hr style={{width: '100%', margin: 0, position: 'relative', top: 0}}></hr>
+          <p style={{fontSize: config["FONT_SIZE"], margin: '20px 0'}} title={curr_meta.description}>{curr_meta.name}</p>
+          <hr style={{width: '100%', margin: 0, position: 'relative', bottom: 0}}></hr>
         </th>
       ))}
     </tr>
@@ -21,7 +23,7 @@ function ResultTableBody({ rows, meta }: {rows: Array<Array<string>>, meta: Arra
     { rows.map((row, row_ind) => (
       <tr key={"row_" + row_ind}>
         { row.map((value, ind) => (
-          <td key={"item_" + row_ind + "_" + ind} style={{minWidth: '120px'}}>
+          <td key={"item_" + row_ind + "_" + ind} style={{minWidth: '120px', maxWidth: '200px'}}>
             {meta[ind].render(value)}
           </td>
         ))}
@@ -72,11 +74,11 @@ function ResultTableOrNull(response: {[index: string]: any}) {
       additional_data = full_type.split("link[")[1].split("]")[0]
     } else if (full_type.includes("clas")) {
       data_type = "clas"
-    } else if (full_type.includes("smiles")) {
+    } else if (full_type.includes("SMILES")) {
       data_type = "smiles"
     }
 
-    data_meta.push(new DataMeta(data_type, data_name, additional_data))
+    data_meta.push(new DataMeta(data_type, data_name, meta_item["description"], additional_data))
   })
 
   response["data"].forEach((data_item: {[index: string]: any}) => {

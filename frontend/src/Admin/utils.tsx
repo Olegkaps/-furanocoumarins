@@ -78,6 +78,7 @@ export function ScrollableContainer({children}: {children: React.ReactNode}) {
         backgroundColor: 'white',
         padding: '30px',
         paddingRight: '70px',
+        paddingTop: 0,
         border: '1px solid #d4d4d4ff',
         borderRadius: '20px',
         maxHeight: '600px',

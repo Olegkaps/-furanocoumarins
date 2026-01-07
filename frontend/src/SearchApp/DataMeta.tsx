@@ -15,12 +15,14 @@ class Link{
 class DataMeta {
   type: string
   name: string
+  description: string
   additional_data: string
 
-  constructor(type: string, name: string, data: string) {
+  constructor(type: string, name: string, description: string, data: string) {
     // TO DO: validate type
     this.type = type
     this.name = name
+    this.description = description
     this.additional_data = data
   }
 
@@ -47,7 +49,7 @@ class DataMeta {
     }
 
     return <p 
-      style={{fontSize: config["FONT_SIZE"], textAlign: 'center'}}
+      style={{fontSize: config["FONT_SIZE"], textAlign: 'center', wordBreak: 'break-all'}}
       title={value}
     >{text_value}{extra_item}</p>
   }
