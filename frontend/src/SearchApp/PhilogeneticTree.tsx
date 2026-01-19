@@ -76,7 +76,8 @@ class PhilogeneticTreeNode {
             position: 'absolute',
             fontSize: config["FONT_SIZE"],
             fontWeight: 600,
-          }}>
+          }}
+          title={meta[meta_ind]}>
             {this.clade_name.replace(' ', '\u00A0')}
           </p>
         </div>

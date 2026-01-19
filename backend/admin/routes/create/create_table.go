@@ -157,6 +157,9 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		if strings.HasPrefix(sheet, "__") {
 			continue
 		}
+		if strings.HasPrefix(sheet, "structures") || strings.Contains(c_type, "external[structures") {
+			c_type += " chemical"
+		}
 
 		if val, exists := meta_keys[column]; exists {
 			c_type_old := strings.Split(val, "\t")[0]
@@ -463,10 +466,6 @@ func check_is_types_equal(c_type_old, c_type_new string) bool {
 	old_list := strings.Split(c_type_old, " ")
 	new_list := strings.Split(c_type_new, " ")
 
-	if len(new_list) != len(old_list) {
-		return false
-	}
-
 	c_types_old_map := make(map[string]struct{})
 	for _, _type := range old_list {
 		if _type == "primary" || strings.Contains(_type, "external[") {
@@ -474,13 +473,19 @@ func check_is_types_equal(c_type_old, c_type_new string) bool {
 		}
 		c_types_old_map[_type] = struct{}{}
 	}
+	num_visited := 0
 	for _, _type := range new_list {
 		if _type == "primary" || strings.Contains(_type, "external[") {
 			continue
 		}
+		num_visited++
 		if _, exists := c_types_old_map[_type]; !exists {
 			return false
 		}
+	}
+
+	if len(c_types_old_map) != num_visited {
+		return false
 	}
 
 	return true
