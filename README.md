@@ -5,7 +5,8 @@ It allows you to download data from Google Tables, build phylogenetic trees and 
 
 Below is an example of the site's UI (home page): search bar, phylogenetic tree, and results table.
 
-![app ui](./img/fuco_ui.png)
+![app ui (tree)](./img/fuco_ui.png)
+![app ui (table)](./img/fuco_ui_1.png)
 
 Which data will be displayed on the website is completely determined by the administrator through the settings in the Google Sheet, as shown below. Using the __LIST__ type, a list of sheets that contain data of the same type is registered, and all columns that will be displayed on the website are specified for them
 
