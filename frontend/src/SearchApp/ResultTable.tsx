@@ -5,6 +5,9 @@ import DataMeta from "./DataMeta";
 import DataRows from "./RowsData";
 import {FileArrowUp} from '@gravity-ui/icons';
 
+
+const maxPageSize = 100
+
 function ResultTableHead({meta}: {meta: Array<DataMeta>}) {
   return <thead style={{position: 'sticky', top: 0,}}>
     <tr key={"meta"}>
@@ -62,6 +65,69 @@ function ResultTable({ rows, meta }: {rows: Array<Map<string, string>>, meta: Ar
 }
 
 
+function GroupedResultTable(
+  { rows, meta, countsPrefSum, currentPage }: 
+  {
+    rows: Array<DataRows>, 
+    meta: Array<DataMeta>,
+    countsPrefSum: number[],
+    currentPage: number,
+  }
+) {  
+  let lowerBound = (currentPage-1)*maxPageSize
+  let upperBound = currentPage*maxPageSize
+
+  return <>{rows.map((dataRows, ind) => {
+      if (countsPrefSum[ind+1] < lowerBound || countsPrefSum[ind] > upperBound) {
+        return <></>
+      }
+
+      let from = (
+        countsPrefSum[ind] >= lowerBound
+        ? 0
+        : countsPrefSum[ind+1] - lowerBound
+      )
+      let to = (
+        from + maxPageSize > dataRows.value_rows.length
+        ? undefined
+        : from + maxPageSize
+      )
+      let rowsOnPage = dataRows.value_rows.slice(from, to)
+
+      return <>
+      {dataRows.key_row.size > 0 &&
+      <div style={{display: 'flex'}}>
+        { meta.map((meta_val, ind) => {
+            if (meta_val.type !== "smiles") {
+              return
+            }
+            return meta[ind].render(dataRows.key_row.get(meta_val.name))
+        })}
+        <table>{ meta.map((meta_val, ind) => {
+            if (!meta_val.is_grouping || meta_val.type === "smiles") {
+              return
+            }
+            return <tr>
+              <td title={meta_val.description}>{meta_val.name}</td>
+              <td>{meta[ind].render(dataRows.key_row.get(meta_val.name))}</td>
+            </tr>
+        })}</table>
+      </div>
+      }
+
+      {
+      rows.length > 1 ?
+        <ScrollableContainer>
+          <ResultTable {...{rows: rowsOnPage, meta: meta}}/>
+        </ScrollableContainer>
+      :
+        <ResultTable {...{rows: rowsOnPage, meta: meta}}/>
+      }
+      </>
+    })}</>
+}
+
+
 function loadDataRowsAsCSV(rows: Array<DataRows>, meta: Array<DataMeta>) {
   let csvContent = "data:text/csv;charset=utf-8,";
   
@@ -95,26 +161,33 @@ function loadDataRowsAsCSV(rows: Array<DataRows>, meta: Array<DataMeta>) {
   window.open(encodedUri);
 }
 
-function ResultTableWrapper({ rows, meta }: {rows: Array<DataRows>, meta: Array<DataMeta>}) {
-  let [currentPage, setCurrentPage] = useState(1)
-  const maxPageSize = 100
+function TableStateBar(
+  { rows, meta, currentPage, numPages, setCurrentPage, }: 
+  {
+    rows: DataRows[],
+    meta: DataMeta[],
+    currentPage: number,
+    numPages: number,
+    setCurrentPage: React.Dispatch<React.SetStateAction<number>>,
+  }
+) {
+  return <div 
+    style={{
+      marginLeft: '25px',
+      marginRight: '25px',
+      border: '1px dashed grey',
+      borderRadius: '5px',
+      padding: '4px',
+      paddingLeft: '20px',
+    }}>
 
-  let countsPrefSum: number[] = [0]
-  rows.forEach((val) => {
-    countsPrefSum.push(countsPrefSum.slice(-1)[0] + val.total_length)
-  })
-  let numPages = Math.ceil(countsPrefSum.slice(-1)[0] / maxPageSize)
-
-  let lowerBound = (currentPage-1)*maxPageSize
-  let upperBound = currentPage*maxPageSize
-
-  return <><div style={{marginLeft: '25px', marginRight: '25px', border: '1px dashed grey', borderRadius: '5px', padding: '4px', paddingLeft: '20px'}}>
   <label>Page number:&nbsp;&nbsp;
     <select
       value={currentPage}
       onChange={e => setCurrentPage(Number(e.target.value))}
     >{Array(numPages).fill(null).map((_, i) => <option value={i+1}>{i+1}</option>)}</select>
   </label>
+
   <label>&nbsp;&nbsp;&nbsp;&nbsp;</label>
   <label>Download results:&nbsp;&nbsp;
     <button
@@ -124,49 +197,22 @@ function ResultTableWrapper({ rows, meta }: {rows: Array<DataRows>, meta: Array<
       </button>
   </label>
   </div>
+}
+
+function ResultTableWrapper({ rows, meta }: {rows: Array<DataRows>, meta: Array<DataMeta>}) {
+  let [currentPage, setCurrentPage] = useState(1)
+
+  let countsPrefSum: number[] = [0]
+  rows.forEach((val) => {
+    countsPrefSum.push(countsPrefSum.slice(-1)[0] + val.total_length)
+  })
+  let numPages = Math.ceil(countsPrefSum.slice(-1)[0] / maxPageSize)
+
+  return <>
+  <TableStateBar {...{rows: rows, meta: meta, currentPage: currentPage, numPages: numPages, setCurrentPage: setCurrentPage}}/>
 
   <ScrollableContainer>
-    {rows.map((dataRows, ind) => {
-      if (countsPrefSum[ind+1] < lowerBound || countsPrefSum[ind] > upperBound) {
-        return <></>
-      }
-
-      let from = (
-        countsPrefSum[ind] >= lowerBound
-        ? 0
-        : countsPrefSum[ind+1] - lowerBound
-      )
-      let to = (
-        from + maxPageSize > dataRows.value_rows.length
-        ? undefined
-        : from + maxPageSize
-      )
-      let rowsOnPage = dataRows.value_rows.slice(from, to)
-
-      return <>
-      <div style={{display: 'flex'}}>
-        { meta.map((meta_val, ind) => {
-            if (meta_val.type !== "smiles") {
-              return
-            }
-            return meta[ind].render(dataRows.key_row.get(meta_val.name))
-        })}
-        <table>{ meta.map((meta_val, ind) => {
-            if (!meta_val.is_grouping || meta_val.type === "smiles") {
-              return
-            }
-            return <tr>
-              <td title={meta_val.description}>{meta_val.name}</td>
-              <td>{meta[ind].render(dataRows.key_row.get(meta_val.name))}</td>
-            </tr>
-        })}</table>
-      </div>
-
-      <ScrollableContainer>
-        <ResultTable {...{rows: rowsOnPage, meta: meta}}/>
-      </ScrollableContainer>
-      </>
-    })}
+    <GroupedResultTable {...{rows: rows, meta: meta, countsPrefSum: countsPrefSum, currentPage: currentPage}}/>
   </ScrollableContainer></>
 }
 
