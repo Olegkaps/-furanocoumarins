@@ -3,6 +3,7 @@ package search
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2"
@@ -18,8 +19,9 @@ type ColumnMeta struct {
 }
 
 type SearchResponse struct {
-	Metadata []ColumnMeta `json:"metadata"`
-	Data     interface{}  `json:"data"`
+	Metadata       []ColumnMeta `json:"metadata"`
+	Data           interface{}  `json:"data"`
+	TableTimestamp time.Time    `json:"timestamp"`
 }
 
 func Search_main_app(c *fiber.Ctx) error {
@@ -40,23 +42,25 @@ func Search_main_app(c *fiber.Ctx) error {
 
 	// find active table version
 	var activeTable struct {
+		Timestamp time.Time
 		TableMeta string
 		TableData string
 	}
 
 	iter := session.Query(`
-		SELECT table_meta, table_data 
+		SELECT created_at, table_meta, table_data 
 		FROM chemdb.tables
 		WHERE is_active = true
 		ALLOW FILTERING
 	`).Iter()
 
 	var results []struct {
+		Timestamp time.Time
 		TableMeta string
 		TableData string
 	}
 
-	for iter.Scan(&activeTable.TableMeta, &activeTable.TableData) {
+	for iter.Scan(&activeTable.Timestamp, &activeTable.TableMeta, &activeTable.TableData) {
 		results = append(results, activeTable)
 	}
 
@@ -146,8 +150,9 @@ func Search_main_app(c *fiber.Ctx) error {
 	}
 
 	response := SearchResponse{
-		Metadata: columns,
-		Data:     searchResults,
+		Metadata:       columns,
+		Data:           searchResults,
+		TableTimestamp: activeTable.Timestamp,
 	}
 
 	return c.JSON(response)
