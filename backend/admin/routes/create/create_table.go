@@ -15,11 +15,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 
-	"admin/routes/create/cassandra"
 	"admin/routes/create/excel"
 	"admin/settings"
 	"admin/utils/common"
 	"admin/utils/dbs"
+	"admin/utils/dbs/cassandra"
 	"admin/utils/mail"
 )
 
