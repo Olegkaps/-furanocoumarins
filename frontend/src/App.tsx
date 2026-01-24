@@ -8,6 +8,7 @@ import {
 import './App.css'
 import SearchApp from "./SearchApp/SearchApp";
 import Admin from "./Admin/Admin";
+import { Reference } from "./SearchApp/DataMeta";
 
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
           <Route path="/reset" element={<Admin.Reset />}/>
           <Route path="/admit/:code" element={<Admin.Admit />}/>
           <Route path="/admin" element={<Admin.App />}/>
+          <Route path="/reference/:article_id" element={<Reference />}/>
       </Routes>
     </BrowserRouter>
   )

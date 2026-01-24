@@ -11,6 +11,34 @@ import (
 func BatchInsertData(
 	session *gocql.Session,
 	tableName string,
+	columns []string,
+	data [][]any, // serialized_string or set or smth else
+	batchSize int,
+) error {
+
+	batch := NewExecutor(session, batchSize)
+
+	columnsStr := strings.Join(columns, ", ")
+	placeholders := strings.Repeat("?, ", len(columns)-1) + "?"
+	insertQuery := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", tableName, columnsStr, placeholders)
+
+	for _, row := range data {
+		if len(row) != len(columns) {
+			return fmt.Errorf("different length of data rows in table %q: want %d, given %d", tableName, len(columns), len(row))
+		}
+		batch.Query(insertQuery, row...)
+	}
+
+	if err := batch.Execute(); err != nil {
+		return fmt.Errorf("error in batch insert into %s: %w", tableName, err)
+	}
+
+	return nil
+}
+
+func CreateAndBatchInsertData(
+	session *gocql.Session,
+	tableName string,
 	columnDefs []string, // col_name TYPE
 	primaryKeys []string, // col_name
 	data [][]any, // serialized_string or set or smth else
@@ -32,22 +60,5 @@ func BatchInsertData(
 		return fmt.Errorf("error while creating table %s: %w", tableName, err)
 	}
 
-	batch := NewExecutor(session, 50)
-
-	columnsStr := strings.Join(columns, ", ")
-	placeholders := strings.Repeat("?, ", len(columns)-1) + "?"
-	insertQuery := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", tableName, columnsStr, placeholders)
-
-	for _, row := range data {
-		if len(row) != len(columns) {
-			return fmt.Errorf("different length of data rows in table %q: want %d, given %d", tableName, len(columns), len(row))
-		}
-		batch.Query(insertQuery, row...)
-	}
-
-	if err := batch.Execute(); err != nil {
-		return fmt.Errorf("error in batch insert into %s: %w", tableName, err)
-	}
-
-	return nil
+	return BatchInsertData(session, tableName, columns, data, 50)
 }

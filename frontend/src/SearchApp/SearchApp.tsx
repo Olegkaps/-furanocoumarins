@@ -44,7 +44,7 @@ function SearchLine({setSearchResponse}: {setSearchResponse: React.Dispatch<Reac
               height: "100%",
               position: "relative",
           }}>
-            <input type="submit" value="" 
+            <input type="submit" value="" id="search-button"
             style={{
               width: "100%",
               height: "100%",
@@ -109,9 +109,9 @@ function filterResponse(searchResponse: {[index: string]: any;}) {
           row[col] = row[default_col]
         }
       })
-
-      resultResponse["data"].push(row)
     })
+
+    resultResponse["data"].push(row)
   })
 
   return resultResponse

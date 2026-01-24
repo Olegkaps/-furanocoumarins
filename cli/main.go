@@ -21,7 +21,8 @@ const (
 );`
 
 	cassandraKeySpace = `CREATE KEYSPACE IF NOT EXISTS chemdb WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};`
-	cassandraSchema   = `CREATE TABLE IF NOT EXISTS chemdb.tables (
+
+	cassandraVersionsSchema = `CREATE TABLE IF NOT EXISTS chemdb.tables (
     created_at TIMESTAMP,
 	name TEXT,
 	version TEXT,
@@ -31,6 +32,11 @@ const (
 	is_active BOOLEAN,
 	is_ok BOOLEAN,
 	PRIMARY KEY (created_at));`
+
+	cassandraBibtexSchema = `CREATE TABLE IF NOT EXISTS chemdb.bibtex (
+    article_id TEXT,
+	bibtex_text TEXT,
+	PRIMARY KEY (article_id));`
 )
 
 var rootCmd = &cobra.Command{
@@ -95,9 +101,11 @@ func initCassandra() {
 	}
 	defer session.Close()
 
-	err = session.Query(cassandraSchema).Exec()
-	if err != nil {
-		log.Fatal(err)
+	for _, q := range []string{cassandraVersionsSchema, cassandraBibtexSchema} {
+		err = session.Query(q).Exec()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	fmt.Println("BD initialized")
 }

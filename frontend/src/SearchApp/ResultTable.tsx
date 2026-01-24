@@ -95,6 +95,7 @@ function GroupedResultTable(
       let rowsOnPage = dataRows.value_rows.slice(from, to)
 
       return <>
+      <br></br>
       {dataRows.key_row.size > 0 &&
       <div style={{display: 'flex'}}>
         { meta.map((meta_val, ind) => {
@@ -103,7 +104,7 @@ function GroupedResultTable(
             }
             return meta[ind].render(dataRows.key_row.get(meta_val.name))
         })}
-        <table>{ meta.map((meta_val, ind) => {
+        <table><tbody>{ meta.map((meta_val, ind) => {
             if (!meta_val.is_grouping || meta_val.type === "smiles") {
               return
             }
@@ -111,18 +112,14 @@ function GroupedResultTable(
               <td title={meta_val.description}>{meta_val.name}</td>
               <td>{meta[ind].render(dataRows.key_row.get(meta_val.name))}</td>
             </tr>
-        })}</table>
+        })}</tbody></table>
       </div>
       }
 
-      {
-      rows.length > 1 ?
-        <ScrollableContainer>
-          <ResultTable {...{rows: rowsOnPage, meta: meta}}/>
-        </ScrollableContainer>
-      :
+      <br></br>
+      <ScrollableContainer>
         <ResultTable {...{rows: rowsOnPage, meta: meta}}/>
-      }
+      </ScrollableContainer>
       </>
     })}</>
 }
@@ -211,9 +208,8 @@ function ResultTableWrapper({ rows, meta }: {rows: Array<DataRows>, meta: Array<
   return <>
   <TableStateBar {...{rows: rows, meta: meta, currentPage: currentPage, numPages: numPages, setCurrentPage: setCurrentPage}}/>
 
-  <ScrollableContainer>
-    <GroupedResultTable {...{rows: rows, meta: meta, countsPrefSum: countsPrefSum, currentPage: currentPage}}/>
-  </ScrollableContainer></>
+  <GroupedResultTable {...{rows: rows, meta: meta, countsPrefSum: countsPrefSum, currentPage: currentPage}}/>
+  </>
 }
 
 
@@ -240,6 +236,8 @@ function ResultTableOrNull(response: {[index: string]: any}) {
       data_type = "clas"
     } else if (full_type.includes("SMILES")) {
       data_type = "smiles"
+    } else if (full_type.includes("ref[]")) {
+      data_type = "reference"
     }
 
     if (full_type.includes("chemical")) {

@@ -17,6 +17,7 @@ import (
 
 	"admin/routes/create/excel"
 	"admin/settings"
+	"admin/utils/bibtex"
 	"admin/utils/common"
 	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
@@ -147,6 +148,8 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	}
 
 	// insert meta in db
+
+	var ref_col = ""
 	var meta_data [][]any
 	var meta_keys = make(map[string]string)
 	for _, row := range meta_result {
@@ -159,6 +162,9 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		}
 		if strings.HasPrefix(sheet, "structures") || strings.Contains(c_type, "external[structures") {
 			c_type += " chemical"
+		}
+		if strings.Contains(c_type, "ref[]") {
+			ref_col = column
 		}
 
 		if val, exists := meta_keys[column]; exists {
@@ -178,7 +184,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		meta_keys[column] = c_type + "\t" + c_decr
 	}
 
-	err = cassandra.BatchInsertData(
+	err = cassandra.CreateAndBatchInsertData(
 		session,
 		table_meta_name,
 		[]string{"sheet TEXT", "column TEXT", "type TEXT", "description TEXT"},
@@ -279,7 +285,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		i++
 	}
 
-	err = cassandra.BatchInsertData(
+	err = cassandra.CreateAndBatchInsertData(
 		session,
 		table_species_name,
 		sp_columns,
@@ -428,7 +434,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 
 	data_primary_keys := []string{"uuid"}
 
-	err = cassandra.BatchInsertData(
+	err = cassandra.CreateAndBatchInsertData(
 		session,
 		table_data_name,
 		data_columns,
@@ -454,11 +460,62 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		return
 	}
 
+	// check reference ids
+	ref_ind := -1
+	for i, col_def := range data_columns {
+		if ref_col == strings.Split(col_def, " ")[0] {
+			ref_ind = i
+		}
+	}
+
+	if ref_ind == -1 {
+		common.WriteLog("Sending mail to %s", AuthorMail)
+		mail.SendMail(
+			AuthorMail,
+			"Table "+TableFile.Path+" created successfully.",
+			`Table created, don't forget to activate it.
+			Column with type 'ref[]' not found, reference check skipped.`,
+		)
+	}
+
+	ids_to_check := make([]string, len(joined_data))
+	for i, row := range joined_data {
+		ref_id := row[ref_ind].(string)
+		ids_to_check[i] = ref_id
+	}
+
+	iter := session.Query(`
+		SELECT article_id
+		FROM chemdb.bibtex
+		ALLOW FILTERING
+	`).Iter()
+
+	var curr_id string
+	corr_ids := make(map[string]string)
+	for iter.Scan(&curr_id) {
+		corr_ids[curr_id] = ""
+	}
+
+	if err := iter.Close(); err != nil {
+		common.WriteLog(err.Error())
+		sendErrorMail(err.Error())
+		return
+	}
+
+	warnigs := bibtex.Check_artickle_ids(corr_ids, ids_to_check)
+
+	var message string
+	if len(warnigs) == 0 {
+		message = "Reference check passed"
+	} else {
+		message = "Failed reference checks: " + strings.Join(warnigs, "\n")
+	}
+
 	common.WriteLog("Sending mail to %s", AuthorMail)
 	mail.SendMail(
 		AuthorMail,
 		"Table "+TableFile.Path+" created successfully.",
-		"Table created, don`t forget to activate it.",
+		"Table created, don`t forget to activate it.\n"+message,
 	)
 }
 

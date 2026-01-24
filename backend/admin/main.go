@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 
 	"admin/routes/auth"
+	"admin/routes/bibtex"
 	"admin/routes/create"
 	"admin/routes/search"
 	"admin/routes/tables"
@@ -16,12 +17,14 @@ import (
 )
 
 func main() {
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		BodyLimit: 10 * 1024 * 1024,
+	})
 
 	app.Use(cors.New(settings.CORS_SETTINGS))
 
 	app.Post("/search", search.Search_main_app)
-	// TO DO: nice to have metadata for autocompletion
+	app.Get("/article/:id", bibtex.Get_article)
 
 	app.Get("/ping", func(c *fiber.Ctx) error { return c.SendStatus(200) })
 	app.Post("/login", auth.Login)
@@ -43,6 +46,8 @@ func main() {
 	app.Post("/make-table-active", tables.Activate_table)
 	app.Post("/delete-table", tables.Delete_table)
 	app.Post("/delete-tables", tables.Delete_all_bad_tables)
+
+	app.Put("/update-bibtex", bibtex.Update_file)
 
 	common.WriteLogFatal(app.Listen(":80").Error())
 }
