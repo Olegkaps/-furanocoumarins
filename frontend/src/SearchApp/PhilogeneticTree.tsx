@@ -49,7 +49,7 @@ class PhilogeneticTreeNode {
   }
 
   render(meta: Array<string>, meta_ind: number = 0, child_ind: number = 0, total_bros: number = 0) {
-    return <div key={meta[meta_ind] + "_" + this.clade_name}
+    return <div
       style={{
         width: '100%',
         backgroundColor: 'white',

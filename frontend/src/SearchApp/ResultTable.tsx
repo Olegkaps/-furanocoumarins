@@ -10,12 +10,12 @@ const maxPageSize = 100
 
 function ResultTableHead({meta}: {meta: Array<DataMeta>}) {
   return <thead style={{position: 'sticky', top: 0,}}>
-    <tr key={"meta"}>
-      { meta.map((curr_meta, ind) => {
+    <tr>
+      { meta.map((curr_meta) => {
         if (curr_meta.is_grouping) {
           return <></>
         }
-        return <th scope='col' key={"meta" + ind} style={{backgroundColor: "#ccd8b7ff", padding: 0}}>
+        return <th scope='col' style={{backgroundColor: "#ccd8b7ff", padding: 0}}>
           <hr style={{width: '100%', margin: 0, position: 'relative', top: 0}}></hr>
           <p style={{fontSize: config["FONT_SIZE"], margin: '20px 0'}} title={curr_meta.description}>{curr_meta.name}</p>
           <hr style={{width: '100%', margin: 0, position: 'relative', bottom: 0}}></hr>
@@ -28,13 +28,13 @@ function ResultTableHead({meta}: {meta: Array<DataMeta>}) {
 
 function ResultTableBody({ rows, meta }: {rows: Array<Map<string, string>>, meta: Array<DataMeta>}) {
   return <tbody>
-    { rows.map((row, row_ind) => (
-      <tr key={"row_" + row_ind}>
+    { rows.map((row) => (
+      <tr>
         { meta.map((meta_val, ind) => {
           if (meta_val.is_grouping) {
             return <></>
           }
-          return <td key={"item_" + row_ind + "_" + ind} style={{minWidth: '120px', maxWidth: '200px'}}>
+          return <td style={{minWidth: '120px', maxWidth: '200px'}}>
             {meta[ind].render(row.get(meta_val.name))}
           </td>
         })}
@@ -104,7 +104,9 @@ function GroupedResultTable(
             }
             return meta[ind].render(dataRows.key_row.get(meta_val.name))
         })}
-        <table><tbody>{ meta.map((meta_val, ind) => {
+        <table><tbody>
+          <tr style={{backgroundColor: 'lightgreen'}}><td>total rows</td><td><b>{dataRows.value_rows.length}</b></td></tr>
+          { meta.map((meta_val, ind) => {
             if (!meta_val.is_grouping || meta_val.type === "smiles") {
               return
             }
