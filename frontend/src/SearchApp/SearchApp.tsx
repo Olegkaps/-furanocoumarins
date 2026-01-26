@@ -1,14 +1,16 @@
 import { useState } from 'react';
 
-import {ChevronRight} from '@gravity-ui/icons';
+import {ArrowUpRightFromSquare, ChevronRight} from '@gravity-ui/icons';
 import { api, isEmpty } from '../Admin/utils';
 import PhilogeneticTreeOrNull from './PhilogeneticTree';
 import ResultTableOrNull from './ResultTable';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 
 
+let isDataFetched = false
 
-const fetchSEarchResult = async (e: React.FormEvent, seqrch_req: string, setSearchResponse: React.Dispatch<React.SetStateAction<{}>>) => {
-  e.preventDefault();
+const fetchSearchResult = async (e: React.FormEvent | null, seqrch_req: string, setSearchResponse: React.Dispatch<React.SetStateAction<{}>>) => {
+  e?.preventDefault();
   var bodyFormData = new FormData();
 
   bodyFormData.append("search_request", seqrch_req)
@@ -16,17 +18,29 @@ const fetchSEarchResult = async (e: React.FormEvent, seqrch_req: string, setSear
 
   if (response && response.status === 200) {
     setSearchResponse(response.data)
+    isDataFetched = true
   } else {
     // TO DO: better error handling
     alert("Error: " + response.status + " - " + response.data.error)
   }
 }
 
-function SearchLine({setSearchResponse}: {setSearchResponse: React.Dispatch<React.SetStateAction<{}>>}) {
-  const [request, setRequest] = useState("")
+function SearchLine({setSearchResponse}: {setSearchResponse: React.Dispatch<React.SetStateAction<{}>>}) {  
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  let query = searchParams.get("query")
+  if (query === null) {
+    query = ""
+  }
+  if (query !== "" && !isDataFetched) {
+    fetchSearchResult(null, query, setSearchResponse).then()
+  }
+
+  const [request, setRequest] = useState(query)
+
   return <div className="card">
-      <form className="main_form" onSubmit={(e) => fetchSEarchResult(e, request, setSearchResponse)}>
-        <input type="text" className="search-teaxtarea" onChange={(text) => setRequest(text.target.value)} style={{fontSize: 'large'}}></input>
+      <form className="main_form" onSubmit={async (e) => {await fetchSearchResult(e, request, setSearchResponse); setSearchParams({query: request})}}>
+        <input type="text" className="search-teaxtarea" onChange={(text) => setRequest(text.target.value)} style={{fontSize: 'large'}} value={request}></input>
         <div className="search-submit">
           <div style={{
             position: "relative",
@@ -118,7 +132,73 @@ function filterResponse(searchResponse: {[index: string]: any;}) {
 }
 
 
+function EmptyResponse() {
+  return <p
+    style={{
+      width: '100%',
+      padding: 'auto',
+      textAlign: 'center',
+      fontSize: 'larger',
+      fontWeight: 600
+    }}>No data for given request</p>
+}
+
+
+function SearchLink({path, text} : {path: string, text: string}) {
+  const [searchParams, _] = useSearchParams();
+
+  return <Link
+    to={{
+      pathname: path,
+      search: "?query=" + searchParams.get("query")
+    }}
+    target="_blank"
+    style={{
+      position: 'absolute',
+      top: '15%',
+      left: '0.5%',
+      padding: '8px',
+      backgroundColor: '#dcfbff',
+      whiteSpace: 'break-spaces',
+      maxWidth: '8%',
+      border: '1px solid grey',
+      borderRadius: '10px',
+    }}
+  >{text}<ArrowUpRightFromSquare /></Link>
+}
+
 function SearchApp() {
+  return <Navigate to="/tree" />
+}
+
+
+export default SearchApp
+
+
+export function AppResultTable() {
+  const [searchResponse, setSearchResponse] = useState<{[index: string]:any}>({})
+
+  let filteredResponse = filterResponse(searchResponse)
+
+  return <>
+    <br></br>
+    <SearchLine {...{setSearchResponse: setSearchResponse}} />
+    <br></br>
+    {!isEmpty(searchResponse) && 
+      <div>{searchResponse["data"].length === 0 ?
+        <EmptyResponse />
+        :
+        <SearchLink {...{path: "/tree", text: "Philogenetic Tree"}}/>
+      }</div>
+    }
+    <br></br>
+    <ResultTableOrNull {...filteredResponse} />
+    <br></br>
+  </>
+}
+
+
+export function AppPhilogeneticTree() {
   const [searchResponse, setSearchResponse] = useState<{[index: string]:any}>({})
   let [classificationTag, setClassificationTag] = useState("default")
 
@@ -127,13 +207,17 @@ function SearchApp() {
   return <>
     <br></br>
     <SearchLine {...{setSearchResponse: setSearchResponse}} />
-    <b></b> {/* this doent works */}
-    <div></div>
+    <br></br>
+    {!isEmpty(searchResponse) && 
+      <div>
+      {searchResponse["data"].length === 0 ?
+        <EmptyResponse />
+        :
+        <SearchLink {...{path: "/table", text: "Result Table"}}/>
+      }</div>
+    }
+    <br></br>
     <PhilogeneticTreeOrNull {...{response: filteredResponse, tag: classificationTag, setTag: setClassificationTag}} />
     <br></br>
-    <ResultTableOrNull {...filteredResponse} />
   </>
 }
-
-
-export default SearchApp

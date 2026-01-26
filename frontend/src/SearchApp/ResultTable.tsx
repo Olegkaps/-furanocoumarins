@@ -198,7 +198,11 @@ function TableStateBar(
   </div>
 }
 
-function ResultTableWrapper({ rows, meta }: {rows: Array<DataRows>, meta: Array<DataMeta>}) {
+function ResultTableWrapper({ rows, meta }: {rows: Array<DataRows>, meta: Array<DataMeta>}) {  
+  if (rows.length === 0) {
+    return <></>
+  }
+
   let [currentPage, setCurrentPage] = useState(1)
 
   let countsPrefSum: number[] = [0]
