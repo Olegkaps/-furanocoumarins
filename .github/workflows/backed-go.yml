@@ -6,8 +6,15 @@ name: Go
 on:
   push:
     branches: [ "main" ]
+    paths:
+    - "backend/admin/**"
+    - ".github/workflows/backed-go.yml"
+
   pull_request:
     branches: [ "main" ]
+    paths:
+    - "backend/admin/**"
+    - ".github/workflows/backed-go.yml"
 
 jobs:
 
