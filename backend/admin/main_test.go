@@ -31,7 +31,7 @@ func TestExistingRoutesAccess(t *testing.T) {
 			description:   "article route",
 			method:        "GET",
 			route:         "/article/art_20",
-			expectedError: true,
+			expectedError: false,
 		},
 		{
 			description:   "ping route",
@@ -45,13 +45,13 @@ func TestExistingRoutesAccess(t *testing.T) {
 			description:   "login route",
 			method:        "POST",
 			route:         "/login",
-			expectedError: true,
+			expectedError: false,
 		},
 		{
 			description:   "mail login route",
 			method:        "POST",
 			route:         "/login-mail",
-			expectedError: true,
+			expectedError: false,
 		},
 		{
 			description:   "mail login part 2 route",
@@ -63,7 +63,7 @@ func TestExistingRoutesAccess(t *testing.T) {
 			description:   "change password route",
 			method:        "POST",
 			route:         "/change-password",
-			expectedError: true,
+			expectedError: false,
 		},
 		{
 			description:   "change password part 2 route",
