@@ -145,7 +145,7 @@ const AdminPage: React.FC = () => {
         bodyFormData.append("file", bibtexFile)
 
         setTimeout(async () => {
-            let response = await api.put('/update-bibtex', bodyFormData, {
+            let response = await api.put('/bibtex', bodyFormData, {
                 headers: { Authorization: `Bearer ${token}` }
             }).catch((err) => {return err.response});
 

@@ -21,7 +21,7 @@ func TestExistingRoutesAccess(t *testing.T) {
 	}{
 		{
 			description:   "search route",
-			method:        "POST", // CHANGE METHOD
+			method:        "POST",
 			route:         "/search",
 			expectedError: false,
 			expectedCode:  400,
@@ -115,7 +115,7 @@ func TestExistingRoutesAccess(t *testing.T) {
 		},
 		{
 			description:   "delete table route",
-			method:        "POST", // CHANGE METHOD
+			method:        "POST",
 			route:         "/delete-table",
 			expectedError: false,
 			expectedCode:  400,
@@ -123,7 +123,7 @@ func TestExistingRoutesAccess(t *testing.T) {
 		},
 		{
 			description:   "delete bad tables route",
-			method:        "POST", // CHANGE METHOD
+			method:        "POST",
 			route:         "/delete-tables",
 			expectedError: false,
 			expectedCode:  400,
@@ -132,7 +132,7 @@ func TestExistingRoutesAccess(t *testing.T) {
 		{
 			description:   "put bibtex route",
 			method:        "PUT",
-			route:         "/update-bibtex", // CHANGE NAME
+			route:         "/bibtex",
 			expectedError: false,
 			expectedCode:  400,
 			expectedBody:  "missing or malformed JWT",

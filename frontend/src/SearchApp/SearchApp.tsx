@@ -112,6 +112,22 @@ function filterResponse(searchResponse: {[index: string]: any;}) {
       meta_defaults[curr_num]["custom"].push(meta_item["column"])
     }
   })
+
+  searchResponse["metadata"].forEach((meta_item: {[index: string]: any}) => {
+    // e.g 'default[lsid_original]', ...
+    let _type = meta_item["type"]    
+    if (!_type.includes("default[") || _type.includes("invisible")) {
+      return
+    }
+
+    let default_col = _type.split("default[")[1].split("]")[0]
+  
+    if (!(default_col in meta_defaults)) {
+      meta_defaults[default_col] = {"default": default_col, "custom": []}
+    }
+
+    meta_defaults[default_col]["custom"].push(meta_item["column"])
+  })
   
   searchResponse["data"].forEach((row: {[index: string]: string}) => {
     Object.values(meta_defaults).forEach((obj: {[index: string]: any}) => {

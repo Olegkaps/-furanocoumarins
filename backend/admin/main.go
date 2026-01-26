@@ -47,7 +47,7 @@ func SetUp() *fiber.App {
 	app.Post("/delete-table", tables.Delete_table)
 	app.Post("/delete-tables", tables.Delete_all_bad_tables)
 
-	app.Put("/update-bibtex", bibtex.Update_file)
+	app.Put("/bibtex", bibtex.Update_file)
 
 	return app
 }

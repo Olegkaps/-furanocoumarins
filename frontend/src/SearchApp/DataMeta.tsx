@@ -68,6 +68,10 @@ class DataMeta {
       return <></>
     }
 
+    if (value.startsWith("fuco")) {
+      return this.render_default(value, 70)
+    }
+
     let links: Array<Link> = []
     value.split(", ").forEach((val: string) => {
       let text_val = val
@@ -83,7 +87,7 @@ class DataMeta {
 
     return <>
       {links.map((link, _) => (
-      <a href={this.additional_data.replace("%s", link.id)}>
+      <a href={this.additional_data.replace("%s", link.id)} target="_blank">
         {this.render_default(link.text, 70, <>&nbsp;<ArrowUpRightFromSquare /></>)}
       </a>
     ))}
