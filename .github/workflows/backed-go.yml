@@ -33,3 +33,6 @@ jobs:
 
     - name: Test
       run: cd backend/admin && go test -v ./...
+
+    - name: Build the Docker image
+      run: docker build ./backend/admin --tag back-app
