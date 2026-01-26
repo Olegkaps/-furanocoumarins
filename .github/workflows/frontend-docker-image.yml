@@ -3,6 +3,10 @@ name: Frontend Docker Image CI
 on:
   push:
     branches: [ "main" ]
+    paths:
+    - "frontend/**"
+    - ".github/workflows/frontend-docker-image.yml"
+
   pull_request:
     branches: [ "main" ]
 
