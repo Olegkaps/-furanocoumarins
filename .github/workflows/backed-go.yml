@@ -21,11 +21,8 @@ jobs:
       with:
         go-version: '1.20'
 
-    - name: Go to target dir
-      run: cd backend/admin
-
     - name: Build
-      run: go build -v ./...
+      run: cd backend/admin && go build -v ./...
 
     - name: Test
-      run: go test -v ./...
+      run: cd backend/admin && go test -v ./...
