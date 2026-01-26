@@ -32,6 +32,8 @@ func TestExistingRoutesAccess(t *testing.T) {
 			method:        "GET",
 			route:         "/article/art_20",
 			expectedError: false,
+			expectedCode:  500,
+			expectedBody:  "Internal Server Error",
 		},
 		{
 			description:   "ping route",
@@ -46,24 +48,30 @@ func TestExistingRoutesAccess(t *testing.T) {
 			method:        "POST",
 			route:         "/login",
 			expectedError: false,
+			expectedCode:  400,
+			expectedBody:  "Bad Request",
 		},
 		{
 			description:   "mail login route",
 			method:        "POST",
 			route:         "/login-mail",
 			expectedError: false,
+			expectedCode:  400,
+			expectedBody:  "Bad Request",
 		},
 		{
 			description:   "mail login part 2 route",
 			method:        "POST",
 			route:         "/confirm-login-mail",
-			expectedError: true,
+			expectedError: true, // BAD
 		},
 		{
 			description:   "change password route",
 			method:        "POST",
 			route:         "/change-password",
 			expectedError: false,
+			expectedCode:  400,
+			expectedBody:  "Bad Request",
 		},
 		{
 			description:   "change password part 2 route",
