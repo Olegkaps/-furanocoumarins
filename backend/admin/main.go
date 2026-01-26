@@ -16,7 +16,7 @@ import (
 	"admin/utils/common"
 )
 
-func main() {
+func SetUp() *fiber.App {
 	app := fiber.New(fiber.Config{
 		BodyLimit: 10 * 1024 * 1024,
 	})
@@ -48,6 +48,12 @@ func main() {
 	app.Post("/delete-tables", tables.Delete_all_bad_tables)
 
 	app.Put("/update-bibtex", bibtex.Update_file)
+
+	return app
+}
+
+func main() {
+	app := SetUp()
 
 	common.WriteLogFatal(app.Listen(":80").Error())
 }
