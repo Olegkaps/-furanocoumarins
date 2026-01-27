@@ -4,6 +4,9 @@ import {ArrowUpRightFromSquare, Check} from '@gravity-ui/icons';
 import { api } from "../Admin/utils";
 import { useParams } from "react-router-dom";
 
+let ignore_link_prefixes = ["fuco", "NoIPNI", "NoKew"]
+
+
 class Link{
   id: string
   text: string
@@ -68,8 +71,10 @@ class DataMeta {
       return <></>
     }
 
-    if (value.startsWith("fuco")) {
-      return this.render_default(value, 70)
+    for(const pref of ignore_link_prefixes) {
+      if (value.startsWith(pref)) {
+        return this.render_default(value, 70)
+      }
     }
 
     let links: Array<Link> = []

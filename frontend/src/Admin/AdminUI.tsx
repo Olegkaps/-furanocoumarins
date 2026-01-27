@@ -169,7 +169,7 @@ const AdminPage: React.FC = () => {
                         marginLeft: "35%",
                         marginRight: "35%",
                     }}>
-                    <i className="fas fa-trash"></i> <TrashBin {...{style: {width: '30px', height: '30px'}}}/>
+                    <i className="fas fa-trash"></i> <TrashBin {...{style: {width: '30px', height: '30px', color: 'grey'}}}/>
                 </button>
             </div>
             <div style={{border: '1px solid rgb(133, 131, 129)', borderRadius: "10%", backgroundColor: "rgb(255, 220, 182)", width: "7%", padding: "10px 0", position: 'absolute', top: "2%", left: "10%"}}>
@@ -347,7 +347,7 @@ const AdminPage: React.FC = () => {
                     }}
                     onClick={() => setShowCreateForm(true)}
                 >
-                    <CirclePlus {...{style: {width: '50px', height: '50px', alignSelf: 'center'}}} />
+                    <CirclePlus {...{style: {width: '50px', height: '50px', alignSelf: 'center', color: 'grey'}}} />
                     <h5>Create Table</h5>
                 </button>
                 }

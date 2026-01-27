@@ -72,6 +72,7 @@ func Login_mail(c *fiber.Ctx) error {
 	}
 
 	word = "lin" + strings.ReplaceAll(word, "/", "")
+	word = "lin" + strings.ReplaceAll(word, ".", "")
 	common.WriteLog("Generate link %s for %s", word, username)
 	err = redis.SetEx(context.Background(), word, username, time.Hour*1).Err()
 	if err != nil {
