@@ -1,5 +1,7 @@
+import { Link, useSearchParams } from "react-router-dom";
 import { isEmpty, ZoomableContainer } from "../Admin/utils";
 import config from "../config";
+import { ArrowUpRightFromSquare } from "@gravity-ui/icons";
 
 
 class Specie {
@@ -87,7 +89,11 @@ class PhilogeneticTreeNode {
           top: '-15px',
           right: '25px',
         }}>
-          <CountButton {...{color: '#fae6b0', number: this.childs_num}} />
+          <CountButton {...{
+            number: this.childs_num,
+            clade_key: meta[meta_ind],
+            clade_val: this.clade_name
+          }} />
         </div>}
         <TreeCladesAdapter {...{
           drawLeftBorder: meta_ind === 0 || child_ind === total_bros - 1
@@ -130,21 +136,46 @@ function TreeCladeLine() {
 }
 
 
-function CountButton({color, number}: {color: string, number: number}) {
-  return <button
-    onClick={() => {}}
-    style={{
-      backgroundColor: color,
-      padding: '4px 5px 6px 5px',
-      border: '0',
-      borderRadius: '40%',
-      position: 'absolute',
-      fontSize: config["FONT_SIZE"],
-      fontWeight: 700,
-      width: '50px',
-    }}>
-      {number}
-    </button>
+function _Button({children}: {children: React.ReactNode}) {
+  return <button style={{
+    backgroundColor: '#fae6b0',
+    padding: '4px 5px 6px 5px',
+    border: '0',
+    borderRadius: '40%',
+    position: 'absolute',
+    fontSize: config["FONT_SIZE"],
+    fontWeight: 700,
+    width: '50px',
+  }}>{children}</button>
+}
+
+function CountButton(
+  {number, clade_key, clade_val}:
+  {number: number, clade_key: string, clade_val: string}
+) {
+  if (clade_key === "__root__" || clade_val.replaceAll(" ", "") === "") {
+    return <_Button>{number}</_Button>
+  }
+
+  const [searchParams, _] = useSearchParams();
+  let query = searchParams.get("query")
+  if (query === null) {
+    query = ""
+  }
+
+  if (!query.includes(clade_key)) {
+    query += " AND " + clade_key + " = '" + clade_val + "'"
+  }
+
+  return <_Button>
+    <Link to={{
+      pathname: "/table",
+      search: "?query=" + query
+    }} style={{fontSize: config["FONT_SIZE"]}}
+     target="_blank">
+      {number}&nbsp;<ArrowUpRightFromSquare {...{style: {width: '12px', height: '12px'}}}/>
+    </Link>
+    </_Button>
 }
 
 
