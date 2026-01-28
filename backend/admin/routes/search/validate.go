@@ -7,10 +7,14 @@ import (
 )
 
 func Validate_request(searchRequest string, columns []ColumnMeta) error {
+	if searchRequest == "" {
+		return fmt.Errorf("search_request is required")
+	}
+
 	// TO DO: validate order
 	// TO DO: mayby add 'OR' and 'LIKE'
 	// TO DO: fix 'IN not supported for non-primary columns' error
-	allowedWords := []string{"AND", "IN", "CONTAINS", "=", "!=", "<", ">", "<=", ">="}
+	allowedWords := []string{"AND", "IN", "CONTAINS", "LIKE", "=", "!=", "<", ">", "<=", ">="}
 	for i := range allowedWords {
 		allowedWords[i] = `\s` + allowedWords[i] + `\s`
 	}
@@ -19,9 +23,12 @@ func Validate_request(searchRequest string, columns []ColumnMeta) error {
 	regex := regexp.MustCompile(allowedPatterns)
 
 	// check white list
-	cleanedRequest := regex.ReplaceAllString(searchRequest, "")
+	cleanedRequest := regex.ReplaceAllString(
+		" "+strings.ReplaceAll(searchRequest, " ", "  ")+" ",
+		"",
+	)
 	for _, col := range columns {
-		cleanedRequest = strings.ReplaceAll(cleanedRequest, col.Column, "")
+		cleanedRequest = strings.ReplaceAll(cleanedRequest, " "+col.Column+" ", "")
 	}
 	cleanedRequest = strings.TrimSpace(cleanedRequest)
 

@@ -21,7 +21,7 @@ func ReadXLSXToMap(file *excelize.File, sheetName string, columnNames []string, 
 	header := rows[0]
 	colIndices := make(map[string]int)
 	for _, colName := range columnNames {
-		idx := findColumnIndex(header, colName)
+		idx := FindColumnIndex(header, colName)
 		if idx == -1 {
 			error_messages = append(error_messages, fmt.Sprintf("column %q not found", colName))
 			continue
@@ -35,7 +35,7 @@ func ReadXLSXToMap(file *excelize.File, sheetName string, columnNames []string, 
 
 	var keyIdx int
 	if keyColumn != "" {
-		keyIdx = findColumnIndex(header, keyColumn)
+		keyIdx = FindColumnIndex(header, keyColumn)
 		if keyIdx == -1 {
 			return nil, fmt.Errorf("primary column %q not found in sheet %q", keyColumn, sheetName)
 		}
@@ -92,7 +92,7 @@ func ReadXLSXToMap(file *excelize.File, sheetName string, columnNames []string, 
 	return result, nil
 }
 
-func findColumnIndex(header []string, colName string) int {
+func FindColumnIndex(header []string, colName string) int {
 	for i, name := range header {
 		if name == colName {
 			return i

@@ -26,11 +26,6 @@ type SearchResponse struct {
 
 func Search_main_app(c *fiber.Ctx) error {
 	searchRequest := c.FormValue("search_request")
-	if searchRequest == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "search_request is required",
-		})
-	}
 
 	cluster := gocql.NewCluster(settings.CASSANDRA_HOST)
 	session, err := cluster.CreateSession()
