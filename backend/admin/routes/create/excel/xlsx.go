@@ -49,7 +49,7 @@ func ReadXLSXToMap(file *excelize.File, sheetName string, columnNames []string, 
 		for i, colName := range columnNames {
 			idx := colIndices[colName]
 			if idx < len(row) {
-				values[i] = strings.Trim(row[idx], " ")
+				values[i] = strings.Trim(RemoveHiden(row[idx]), " ")
 			} else {
 				values[i] = ""
 			}
@@ -123,4 +123,34 @@ func ReadXLSXToMapMerged(file *excelize.File, sheetNames []string, columnNames [
 	}
 
 	return result, nil
+}
+
+func removeFirst(s string) string {
+	start := -1
+	end := -1
+	for i, char := range s {
+		if char == '#' {
+			if start == -1 {
+				start = i
+			} else {
+				end = i
+				break
+			}
+		}
+	}
+
+	res := s
+	if start != -1 && end != -1 {
+		res = s[:start] + s[end+1:]
+	}
+	return res
+}
+
+func RemoveHiden(s string) string {
+	res := removeFirst(s)
+	for res != s {
+		s = res
+		res = removeFirst(s)
+	}
+	return res
 }
