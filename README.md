@@ -64,6 +64,15 @@ After the first launch of the backend, run the CLI commands for:
   ./cli create_admin <username> <email>
   ```
 
+- run tests:
+  ```bash
+  cd backend/admin & go test -v ./...
+  ```
+  or inside container
+  ```bash
+  docker build backend/admin --file Dockerfile.test --build-arg VAR=$(date +%s)
+  ```
+
 ### 3. Launching the frontend
 1. Build a Docker image:
    ```bash
