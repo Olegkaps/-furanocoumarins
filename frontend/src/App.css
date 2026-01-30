@@ -1,3 +1,7 @@
+html {
+  min-width: 1500px;
+}
+
 #root {
   width: 80%;
   margin: 0 auto;
@@ -12,7 +16,7 @@ p, label, span, input, textarea, button, td, h1, h2, h3, h4, h5, h6 {
 }
 
 input, textarea {
-  background-color: #fae6b0;
+  background-color: #fff9ea;
 }
 
 a, a * {
@@ -52,13 +56,6 @@ a:hover, a:hover * {
   margin: 0, auto;
   height: 2em;
   padding-left: 2%;
-}
-
-.search-submit {
-  width: 5%;
-  background-color: #fae6b0;
-  border: 1px solid rgb(65, 65, 38);
-  border-radius: 10%;
 }
 
 table {

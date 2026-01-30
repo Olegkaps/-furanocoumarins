@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import {ArrowUpRightFromSquare, ChevronRight} from '@gravity-ui/icons';
+import {ArrowUpRightFromSquare, ChevronRight, CircleInfo, House} from '@gravity-ui/icons';
 import { api, isEmpty } from '../Admin/utils';
 import PhilogeneticTreeOrNull from './PhilogeneticTree';
 import ResultTableOrNull from './ResultTable';
-import { Link, Navigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 
 let isDataFetched = false
@@ -41,7 +41,12 @@ function SearchLine({setSearchResponse}: {setSearchResponse: React.Dispatch<Reac
   return <div className="card">
       <form className="main_form" onSubmit={async (e) => {await fetchSearchResult(e, request, setSearchResponse); setSearchParams({query: request})}}>
         <input type="text" className="search-teaxtarea" onChange={(text) => setRequest(text.target.value)} style={{fontSize: 'large'}} value={request}></input>
-        <div className="search-submit">
+        <div style={{
+          width: '5%',
+          backgroundColor: '#fcdbf4',
+          border: '1px solid grey',
+          borderRadius: '10%',
+        }}>
           <div style={{
             position: "relative",
             right: "-30%",
@@ -50,7 +55,7 @@ function SearchLine({setSearchResponse}: {setSearchResponse: React.Dispatch<Reac
             <div style={{
               position: "absolute",
             }}>
-              <ChevronRight />
+              <ChevronRight style={{color: 'grey'}}/>
             </div>
           </div>
           <div style={{
@@ -163,28 +168,135 @@ function EmptyResponse() {
 function SearchLink({path, text} : {path: string, text: string}) {
   const [searchParams, _] = useSearchParams();
 
-  return <Link
-    to={{
-      pathname: path,
-      search: "?query=" + searchParams.get("query")
-    }}
-    target="_blank"
-    style={{
+  return <label style={{
       position: 'absolute',
       top: '15%',
       left: '0.5%',
       padding: '8px',
-      backgroundColor: '#dcfbff',
+      backgroundColor: '#ffbe85',
       whiteSpace: 'break-spaces',
-      maxWidth: '8%',
+      maxWidth: '120px',
+      border: '3px solid grey',
+      borderRadius: '10px',
+    }}><p>Go&nbsp;to:</p>
+    <Link to={{
+      pathname: path,
+      search: "?query=" + searchParams.get("query")
+    }}
+    target="_blank"
+  >{text}<ArrowUpRightFromSquare /></Link></label>
+}
+
+function HomeLink() {
+  return <Link to={"/"} target='_blank'
+    style={{
+      position: 'absolute',
+      left: '50px',
+      top: '21px',
+      backgroundColor: '#e1c8ff',
       border: '1px solid grey',
       borderRadius: '10px',
-    }}
-  >{text}<ArrowUpRightFromSquare /></Link>
+      padding: '10px 10px 5px 10px',
+  }}
+  ><House width={'30px'} height={'30px'}/></Link>
 }
 
 function SearchApp() {
-  return <Navigate to="/tree" />
+  let [metadata, setMetadata] = useState<Array<{[index: string]:any}>>([]);
+  const navigate = useNavigate();
+
+  const fetchMetadata = async () => {
+    const response = await api.get('/metadata').catch((err) => {return err.response});
+    setMetadata(response.data["metadata"]);
+
+    if (response?.status >= 400) {
+      alert('Error request')
+    }
+  };
+
+  useEffect(() => {
+    fetchMetadata();
+  }, []);
+
+  if (metadata === undefined || metadata.length === 0) {
+    return <p style={{textAlign: 'center'}}>Loading...</p>
+  }
+
+  let parsed_metadata: {[index: string]: any;}[] = []
+  let search_values = new Map<{[index: string]: any;}, string>()
+
+  metadata.forEach((curr_meta) => {
+    if (!curr_meta["type"].includes("search")) {
+      return
+    }
+    parsed_metadata.push(curr_meta)
+    search_values.set(curr_meta, "")
+  })
+
+  if (parsed_metadata.length === 0) {
+    navigate('/table')
+  }
+
+  const handleSearchRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    let search_params: string[] = []
+
+    search_values.forEach((val, key) => {
+      if (val === "") {
+        return
+      }
+      let op = " = "
+      if (key["type"].includes("set")) {
+        op = " CONTAINS "
+      }
+      search_params.push(key["column"] + op + "'" + val + "'")
+    })
+
+    if (search_params.length === 0) {
+      alert("Enter at least one parameter")
+      return
+    }
+
+    navigate('/table?query=' + search_params.join(" AND "));
+  };
+
+  return <form onSubmit={handleSearchRequest}
+    style={{
+      border: '1px dashed grey',
+      borderRadius: '15px',
+      backgroundColor: '#eaf5ff',
+      padding: '25px',
+      paddingLeft: '40px',
+      width: '600px',
+      margin: 'auto'
+    }}>
+    <h2 style={{textAlign: 'center'}}>Search species or substances</h2>
+    <ul>{parsed_metadata.map((curr_meta) => (
+      <li style={{width: '400px', position: 'relative'}}><label title={curr_meta["description"]}>
+        <CircleInfo />&nbsp;{curr_meta["column"]}:
+        <input
+          style={{
+            position: 'absolute',
+            left: '45%',
+            width: '300px',
+            height: '30px',
+            borderColor: 'grey'
+          }}
+          onChange={
+            (e) => {search_values.set(curr_meta, e.target.value.trim())}
+          }></input>
+        <hr style={{border: 0, margin: 0, height: '15px'}}></hr>
+      </label></li>
+    ))}</ul>
+    <button type='submit' style={{
+      position: 'relative',
+      left: '45%',
+      padding: '8px',
+      border: '1px solid grey',
+      borderRadius: '7px',
+      backgroundColor: '#efeaff',
+    }}>Search<ChevronRight style={{color: 'grey'}}/></button>
+  </form>
 }
 
 
@@ -197,6 +309,7 @@ export function AppResultTable() {
   let filteredResponse = filterResponse(searchResponse)
 
   return <>
+    <HomeLink />
     <br></br>
     <SearchLine {...{setSearchResponse: setSearchResponse}} />
     <br></br>
@@ -221,6 +334,7 @@ export function AppPhilogeneticTree() {
   let filteredResponse = filterResponse(searchResponse)
 
   return <>
+    <HomeLink />
     <br></br>
     <SearchLine {...{setSearchResponse: setSearchResponse}} />
     <br></br>

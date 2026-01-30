@@ -3,7 +3,7 @@ import { isEmpty, ScrollableContainer } from "../Admin/utils";
 import config from "../config";
 import DataMeta from "./DataMeta";
 import DataRows from "./RowsData";
-import {FileArrowUp} from '@gravity-ui/icons';
+import {FileArrowUp, CircleInfo} from '@gravity-ui/icons';
 
 
 const maxPageSize = 100
@@ -17,7 +17,7 @@ function ResultTableHead({meta}: {meta: Array<DataMeta>}) {
         }
         return <th scope='col' style={{backgroundColor: "#ccd8b7ff", padding: 0}}>
           <hr style={{width: '100%', margin: 0, position: 'relative', top: 0}}></hr>
-          <p style={{fontSize: config["FONT_SIZE"], margin: '20px 0'}} title={curr_meta.description}>{curr_meta.name}</p>
+          <p style={{fontSize: config["FONT_SIZE"], margin: '20px 0'}} title={curr_meta.description}>{curr_meta.name}&nbsp;<CircleInfo /></p>
           <hr style={{width: '100%', margin: 0, position: 'relative', bottom: 0}}></hr>
         </th>
     })}
@@ -111,7 +111,7 @@ function GroupedResultTable(
               return
             }
             return <tr>
-              <td title={meta_val.description}>{meta_val.name}</td>
+              <td title={meta_val.description}><CircleInfo />&nbsp;{meta_val.name}</td>
               <td>{meta[ind].render(dataRows.key_row.get(meta_val.name))}</td>
             </tr>
         })}</tbody></table>

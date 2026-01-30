@@ -158,8 +158,8 @@ const AdminPage: React.FC = () => {
 
     return (
         <div style={{ margin: '20px', }}>
-            <h2 style={{ fontSize: 'xx-large', position: 'absolute', top: '5%', left: '40%' }}>Existing Tables: {tables.length}/{config["MAX_TABLES_COUNT"]}</h2>
-            <div style={{border: '1px solid #818485ff', borderRadius: "10%", backgroundColor: "#e9fafeff", width: "10%", padding: "10px", position: 'absolute', top: "2%", left: "20%"}}>
+            <h2 style={{ fontSize: 'xx-large', position: 'absolute', top: '40px', left: '600px' }}>Existing&nbsp;Tables:&nbsp;{tables.length}/{config["MAX_TABLES_COUNT"]}</h2>
+            <div style={{border: '1px solid #818485ff', borderRadius: "10%", backgroundColor: "#e9fafeff", width: "130px", padding: "10px", position: 'absolute', top: "20px", left: "300px"}}>
                 <p style={{paddingLeft: "15px"}}><b>Clear tables</b></p>
                 <button onClick={handleDeleteBadTables}
                     style={{
@@ -172,7 +172,7 @@ const AdminPage: React.FC = () => {
                     <i className="fas fa-trash"></i> <TrashBin {...{style: {width: '30px', height: '30px', color: 'grey'}}}/>
                 </button>
             </div>
-            <div style={{border: '1px solid rgb(133, 131, 129)', borderRadius: "10%", backgroundColor: "rgb(255, 220, 182)", width: "7%", padding: "10px 0", position: 'absolute', top: "2%", left: "10%"}}>
+            <div style={{border: '1px solid rgb(133, 131, 129)', borderRadius: "10%", backgroundColor: "rgb(255, 220, 182)", width: "90px", padding: "10px 0", position: 'absolute', top: "20px", left: "150px"}}>
                 <p style={{paddingLeft: "15px"}}><b>Bibtex</b></p>
                 <button onClick={() => setShowSaveBibtex(true)}
                     style={{
@@ -278,6 +278,7 @@ const AdminPage: React.FC = () => {
                 </form>
             )}
 
+            <br></br>
             { !showCreateForm &&
             <div style={{
                 padding: '20px',

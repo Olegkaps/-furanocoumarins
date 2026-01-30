@@ -23,6 +23,7 @@ func SetUp() *fiber.App {
 
 	app.Use(cors.New(settings.CORS_SETTINGS))
 
+	app.Get("/metadata", search.Get_current_metadata)
 	app.Post("/search", search.Search_main_app)
 	app.Get("/article/:id", bibtex.Get_article)
 
