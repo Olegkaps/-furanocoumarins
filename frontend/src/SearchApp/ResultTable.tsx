@@ -16,9 +16,7 @@ function ResultTableHead({meta}: {meta: Array<DataMeta>}) {
           return <></>
         }
         return <th scope='col' style={{backgroundColor: "#ccd8b7ff", padding: 0}}>
-          <hr style={{width: '100%', margin: 0, position: 'relative', top: 0}}></hr>
-          <p style={{fontSize: config["FONT_SIZE"], margin: '20px 0'}} title={curr_meta.description}>{curr_meta.name}&nbsp;<CircleInfo /></p>
-          <hr style={{width: '100%', margin: 0, position: 'relative', bottom: 0}}></hr>
+          <p style={{fontSize: config["FONT_SIZE"], margin: '20px 0'}} title={curr_meta.description}>{curr_meta.show_name}&nbsp;<CircleInfo /></p>
         </th>
     })}
     </tr>
@@ -111,7 +109,7 @@ function GroupedResultTable(
               return
             }
             return <tr>
-              <td title={meta_val.description}><CircleInfo />&nbsp;{meta_val.name}</td>
+              <td title={meta_val.description}><CircleInfo />&nbsp;{meta_val.show_name}</td>
               <td>{meta[ind].render(dataRows.key_row.get(meta_val.name))}</td>
             </tr>
         })}</tbody></table>
@@ -250,7 +248,7 @@ function ResultTableOrNull(response: {[index: string]: any}) {
       group_inds.add(data_meta.length)
     }
 
-    data_meta.push(new DataMeta(data_type, data_name, meta_item["description"], additional_data, full_type.includes("chemical")))
+    data_meta.push(new DataMeta(data_type, data_name, meta_item["name"], meta_item["description"], additional_data, full_type.includes("chemical")))
   })
 
   response["data"].forEach((data_item: {[index: string]: any}) => {

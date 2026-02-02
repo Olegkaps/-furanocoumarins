@@ -14,6 +14,7 @@ import (
 
 type ColumnMeta struct {
 	Column      string `json:"column"`
+	Name        string `json:"name"`
 	Type        string `json:"type"`
 	Description string `json:"description"`
 }
@@ -40,10 +41,11 @@ func Search_main_app(c *fiber.Ctx) error {
 		Timestamp time.Time
 		TableMeta string
 		TableData string
+		Version   string
 	}
 
 	iter := session.Query(`
-		SELECT created_at, table_meta, table_data 
+		SELECT created_at, table_meta, table_data, version
 		FROM chemdb.tables
 		WHERE is_active = true
 		ALLOW FILTERING
@@ -53,9 +55,10 @@ func Search_main_app(c *fiber.Ctx) error {
 		Timestamp time.Time
 		TableMeta string
 		TableData string
+		Version   string
 	}
 
-	for iter.Scan(&activeTable.Timestamp, &activeTable.TableMeta, &activeTable.TableData) {
+	for iter.Scan(&activeTable.Timestamp, &activeTable.TableMeta, &activeTable.TableData, &activeTable.Version) {
 		results = append(results, activeTable)
 	}
 
@@ -76,16 +79,34 @@ func Search_main_app(c *fiber.Ctx) error {
 
 	activeTable = results[0]
 
+	ge_v2 := common.IsVersionGreater(activeTable.Version, "v2")
+
 	// get table_meta (definitions of columns)
 	var columns []ColumnMeta
-	metaQuery := "SELECT column, type, description FROM " + activeTable.TableMeta
+	var metaQuery string
+
+	if ge_v2 {
+		metaQuery = "SELECT column, type, description, show_name FROM " + activeTable.TableMeta
+	} else {
+		metaQuery = "SELECT column, type, description FROM " + activeTable.TableMeta
+	}
 
 	iter = session.Query(metaQuery).Iter()
 
 	for {
 		var col ColumnMeta
-		if !iter.Scan(&col.Column, &col.Type, &col.Description) {
-			break
+		if ge_v2 {
+			if !iter.Scan(&col.Column, &col.Type, &col.Description, &col.Name) {
+				break
+			}
+			if col.Name == "" {
+				col.Name = col.Column
+			}
+		} else {
+			if !iter.Scan(&col.Column, &col.Type, &col.Description) {
+				break
+			}
+			col.Name = col.Column
 		}
 		columns = append(columns, col)
 	}

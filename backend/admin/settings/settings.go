@@ -12,7 +12,7 @@ import (
 	"github.com/redis/go-redis/v9/maintnotifications"
 )
 
-var BACK_VERSION = "v1.2"
+var BACK_VERSION = "v2.0"
 
 var SECRET_KEY = []byte(os.Getenv("SECRET_KEY"))
 var ALLOW_ORIGIN = os.Getenv("ALLOW_ORIGIN")

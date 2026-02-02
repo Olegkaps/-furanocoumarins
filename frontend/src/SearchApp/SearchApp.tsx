@@ -79,6 +79,7 @@ function SearchLine({setSearchResponse}: {setSearchResponse: React.Dispatch<Reac
 
 function filterResponse(searchResponse: {[index: string]: any;}) {
   if (isEmpty(searchResponse)) {
+    isDataFetched = false
     return searchResponse
   }
 
@@ -271,13 +272,15 @@ function SearchApp() {
       margin: 'auto'
     }}>
     <h2 style={{textAlign: 'center'}}>Search species or substances</h2>
-    <ul>{parsed_metadata.map((curr_meta) => (
+    <ul>{parsed_metadata.map((curr_meta, ind) => (
       <li style={{width: '400px', position: 'relative'}}><label title={curr_meta["description"]}>
-        <CircleInfo />&nbsp;{curr_meta["column"]}:
+        <CircleInfo />&nbsp;{curr_meta["name"]}:
+        {ind > 0 && <span style={{position: 'absolute', left: '90%', color: 'blue'}}>AND</span>}
+        <br></br>
         <input
           style={{
-            position: 'absolute',
-            left: '45%',
+            position: 'relative',
+            left: '20%',
             width: '300px',
             height: '30px',
             borderColor: 'grey'

@@ -20,14 +20,16 @@ class Link{
 class DataMeta {
   type: string
   name: string
+  show_name: string
   description: string
   additional_data: string
   is_grouping: boolean
 
-  constructor(type: string, name: string, description: string, data: string, is_grouping: boolean) {
+  constructor(type: string, name: string, show_name: string, description: string, data: string, is_grouping: boolean) {
     // TO DO: validate type
     this.type = type
     this.name = name
+    this.show_name = show_name
     this.description = description
     this.additional_data = data
     this.is_grouping = is_grouping

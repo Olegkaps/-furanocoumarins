@@ -50,7 +50,7 @@ class PhilogeneticTreeNode {
     this.is_visible = !this.is_visible
   }
 
-  render(meta: Array<string>, meta_ind: number = 0, child_ind: number = 0, total_bros: number = 0) {
+  render(meta: Array<string>, meta_names: Array<string>, meta_ind: number = 0, child_ind: number = 0, total_bros: number = 0) {
     return <div
       style={{
         width: '100%',
@@ -79,7 +79,7 @@ class PhilogeneticTreeNode {
             fontSize: config["FONT_SIZE"],
             fontWeight: 600,
           }}
-          title={meta[meta_ind]}>
+          title={meta_names[meta_ind]}>
             {this.clade_name.replace(' ', '\u00A0')}
           </p>
         </div>
@@ -108,7 +108,7 @@ class PhilogeneticTreeNode {
               (a, b) => Object.keys(a).length - Object.keys(b).length
             ).map((name, ind) => (
               <div>
-                {this.childs[name].render(meta, meta_ind+1, ind, Object.keys(this.childs).length)}
+                {this.childs[name].render(meta, meta_names, meta_ind+1, ind, Object.keys(this.childs).length)}
               </div>
             ))
           }</div>
@@ -179,7 +179,7 @@ function CountButton(
 }
 
 
-function PhilogeneticTree({ species, meta }: {species: Array<Specie>, meta: Array<string>}) {
+function PhilogeneticTree({ species, meta, meta_names }: {species: Array<Specie>, meta: Array<string>, meta_names: Array<string>}) {
   if (species.length === 0) {
     return <div></div>
   }
@@ -193,7 +193,7 @@ function PhilogeneticTree({ species, meta }: {species: Array<Specie>, meta: Arra
   // TO DO: Add visibility for branches and clades
 
 
-  return <ZoomableContainer>{root.render(meta)}</ZoomableContainer>
+  return <ZoomableContainer>{root.render(meta, meta_names)}</ZoomableContainer>
 }
 
 
@@ -218,6 +218,7 @@ function PhilogeneticTreeOrNull(
   })
 
   let species_meta = ["__root__"]
+  let meta_names = ["__root__"]
   let class_num_to_tag: {[val: string]: string} = {}
 
   let all_tags = new Set<string>()
@@ -249,6 +250,7 @@ function PhilogeneticTreeOrNull(
 
     let clade_name = meta_item["column"]
     species_meta.push(clade_name)
+    meta_names.push(meta_item["name"])
     class_num_to_tag[curr_num] = curr_tag
   })
 
@@ -291,7 +293,7 @@ function PhilogeneticTreeOrNull(
           onClick={() => {setTag(item)}}
         >{item}</button>
       ))}</div>
-    <PhilogeneticTree {...{species: species, meta: species_meta}} />
+    <PhilogeneticTree {...{species: species, meta: species_meta, meta_names: meta_names}} />
   </div>
 }
 

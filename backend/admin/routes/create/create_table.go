@@ -139,7 +139,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	}
 
 	// read data
-	meta_columns := []string{"sheet", "column", "type", "description"}
+	meta_columns := []string{"sheet", "column", "type", "description", "show_name"}
 	meta_result, err := excel.ReadXLSXToMap(TableFile, MetaListName, meta_columns, "")
 	if err != nil {
 		common.WriteLog(err.Error())
@@ -157,6 +157,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		column := row[1]
 		c_type := row[2]
 		c_decr := row[3]
+		c_name := row[4]
 		if strings.HasPrefix(sheet, "__") {
 			continue
 		}
@@ -178,7 +179,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 				return
 			}
 		} else {
-			meta_data = append(meta_data, []any{sheet, column, c_type, c_decr})
+			meta_data = append(meta_data, []any{sheet, column, c_type, c_decr, c_name})
 		}
 
 		meta_keys[column] = c_type + "\t" + c_decr
@@ -187,7 +188,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	err = cassandra.CreateAndBatchInsertData(
 		session,
 		table_meta_name,
-		[]string{"sheet TEXT", "column TEXT", "type TEXT", "description TEXT"},
+		[]string{"sheet TEXT", "column TEXT", "type TEXT", "description TEXT", "show_name TEXT"},
 		[]string{"column"},
 		meta_data,
 	)
