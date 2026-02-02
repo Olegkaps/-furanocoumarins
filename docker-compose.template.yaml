@@ -23,6 +23,7 @@ services:
     ports:
       - "8081:80"
     environment:
+      - BACKEND_VERSION=
       - SECRET_KEY=
       - ALLOW_ORIGIN=
       - REDIS_PASSWORD=
@@ -30,15 +31,17 @@ services:
       - PG_PASSWORD=
       - PG_DB=
       - CASSANDRA_HOST=
+      - VM_PSWD=
       - MAIL=
       - MAIL_SECRET=
       - MAIL_PASSWORD=
-      - DOMAIN_PREF=  # without / at the end
+      - DOMAIN_PREF=http://localhost  # without / at the end
     depends_on:
       - postgres
       - redis
     networks:
       - back
+      - metrics
   
   redis:
     hostname: redis
@@ -103,24 +106,75 @@ services:
     networks:
       - appnet
     env_file:
-      - backend/cassandra/nf-data-explorer/.env  # git clone nf-data-explorer to 'backend/cassandra/'
+      - backend/cassandra/nf-data-explorer/.env
     environment:
       - CASSANDRA_HOST=cassandra
       - REDIS_HOST=redis
     volumes:
       - neflix_explorer_data:/apps/nf-data-explorer/data
 
-# TO DO: probably add opensearch + grafana
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheusdata:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - metrics
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=
+      - GF_SECURITY_ADMIN_PASSWORD=
+    volumes:
+      - ./monitoring/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./monitoring/grafana.ini:/etc/grafana/grafana.ini
+      - grafanadata:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - metrics
+
+  loki:
+    image: grafana/loki:2.9.0
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki-config.yaml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - metrics
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    ports:
+      - "9080:9080"
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./monitoring/promtail-config.yaml:/etc/promtail/config.yaml
+    command: -config.file=/etc/promtail/config.yaml
+    privileged: true
+    depends_on:
+      - loki
+    networks:
+      - metrics
+  
 
 volumes:
   postgres_data:
   redis-data:
   cassandra3_data:
   neflix_explorer_data:
-  # kafka_data:
-  # elasticsearch_data:
+  grafanadata:
+  prometheusdata:
 
 networks:
   appnet:
   back:
+  metrics:
   ps:

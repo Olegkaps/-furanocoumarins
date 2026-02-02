@@ -3,6 +3,7 @@ package main
 import (
 	_ "github.com/lib/pq"
 
+	"github.com/ansrivas/fiberprometheus/v2"
 	jwtware "github.com/gofiber/contrib/jwt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -20,6 +21,12 @@ func SetUp() *fiber.App {
 	app := fiber.New(fiber.Config{
 		BodyLimit: 10 * 1024 * 1024,
 	})
+
+	prometheus := fiberprometheus.New("fuco-backend")
+	prometheus.RegisterAt(app, "/metrics")
+	// prometheus.SetSkipPaths([]string{"/ping"})
+	// prometheus.SetIgnoreStatusCodes([]int{401, 403, 404})
+	app.Use(prometheus.Middleware)
 
 	app.Use(cors.New(settings.CORS_SETTINGS))
 
