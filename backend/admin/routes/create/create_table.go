@@ -21,24 +21,17 @@ import (
 	"admin/utils/common"
 	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
+	"admin/utils/dbs/postgres"
 	"admin/utils/mail"
 )
 
 func Create_table(c *fiber.Ctx) error { // TO DO: no more than 10 tables
-	db, err := dbs.OpenDB()
-	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-	defer db.Close()
-
 	user := c.Locals("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)
 	name := claims["name"].(string)
-	common.WriteLog("create_table from user %s", name)
 
-	var mail string
-	err = db.QueryRow("SELECT email FROM users WHERE username=$1", name).Scan(&mail)
-	if err != nil || len(mail) <= 3 {
+	db_user, err := postgres.GetUser(name)
+	if err != nil || len(db_user.Mail) <= 3 {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
@@ -66,7 +59,7 @@ func Create_table(c *fiber.Ctx) error { // TO DO: no more than 10 tables
 	meta := c.FormValue("meta")
 	table_name := c.FormValue("name")
 
-	go make_create_table(xlsx, meta, mail, table_name)
+	go make_create_table(xlsx, meta, db_user.Mail, table_name)
 
 	return c.SendStatus(fiber.StatusCreated)
 }

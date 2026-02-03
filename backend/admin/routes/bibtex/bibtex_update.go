@@ -4,8 +4,8 @@ import (
 	"admin/settings"
 	"admin/utils/bibtex"
 	"admin/utils/common"
-	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
+	"admin/utils/dbs/postgres"
 	"admin/utils/mail"
 	"strings"
 	"time"
@@ -16,20 +16,12 @@ import (
 )
 
 func Update_file(c *fiber.Ctx) error {
-	db, err := dbs.OpenDB()
-	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-	defer db.Close()
-
 	user := c.Locals("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)
 	name := claims["name"].(string)
-	common.WriteLog("create_table from user %s", name)
 
-	var admin_mail string
-	err = db.QueryRow("SELECT email FROM users WHERE username=$1", name).Scan(&admin_mail)
-	if err != nil || len(admin_mail) <= 3 {
+	db_user, err := postgres.GetUser(name)
+	if err != nil || len(db_user.Mail) <= 3 {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
@@ -120,7 +112,7 @@ func Update_file(c *fiber.Ctx) error {
 
 	if strings.Trim(ref_column, " ") == "" {
 		mail.SendMail(
-			admin_mail,
+			db_user.Mail,
 			"Updated bibtex file",
 			"Bibtex file updated, but active table "+
 				timestamp+
@@ -158,9 +150,9 @@ func Update_file(c *fiber.Ctx) error {
 		message += " have errors:\n" + strings.Join(warnings, "\n")
 	}
 
-	common.WriteLog("sending mail to %s", admin_mail)
+	common.WriteLog("sending mail to %s", db_user.Mail)
 	mail.SendMail(
-		admin_mail,
+		db_user.Mail,
 		"Updated bibtex file",
 		message,
 	)

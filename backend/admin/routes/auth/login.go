@@ -11,31 +11,24 @@ import (
 
 	"admin/utils/common"
 	"admin/utils/dbs"
+	"admin/utils/dbs/postgres"
 	"admin/utils/mail"
 )
 
 func Login(c *fiber.Ctx) error {
-	db, err := dbs.OpenDB()
-	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-	defer db.Close()
-
-	user := c.FormValue("uname_or_email")
+	login_or_email := c.FormValue("uname_or_email")
 	password := c.FormValue("password")
-	common.WriteLog("Trying to log in %s", user)
 
-	var username, role, hashed_password string
-	err = db.QueryRow("SELECT username, role, hashed_password FROM users WHERE username=$1 OR email=$2", user, user).Scan(&username, &role, &hashed_password)
+	db_user, err := postgres.GetUser(login_or_email)
 	if err != nil {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	if !common.CheckPasswordHash(password, hashed_password) {
+	if !common.CheckPasswordHash(password, db_user.Hashed_password) {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
-	t, err := common.GetToken(username, role)
+	t, err := common.GetToken(db_user.Username, db_user.Role)
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
@@ -44,21 +37,12 @@ func Login(c *fiber.Ctx) error {
 }
 
 func Login_mail(c *fiber.Ctx) error {
-	db, err := dbs.OpenDB()
-	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-	defer db.Close()
+	mail_or_login := c.FormValue("uname_or_email")
 
-	user := c.FormValue("uname_or_email")
-	common.WriteLog("Trying to log in %s by mail", user)
-
-	var username, mail_addr string
-	err = db.QueryRow("SELECT username, email FROM users WHERE username=$1 OR email=$2", user, user).Scan(&username, &mail_addr)
-	if err != nil || len(mail_addr) <= 3 {
+	user, err := postgres.GetUser(mail_or_login)
+	if err != nil || len(user.Mail) <= 3 {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
-	common.WriteLog("user have name %s and email %s", username, mail_addr)
 
 	redis, err := dbs.NewRedisClient(context.Background())
 	if err != nil {
@@ -73,16 +57,16 @@ func Login_mail(c *fiber.Ctx) error {
 
 	word = "lin" + strings.ReplaceAll(word, "/", "")
 	word = "lin" + strings.ReplaceAll(word, ".", "")
-	common.WriteLog("Generate link %s for %s", word, username)
-	err = redis.SetEx(context.Background(), word, username, time.Hour*1).Err()
+	common.WriteLog("Generate link %s for %s", word, user.Username)
+	err = redis.SetEx(context.Background(), word, user.Username, time.Hour*1).Err()
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
-	common.WriteLog("Sending message for %s", mail_addr)
+	common.WriteLog("Sending message for %s", user.Mail)
 	link := os.Getenv("DOMAIN_PREF") + "/admit/" + word
 	go mail.SendMail(
-		mail_addr,
+		user.Mail,
 		"Login to site",
 		mail.GetLinkMailBody("log in", link),
 	)
