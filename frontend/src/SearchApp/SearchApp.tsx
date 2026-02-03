@@ -94,6 +94,7 @@ function filterResponse(searchResponse: {[index: string]: any;}) {
 
   resultResponse["data"] = []
 
+  // DELETE LATER START 1
   let meta_defaults: {[ind: string]: any} = {}
   searchResponse["metadata"].forEach((meta_item: {[index: string]: any}) => {
     // e.g 'clas[00]', 'clas[02][powo]', ...
@@ -119,6 +120,7 @@ function filterResponse(searchResponse: {[index: string]: any;}) {
     }
   })
 
+  // DELETE LATER START 2
   searchResponse["metadata"].forEach((meta_item: {[index: string]: any}) => {
     // e.g 'default[lsid_original]', ...
     let _type = meta_item["type"]    
@@ -134,7 +136,8 @@ function filterResponse(searchResponse: {[index: string]: any;}) {
 
     meta_defaults[default_col]["custom"].push(meta_item["column"])
   })
-  
+  // DELETE LATER END 2
+
   searchResponse["data"].forEach((row: {[index: string]: string}) => {
     Object.values(meta_defaults).forEach((obj: {[index: string]: any}) => {
 
@@ -146,6 +149,7 @@ function filterResponse(searchResponse: {[index: string]: any;}) {
         }
       })
     })
+    // DELETE LATER END 1
 
     resultResponse["data"].push(row)
   })

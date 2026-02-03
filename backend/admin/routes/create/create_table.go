@@ -217,7 +217,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	}
 
 	for _, row := range meta_result {
-		// meta_names := []string{"sheet", "column", "type", "description"}
+		// meta_names := []string{"sheet", "column", "type", "description", "show_name"}
 		name := row[0]
 
 		if name == "__LIST__" {
@@ -448,6 +448,29 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		return
 	}
 
+	// LIKE Index
+	for _, row := range meta_result {
+		// meta_names := []string{"sheet", "column", "type", "description", "show_name"}
+		_type := row[2]
+		if strings.Contains(_type, "search") && !strings.Contains(_type, "set") && !strings.Contains(_type, "external[") {
+			err = session.Query(fmt.Sprintf(
+				`CREATE CUSTOM INDEX ON %s (%s)
+					USING 'org.apache.cassandra.index.sasi.SASIIndex'
+					WITH OPTIONS = {
+						'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.StandardAnalyzer',
+						'case_sensitive': 'false'
+					};`,
+				table_data_name,
+				row[1],
+			)).Exec()
+			if err != nil {
+				common.WriteLog(err.Error())
+				sendErrorMail(err.Error())
+				return
+			}
+		}
+	}
+
 	// set that all is ok
 	err = session.Query(fmt.Sprintf(
 		`UPDATE chemdb.tables
@@ -589,9 +612,44 @@ func (v_sheet *VirtualSheet) Postprocess() error {
 	}
 	error_messages := []string{}
 
-	for key, row := range v_sheet.Rows {
-		for j, item := range row {
+	meta_defaults := make(map[string]map[string]any)
 
+	for i, _type := range v_sheet.ColumnTypes {
+		if !strings.Contains(_type, "default[") {
+			continue
+		}
+
+		default_col := strings.Split(strings.Split(_type, "default[")[1], "]")[0]
+		default_ind := excel.FindColumnIndex(v_sheet.ColumnNames, default_col)
+		if default_ind == -1 {
+			error_messages = append(error_messages, fmt.Sprintf(
+				"bad type '%s', cannot find default column '%s'",
+				_type, default_col,
+			))
+			continue
+		}
+
+		if _, exist := meta_defaults[default_col]; !exist {
+			meta_defaults[default_col] = map[string]any{"default": default_ind, "custom": []int{}}
+		}
+
+		meta_defaults[default_col]["custom"] = append(meta_defaults[default_col]["custom"].([]int), i)
+	}
+
+	for key, row := range v_sheet.Rows {
+		// default cols
+		for _, m := range meta_defaults {
+			default_col := m["default"].(int)
+			for _, custom_col := range m["custom"].([]int) {
+				if row[custom_col] != "" {
+					continue
+				}
+				row[custom_col] = row[default_col]
+			}
+		}
+
+		// type checks
+		for j, item := range row {
 			if strings.Contains(v_sheet.ColumnTypes[j], "external[") && item == "" {
 				error_messages = append(error_messages, fmt.Sprintf(
 					"missing external key in row with primary key '%s' for column '%s'",
