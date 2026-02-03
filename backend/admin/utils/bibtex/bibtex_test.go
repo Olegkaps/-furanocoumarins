@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/exp/slices"
 )
 
 func TestValidateRequest(t *testing.T) {
@@ -42,6 +43,8 @@ func TestValidateRequest(t *testing.T) {
 
 	for _, test := range tests {
 		errors := bibtex.Check_artickle_ids(test.corrIds, test.idsToCheck)
+		slices.Sort(test.expectedErrors)
+		slices.Sort(errors)
 		assert.Equalf(t, test.expectedErrors, errors, test.description)
 	}
 }
