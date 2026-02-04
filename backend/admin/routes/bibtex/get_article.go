@@ -3,6 +3,7 @@ package bibtex
 import (
 	"admin/settings"
 	"admin/utils/common"
+	"admin/utils/dbs/cassandra"
 
 	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2"
@@ -19,20 +20,11 @@ func Get_article(c *fiber.Ctx) error {
 	}
 	defer session.Close()
 
-	iter := session.Query(`
-		SELECT bibtex_text 
-		FROM chemdb.bibtex
-		WHERE article_id = ?
-	`, id).Iter()
-
-	var text string
-	for iter.Scan(&text) {
-		break
-	}
-
-	if err := iter.Close(); err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+	text, err := cassandra.GetArticle(session, id)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
 	if text == "" {

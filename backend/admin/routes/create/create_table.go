@@ -67,67 +67,55 @@ func Create_table(c *fiber.Ctx) error { // TO DO: no more than 10 tables
 func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileName string) {
 	defer TableFile.Close()
 
-	sendErrorMail := func(err_message string) {
+	sendErrorMail := func(err error) {
+		common.WriteLog(err.Error())
 		mail.SendMail(
 			AuthorMail,
 			"Creating table "+TableFile.Path+" failed.",
-			"Recieved following error: "+err_message,
+			"Recieved following error: "+err.Error(),
 		)
 	}
 
 	sendErrorBadMetaMail := func(column, c_decr, c_desr_old, c_type, c_type_old string) {
-		message := fmt.Sprintf(
+		message := fmt.Errorf("%s", fmt.Sprintf(
 			"Column '%s' has different descriptions in different rows:\n",
 			column,
-		) + fmt.Sprintf(
+		)+fmt.Sprintf(
 			" - Descriptions:\n\t'%s'\n\t'%s'\n",
 			c_decr, c_desr_old,
-		) + fmt.Sprintf(
+		)+fmt.Sprintf(
 			" - Types (may differ only by primary/external):\n\t'%s'\n\t'%s'\n",
 			c_type, c_type_old,
-		)
-		common.WriteLog(message)
+		))
 		sendErrorMail(message)
 	}
 
 	cluster := gocql.NewCluster(settings.CASSANDRA_HOST)
 	session, err := cluster.CreateSession()
 	if err != nil {
-		common.WriteLog(err.Error())
-		sendErrorMail(err.Error())
+		sendErrorMail(err)
 		return
 	}
 	defer session.Close()
 
-	curr_time := time.Now().Format("2006-01-02T15:04:05.000")
+	table := &cassandra.Table{
+		Name:     FileName,
+		Version:  settings.BACK_VERSION,
+		IsOk:     false,
+		IsActive: false,
+	}
+
+	table.Timestamp = time.Now()
+	curr_time := table.Timestamp.Format("2006-01-02T15:04:05.000")
 
 	fixed_curr_time := dbs.FixCassandraTimestamp(curr_time)
-	table_meta_name := "chemdb." + "meta_" + fixed_curr_time
-	table_data_name := "chemdb." + "data_" + fixed_curr_time
-	table_species_name := "chemdb." + "species_" + fixed_curr_time
+	table.TableMeta = "chemdb." + "meta_" + fixed_curr_time
+	table.TableData = "chemdb." + "data_" + fixed_curr_time
+	table.TableSpecies = "chemdb." + "species_" + fixed_curr_time
 
-	// init tables data
-	err = session.Query(fmt.Sprintf(
-		`INSERT INTO chemdb.tables (
-			created_at,
-			name,
-			version,
-			table_meta,
-			table_data,
-			table_species,
-			is_active,
-			is_ok
-		) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', false, false);`,
-		curr_time,
-		FileName,
-		settings.BACK_VERSION,
-		table_meta_name,
-		table_data_name,
-		table_species_name,
-	)).Exec()
+	err = cassandra.InserTable(session, table)
 	if err != nil {
-		common.WriteLog(err.Error())
-		sendErrorMail(err.Error())
+		sendErrorMail(err)
 		return
 	}
 
@@ -135,8 +123,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	meta_columns := []string{"sheet", "column", "type", "description", "show_name"}
 	meta_result, err := excel.ReadXLSXToMap(TableFile, MetaListName, meta_columns, "")
 	if err != nil {
-		common.WriteLog(err.Error())
-		sendErrorMail(err.Error())
+		sendErrorMail(err)
 		return
 	}
 
@@ -180,14 +167,13 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 
 	err = cassandra.CreateAndBatchInsertData(
 		session,
-		table_meta_name,
+		table.TableMeta,
 		[]string{"sheet TEXT", "column TEXT", "type TEXT", "description TEXT", "show_name TEXT"},
 		[]string{"column"},
 		meta_data,
 	)
 	if err != nil {
-		common.WriteLog(err.Error())
-		sendErrorMail(err.Error())
+		sendErrorMail(err)
 		return
 	}
 
@@ -218,9 +204,8 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		}
 
 		if _, ok := parsed_meta[name]; !ok {
-			err_message := fmt.Sprintf("Got unknown sheet name '%s'. Did you register this sheet as __LIST__ ?", name)
-			common.WriteLog(err_message)
-			sendErrorMail(err_message)
+			err = fmt.Errorf("Got unknown sheet name '%s'. Did you register this sheet as __LIST__ ?", name)
+			sendErrorMail(err)
 			return
 		}
 
@@ -237,14 +222,12 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	for _, v_sheet := range parsed_meta {
 		err = v_sheet.ReadFile(TableFile)
 		if err != nil {
-			common.WriteLog(err.Error())
-			sendErrorMail(err.Error())
+			sendErrorMail(err)
 			return
 		}
 		err = v_sheet.Postprocess()
 		if err != nil {
-			common.WriteLog(err.Error())
-			sendErrorMail(err.Error())
+			sendErrorMail(err)
 			return
 		}
 	}
@@ -253,9 +236,8 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	// parsed_meta[classification]
 	species_sheet, ok := parsed_meta["classification"]
 	if !ok {
-		err_message := "Missing classifaction in meta. Did you register this sheet as __LIST__ ?"
-		common.WriteLog(err_message)
-		sendErrorMail(err_message)
+		err = fmt.Errorf("Missing classifaction in meta. Did you register this sheet as __LIST__ ?")
+		sendErrorMail(err)
 		return
 	}
 
@@ -281,14 +263,13 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 
 	err = cassandra.CreateAndBatchInsertData(
 		session,
-		table_species_name,
+		table.TableSpecies,
 		sp_columns,
 		[]string{"uuid"},
 		sp_data,
 	)
 	if err != nil {
-		common.WriteLog(err.Error())
-		sendErrorMail(err.Error())
+		sendErrorMail(err)
 		return
 	}
 
@@ -296,9 +277,8 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	// parsed_meta[main]
 	main_sheet, ok := parsed_meta["main"]
 	if !ok {
-		err_message := "Missing main sheet in meta. Did you register this sheet as __LIST__ ?"
-		common.WriteLog(err_message)
-		sendErrorMail(err_message)
+		err = fmt.Errorf("Missing main sheet in meta. Did you register this sheet as __LIST__ ?")
+		sendErrorMail(err)
 		return
 	}
 
@@ -326,14 +306,12 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		} else {
 			next_sheet, ok := parsed_meta[curr_arrange]
 			if !ok {
-				err_message := fmt.Sprintf("not found sheet '%s' which is used as 'external'", curr_arrange)
-				common.WriteLog(err_message)
-				sendErrorMail(err_message)
+				err = fmt.Errorf("not found sheet '%s' which is used as 'external'", curr_arrange)
+				sendErrorMail(err)
 			}
 			if _, is_used := sheet_to_count[next_sheet]; is_used {
-				err_message := fmt.Sprintf("sheet '%s' used twice or gets in cycle as 'external'", curr_arrange)
-				common.WriteLog(err_message)
-				sendErrorMail(err_message)
+				err = fmt.Errorf("sheet '%s' used twice or gets in cycle as 'external'", curr_arrange)
+				sendErrorMail(err)
 			}
 
 			sheet_to_count[next_sheet] = 0
@@ -394,14 +372,12 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 			} else {
 				next_sheet, ok := parsed_meta[curr_arrange]
 				if !ok {
-					err_message := fmt.Sprintf("not found sheet '%s' which is used as 'external'", curr_arrange)
-					common.WriteLog(err_message)
-					sendErrorMail(err_message)
+					err = fmt.Errorf("not found sheet '%s' which is used as 'external'", curr_arrange)
+					sendErrorMail(err)
 				}
 				if _, is_used := sheet_to_count[next_sheet]; is_used {
-					err_message := fmt.Sprintf("sheet '%s' used twice or gets in cycle as 'external'", curr_arrange)
-					common.WriteLog(err_message)
-					sendErrorMail(err_message)
+					err = fmt.Errorf("sheet '%s' used twice or gets in cycle as 'external'", curr_arrange)
+					sendErrorMail(err)
 				}
 
 				sheet_to_count[next_sheet] = 0
@@ -420,9 +396,8 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		for message := range not_found_primary_key_messages {
 			messages = append(messages, message)
 		}
-		err_message := strings.Join(messages, "\n")
-		common.WriteLog(err_message)
-		sendErrorMail(err_message)
+		err = fmt.Errorf("%s", strings.Join(messages, "\n"))
+		sendErrorMail(err)
 		return
 	}
 
@@ -430,14 +405,13 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 
 	err = cassandra.CreateAndBatchInsertData(
 		session,
-		table_data_name,
+		table.TableData,
 		data_columns,
 		data_primary_keys,
 		joined_data,
 	)
 	if err != nil {
-		common.WriteLog(err.Error())
-		sendErrorMail(err.Error())
+		sendErrorMail(err)
 		return
 	}
 
@@ -446,34 +420,18 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		// meta_names := []string{"sheet", "column", "type", "description", "show_name"}
 		_type := row[2]
 		if strings.Contains(_type, "search") && !strings.Contains(_type, "set") && !strings.Contains(_type, "external[") {
-			err = session.Query(fmt.Sprintf(
-				`CREATE CUSTOM INDEX ON %s (%s)
-					USING 'org.apache.cassandra.index.sasi.SASIIndex'
-					WITH OPTIONS = {
-						'analyzer_class': 'org.apache.cassandra.index.sasi.analyzer.StandardAnalyzer',
-						'case_sensitive': 'false'
-					};`,
-				table_data_name,
-				row[1],
-			)).Exec()
+			err = cassandra.CreateSASIIndex(session, table.TableData, row[1])
 			if err != nil {
-				common.WriteLog(err.Error())
-				sendErrorMail(err.Error())
+				sendErrorMail(err)
 				return
 			}
 		}
 	}
 
 	// set that all is ok
-	err = session.Query(fmt.Sprintf(
-		`UPDATE chemdb.tables
-			SET is_ok = true
-			WHERE created_at = '%s';`,
-		curr_time,
-	)).Exec()
+	err = cassandra.SetTableOk(session, table)
 	if err != nil {
-		common.WriteLog(err.Error())
-		sendErrorMail(err.Error())
+		sendErrorMail(err)
 		return
 	}
 
@@ -501,21 +459,9 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		ids_to_check[i] = ref_id
 	}
 
-	iter := session.Query(`
-		SELECT article_id
-		FROM chemdb.bibtex
-		ALLOW FILTERING
-	`).Iter()
-
-	var curr_id string
-	corr_ids := make(map[string]string)
-	for iter.Scan(&curr_id) {
-		corr_ids[curr_id] = ""
-	}
-
-	if err := iter.Close(); err != nil {
-		common.WriteLog(err.Error())
-		sendErrorMail(err.Error())
+	corr_ids, err := cassandra.GetArticleIds(session)
+	if err != nil {
+		sendErrorMail(err)
 		return
 	}
 

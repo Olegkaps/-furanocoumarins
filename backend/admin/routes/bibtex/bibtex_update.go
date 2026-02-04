@@ -8,7 +8,6 @@ import (
 	"admin/utils/dbs/postgres"
 	"admin/utils/mail"
 	"strings"
-	"time"
 
 	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2"
@@ -71,43 +70,28 @@ func Update_file(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
-	iter := session.Query(`
-		SELECT created_at, table_meta, table_data 
-		FROM chemdb.tables
-		WHERE is_active = true
-		ALLOW FILTERING
-	`).Iter()
-
-	var table_meta, table_data string
-	var table_timestamp time.Time
-	for iter.Scan(&table_timestamp, &table_meta, &table_data) {
-		break
+	activeTable, err := cassandra.GetActiveTable(session)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
-	if err := iter.Close(); err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+	columns, err := cassandra.GetColumnMeta(session, activeTable)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
-	timestamp := table_timestamp.Format("2006-01-02 15:04:05.00000 -07:00 MST")
+	timestamp := activeTable.Timestamp.Format("2006-01-02 15:04:05.00000 -07:00 MST")
 
-	iter = session.Query(`
-		SELECT column, type
-		FROM ` + table_meta + `
-		ALLOW FILTERING
-	`).Iter()
-
-	var ref_column, curr_column, curr_type string
-	for iter.Scan(&curr_column, &curr_type) {
-		if strings.Contains(curr_type, "ref[]") {
-			ref_column = curr_column
+	var ref_column string
+	for _, col := range columns {
+		if strings.Contains(col.Type, "ref[]") {
+			ref_column = col.Column
 			break
 		}
-	}
-
-	if err := iter.Close(); err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
 	if strings.Trim(ref_column, " ") == "" {
@@ -122,19 +106,8 @@ func Update_file(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusOK)
 	}
 
-	iter = session.Query(`
-		SELECT ` + ref_column + `
-		FROM ` + table_data + `
-		ALLOW FILTERING
-	`).Iter()
-
-	var ids_to_check []string
-	var curr_id string
-	for iter.Scan(&curr_id) {
-		ids_to_check = append(ids_to_check, curr_id)
-	}
-
-	if err := iter.Close(); err != nil {
+	ids_to_check, err := cassandra.GetColumn(session, activeTable.TableData, ref_column)
+	if err != nil {
 		common.WriteLog(err.Error())
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}

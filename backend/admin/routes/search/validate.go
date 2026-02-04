@@ -1,12 +1,13 @@
 package search
 
 import (
+	"admin/utils/dbs/cassandra"
 	"fmt"
 	"regexp"
 	"strings"
 )
 
-func Validate_request(searchRequest string, columns []ColumnMeta) error {
+func Validate_request(searchRequest string, columns []*cassandra.ColumnMeta) error {
 	if searchRequest == "" {
 		return fmt.Errorf("search_request is required")
 	}

@@ -2,6 +2,7 @@ package search_test
 
 import (
 	"admin/routes/search"
+	"admin/utils/dbs/cassandra"
 	"fmt"
 	"testing"
 
@@ -9,7 +10,7 @@ import (
 )
 
 func TestValidateRequest(t *testing.T) {
-	columns := []search.ColumnMeta{
+	columns := []*cassandra.ColumnMeta{
 		{
 			Column:      "name",
 			Type:        "primary",
@@ -29,7 +30,7 @@ func TestValidateRequest(t *testing.T) {
 
 	tests := []struct {
 		request       string
-		columns       []search.ColumnMeta
+		columns       []*cassandra.ColumnMeta
 		expectedError error
 		description   string
 	}{
