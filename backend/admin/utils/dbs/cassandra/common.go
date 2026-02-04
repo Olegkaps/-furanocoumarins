@@ -23,6 +23,37 @@ func CreateSASIIndex(session *gocql.Session, table string, column string) error 
 	return nil
 }
 
+func GetPrefix(session *gocql.Session, table string, column string, prefix string) ([]string, error) {
+	Query := fmt.Sprintf(
+		`SELECT %s FROM %s WHERE %s LIKE '%s%%' LIMIT 1000`,
+		column,
+		table,
+		column,
+		prefix,
+	)
+
+	results := make(map[string]struct{}, 70)
+
+	var v string
+	iter := session.Query(Query).Iter()
+	for iter.Scan(&v) {
+		results[v] = struct{}{}
+		if len(results) >= 50 {
+			break
+		}
+	}
+
+	if err := iter.Close(); err != nil {
+		return nil, err
+	}
+
+	arr := make([]string, 0)
+	for s := range results {
+		arr = append(arr, s)
+	}
+	return arr, nil
+}
+
 func GetColumn(session *gocql.Session, table string, column string) ([]string, error) {
 	iter := session.Query(`
 		SELECT ` + column + `

@@ -67,7 +67,7 @@ func Search_main_app(c *fiber.Ctx) error {
 
 	selectClause := strings.Join(selectedColumns, ", ")
 
-	searchResults, err := cassandra.GetColumnWhere(session, selectClause, activeTable.TableData, searchRequest)
+	searchResults, err := cassandra.GetColumnWhere(session, activeTable.TableData, selectClause, searchRequest)
 	if err != nil {
 		common.WriteLog("Search query failed: " + err.Error())
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

@@ -5,6 +5,7 @@ import { api, isEmpty } from '../Admin/utils';
 import PhilogeneticTreeOrNull from './PhilogeneticTree';
 import ResultTableOrNull from './ResultTable';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import Autocomplete from './Autocomplete';
 
 
 let isDataFetched = false
@@ -103,7 +104,7 @@ function filterResponse(searchResponse: {[index: string]: any;}) {
       return
     }
   
-    let curr_num: string = _type.split("[")[1].split("]")[0]
+    let curr_num: string = _type.split("clas[")[1].split("]")[0]
     if (!(curr_num in meta_defaults)) {
       meta_defaults[curr_num] = {"default": "", "custom": []}
     }
@@ -206,6 +207,45 @@ function HomeLink() {
   ><House width={'30px'} height={'30px'}/></Link>
 }
 
+
+const fetchAutocomplete = (column: string): any => {
+  return async (query: string): Promise<string[]> => {
+    let data: string[] = [];
+
+    var response = await api.get('/autocomplete/'+column + "?value=" + query).catch((err) => {return err.response});
+
+    if (response && response.status === 200) {
+      data = response.data["values"]
+    } else {
+      alert("Error: " + response.status + " - " + response.data.error)
+    }
+
+    return data;
+  }
+};
+
+interface AutocompletesInputProps {
+  fetchAutocomplete: (query: string) => Promise<string[]>;
+  onChange: (value: string) => void;
+  style: React.CSSProperties
+}
+
+function AutocompletedInput({fetchAutocomplete, onChange, style}: AutocompletesInputProps) {
+  const [_, setSelectedValue] = useState('');
+
+  return (
+    <div className="app-container">      
+      <Autocomplete
+        fetchSuggestions={fetchAutocomplete}
+        onSelect={(value) => setSelectedValue(value)}
+        onChange={onChange}
+        style={style}
+        placeholder="Enter..."
+      />
+    </div>
+  );
+}
+
 function SearchApp() {
   let [metadata, setMetadata] = useState<Array<{[index: string]:any}>>([]);
   const navigate = useNavigate();
@@ -276,12 +316,29 @@ function SearchApp() {
       margin: 'auto'
     }}>
     <h2 style={{textAlign: 'center'}}>Search species or substances</h2>
-    <ul>{parsed_metadata.map((curr_meta, ind) => (
-      <li style={{width: '400px', position: 'relative'}}><label title={curr_meta["description"]}>
+    <ul>{parsed_metadata.map((curr_meta, ind) => {
+
+      let _fetch: (query: string) => Promise<string[]>
+
+      if (curr_meta["type"].includes("set[")) {
+        let values = curr_meta["type"].split("set[")[1].split("]")[0].split(" ")
+
+        _fetch = async (query: string): Promise<string[]> => {
+          return values.filter((item: string) =>
+            item.toLowerCase().includes(query.toLowerCase())
+          );
+        }
+      } else {
+        _fetch = fetchAutocomplete(curr_meta["column"])
+      }
+
+      return <li style={{width: '400px', position: 'relative'}}><label title={curr_meta["description"]}>
         <CircleInfo />&nbsp;{curr_meta["name"]}:
         {ind > 0 && <span style={{position: 'absolute', left: '90%', color: 'blue'}}>AND</span>}
         <br></br>
-        <input
+        <AutocompletedInput
+          fetchAutocomplete={_fetch}
+          onChange={(value) => {search_values.set(curr_meta, value.trim())}}
           style={{
             position: 'relative',
             left: '20%',
@@ -289,12 +346,10 @@ function SearchApp() {
             height: '30px',
             borderColor: 'grey'
           }}
-          onChange={
-            (e) => {search_values.set(curr_meta, e.target.value.trim())}
-          }></input>
+        />
         <hr style={{border: 0, margin: 0, height: '15px'}}></hr>
       </label></li>
-    ))}</ul>
+    })}</ul>
     <button type='submit' style={{
       position: 'relative',
       left: '45%',
