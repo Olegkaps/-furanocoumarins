@@ -8,6 +8,7 @@ import (
 	"admin/utils/dbs/postgres"
 	"admin/utils/http"
 	"admin/utils/mail"
+	"fmt"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -85,9 +86,10 @@ func Update_file(c *fiber.Ctx) error {
 		mail.SendMail(
 			db_user.Mail,
 			"Updated bibtex file",
-			"Bibtex file updated, but active table "+
-				timestamp+
-				" has no column with type `ref[]`, check skiped",
+			fmt.Sprintf(
+				"Bibtex file updated, but active table %s has no column with type `ref[]`, check skiped",
+				timestamp,
+			),
 		)
 		common.WriteLog("for table %s ref-check skipped.", timestamp)
 		return c.SendStatus(fiber.StatusOK)
@@ -109,7 +111,6 @@ func Update_file(c *fiber.Ctx) error {
 		message += " have errors:\n" + strings.Join(warnings, "\n")
 	}
 
-	common.WriteLog("sending mail to %s", db_user.Mail)
 	mail.SendMail(
 		db_user.Mail,
 		"Updated bibtex file",

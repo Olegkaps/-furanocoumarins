@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"admin/utils/common"
 	"fmt"
 	"net/smtp"
 	"os"
@@ -10,12 +11,15 @@ func GetLinkMailBody(action string, link string) string {
 	return fmt.Sprintf("To %s, follow the <a href=\"%s\">link</a>\nThis link works for only 1 hour.", action, link)
 }
 
-func SendMail(recivier, subject, body string) error {
-	smtpServer := "smtp.yandex.ru"
-	smtpPort := "587"
-	senderEmail := os.Getenv("MAIL")
+var smtpServer = "smtp.yandex.ru"
+var smtpPort = "587"
+var senderEmail = os.Getenv("MAIL")
+var mailSecret = os.Getenv("MAIL_SECRET")
 
-	auth := smtp.PlainAuth("", senderEmail, os.Getenv("MAIL_SECRET"), smtpServer)
+func SendMail(recivier, subject, body string) error {
+	common.WriteLog("Sending mail to %s", recivier)
+
+	auth := smtp.PlainAuth("", senderEmail, mailSecret, smtpServer)
 
 	// Create the email message
 	msg := "From: " + senderEmail + "\n" +

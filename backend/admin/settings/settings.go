@@ -55,3 +55,5 @@ var CORS_SETTINGS = cors.Config{
 
 var CASSANDRA_HOST = os.Getenv("CASSANDRA_HOST")
 var CASSANDRA_COLLECTION_SEPARATORS = []rune{' ', '_'}
+
+var DOMAIN_PREF = os.Getenv("DOMAIN_PREF")

@@ -2,13 +2,13 @@ package auth
 
 import (
 	"context"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"admin/settings"
 	"admin/utils/common"
 	"admin/utils/dbs"
 	"admin/utils/dbs/postgres"
@@ -58,8 +58,7 @@ func Login_mail(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
-	common.WriteLog("Sending message for %s", user.Mail)
-	link := os.Getenv("DOMAIN_PREF") + "/admit/" + word
+	link := settings.DOMAIN_PREF + "/admit/" + word
 	go mail.SendMail(
 		user.Mail,
 		"Login to site",

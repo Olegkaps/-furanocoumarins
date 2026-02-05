@@ -2,7 +2,6 @@ package create
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -53,41 +52,40 @@ func Create_table(c *fiber.Ctx) error { // TO DO: no more than 10 tables
 	meta := c.FormValue("meta")
 	table_name := c.FormValue("name")
 
-	go make_create_table(xlsx, meta, db_user.Mail, table_name)
+	go create_table(xlsx, meta, db_user.Mail, table_name)
 
 	return c.SendStatus(fiber.StatusCreated)
 }
 
-func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileName string) {
-	defer TableFile.Close()
-
+func create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileName string) {
 	sendErrorMail := func(err error) {
 		common.WriteLog(err.Error())
 		mail.SendMail(
 			AuthorMail,
-			"Creating table "+TableFile.Path+" failed.",
+			fmt.Sprintf("Creating table %s failed.", TableFile.Path),
 			"Recieved following error: "+err.Error(),
 		)
 	}
 
-	sendErrorBadMetaMail := func(column, c_decr, c_desr_old, c_type, c_type_old string) {
-		message := fmt.Errorf("%s", fmt.Sprintf(
-			"Column '%s' has different descriptions in different rows:\n",
-			column,
-		)+fmt.Sprintf(
-			" - Descriptions:\n\t'%s'\n\t'%s'\n",
-			c_decr, c_desr_old,
-		)+fmt.Sprintf(
-			" - Types (may differ only by primary/external):\n\t'%s'\n\t'%s'\n",
-			c_type, c_type_old,
-		))
-		sendErrorMail(message)
-	}
-
-	session, err := dbs.CQL.CreateSession()
+	message, err := make_create_table(TableFile, MetaListName, AuthorMail, FileName)
 	if err != nil {
 		sendErrorMail(err)
 		return
+	}
+
+	mail.SendMail(
+		AuthorMail,
+		fmt.Sprintf("Table %s created successfully.", TableFile.Path),
+		"Table created, don`t forget to activate it.\n"+message,
+	)
+}
+
+func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileName string) (string, error) {
+	defer TableFile.Close()
+
+	session, err := dbs.CQL.CreateSession()
+	if err != nil {
+		return "", err
 	}
 	defer session.Close()
 
@@ -108,16 +106,14 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 
 	err = cassandra.InserTable(session, table)
 	if err != nil {
-		sendErrorMail(err)
-		return
+		return "", err
 	}
 
 	// read data
 	meta_columns := []string{"sheet", "column", "type", "description", "show_name"}
 	meta_result, err := excel.ReadXLSXToMap(TableFile, MetaListName, meta_columns, "")
 	if err != nil {
-		sendErrorMail(err)
-		return
+		return "", err
 	}
 
 	// insert meta in db
@@ -148,8 +144,16 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 			var is_types_identical bool = check_is_types_equal(c_type_old, c_type)
 
 			if c_desr_old != c_decr || !is_types_identical {
-				sendErrorBadMetaMail(column, c_decr, c_desr_old, c_type, c_type_old)
-				return
+				return "", fmt.Errorf("%s", fmt.Sprintf(
+					"Column '%s' has different descriptions in different rows:\n",
+					column,
+				)+fmt.Sprintf(
+					" - Descriptions:\n\t'%s'\n\t'%s'\n",
+					c_decr, c_desr_old,
+				)+fmt.Sprintf(
+					" - Types (may differ only by primary/external):\n\t'%s'\n\t'%s'\n",
+					c_type, c_type_old,
+				))
 			}
 		} else {
 			meta_data = append(meta_data, []any{sheet, column, c_type, c_decr, c_name})
@@ -166,8 +170,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		meta_data,
 	)
 	if err != nil {
-		sendErrorMail(err)
-		return
+		return "", err
 	}
 
 	// normally parse meta
@@ -198,8 +201,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 
 		if _, ok := parsed_meta[name]; !ok {
 			err = fmt.Errorf("Got unknown sheet name '%s'. Did you register this sheet as __LIST__ ?", name)
-			sendErrorMail(err)
-			return
+			return "", err
 		}
 
 		column_name := row[1]
@@ -215,13 +217,11 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	for _, v_sheet := range parsed_meta {
 		err = v_sheet.ReadFile(TableFile)
 		if err != nil {
-			sendErrorMail(err)
-			return
+			return "", err
 		}
 		err = v_sheet.Postprocess()
 		if err != nil {
-			sendErrorMail(err)
-			return
+			return "", err
 		}
 	}
 
@@ -230,8 +230,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	species_sheet, ok := parsed_meta["classification"]
 	if !ok {
 		err = fmt.Errorf("Missing classifaction in meta. Did you register this sheet as __LIST__ ?")
-		sendErrorMail(err)
-		return
+		return "", err
 	}
 
 	used_uuids := make(map[string]struct{}, len(species_sheet.Rows))
@@ -262,8 +261,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		sp_data,
 	)
 	if err != nil {
-		sendErrorMail(err)
-		return
+		return "", err
 	}
 
 	// insert data
@@ -271,8 +269,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	main_sheet, ok := parsed_meta["main"]
 	if !ok {
 		err = fmt.Errorf("Missing main sheet in meta. Did you register this sheet as __LIST__ ?")
-		sendErrorMail(err)
-		return
+		return "", err
 	}
 
 	// WARN: joins almost repeats
@@ -300,11 +297,11 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 			next_sheet, ok := parsed_meta[curr_arrange]
 			if !ok {
 				err = fmt.Errorf("not found sheet '%s' which is used as 'external'", curr_arrange)
-				sendErrorMail(err)
+				return "", err
 			}
 			if _, is_used := sheet_to_count[next_sheet]; is_used {
 				err = fmt.Errorf("sheet '%s' used twice or gets in cycle as 'external'", curr_arrange)
-				sendErrorMail(err)
+				return "", err
 			}
 
 			sheet_to_count[next_sheet] = 0
@@ -366,11 +363,11 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 				next_sheet, ok := parsed_meta[curr_arrange]
 				if !ok {
 					err = fmt.Errorf("not found sheet '%s' which is used as 'external'", curr_arrange)
-					sendErrorMail(err)
+					return "", err
 				}
 				if _, is_used := sheet_to_count[next_sheet]; is_used {
 					err = fmt.Errorf("sheet '%s' used twice or gets in cycle as 'external'", curr_arrange)
-					sendErrorMail(err)
+					return "", err
 				}
 
 				sheet_to_count[next_sheet] = 0
@@ -390,8 +387,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 			messages = append(messages, message)
 		}
 		err = fmt.Errorf("%s", strings.Join(messages, "\n"))
-		sendErrorMail(err)
-		return
+		return "", err
 	}
 
 	data_primary_keys := []string{"uuid"}
@@ -404,8 +400,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		joined_data,
 	)
 	if err != nil {
-		sendErrorMail(err)
-		return
+		return "", err
 	}
 
 	// LIKE Index
@@ -415,8 +410,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		if strings.Contains(_type, "search") && !strings.Contains(_type, "set") && !strings.Contains(_type, "external[") {
 			err = cassandra.CreateSASIIndex(session, table.TableData, row[1])
 			if err != nil {
-				sendErrorMail(err)
-				return
+				return "", err
 			}
 		}
 	}
@@ -424,8 +418,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	// set that all is ok
 	err = cassandra.SetTableOk(session, table)
 	if err != nil {
-		sendErrorMail(err)
-		return
+		return "", err
 	}
 
 	// check reference ids
@@ -437,7 +430,6 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	}
 
 	if ref_ind == -1 {
-		common.WriteLog("Sending mail to %s", AuthorMail)
 		mail.SendMail(
 			AuthorMail,
 			"Table "+TableFile.Path+" created successfully.",
@@ -454,8 +446,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 
 	corr_ids, err := cassandra.GetArticleIds(session)
 	if err != nil {
-		sendErrorMail(err)
-		return
+		return "", err
 	}
 
 	warnigs := bibtex.Check_artickle_ids(corr_ids, ids_to_check)
@@ -467,12 +458,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		message = "Failed reference checks: " + strings.Join(warnigs, "\n")
 	}
 
-	common.WriteLog("Sending mail to %s", AuthorMail)
-	mail.SendMail(
-		AuthorMail,
-		"Table "+TableFile.Path+" created successfully.",
-		"Table created, don`t forget to activate it.\n"+message,
-	)
+	return message, nil
 }
 
 func check_is_types_equal(c_type_old, c_type_new string) bool {
@@ -502,139 +488,4 @@ func check_is_types_equal(c_type_old, c_type_new string) bool {
 	}
 
 	return true
-}
-
-type VirtualSheet struct {
-	ArrangeOfExternals []string // shows how to join data from different sheets
-	RealSheetNames     []string
-	ColumnNames        []string
-	ColumnTypes        []string // unprocessed types
-	ColumnCassTypes    []string // types to use in Cassandra
-	KeyColumn          string
-	Rows               map[string][]any
-	is_postprocessed   bool
-}
-
-func NewVirtualSheet() *VirtualSheet {
-	return &VirtualSheet{
-		[]string{},
-		[]string{},
-		[]string{},
-		[]string{},
-		[]string{},
-		"",
-		make(map[string][]any),
-		false,
-	}
-}
-
-func (v_sheet *VirtualSheet) ReadFile(file *excelize.File) error {
-	rows, err := excel.ReadXLSXToMapMerged(file, v_sheet.RealSheetNames, v_sheet.ColumnNames, v_sheet.KeyColumn)
-	v_sheet.Rows = map[string][]any(rows)
-	return err
-}
-
-func split_set(r rune) bool {
-	return slices.Contains(settings.CASSANDRA_COLLECTION_SEPARATORS, r)
-}
-
-func (v_sheet *VirtualSheet) Postprocess() error {
-	if v_sheet.is_postprocessed {
-		return nil
-	}
-	error_messages := []string{}
-
-	meta_defaults := make(map[string]map[string]any)
-
-	for i, _type := range v_sheet.ColumnTypes {
-		if !strings.Contains(_type, "default[") {
-			continue
-		}
-
-		default_col := strings.Split(strings.Split(_type, "default[")[1], "]")[0]
-		default_ind := excel.FindColumnIndex(v_sheet.ColumnNames, default_col)
-		if default_ind == -1 {
-			error_messages = append(error_messages, fmt.Sprintf(
-				"bad type '%s', cannot find default column '%s'",
-				_type, default_col,
-			))
-			continue
-		}
-
-		if _, exist := meta_defaults[default_col]; !exist {
-			meta_defaults[default_col] = map[string]any{"default": default_ind, "custom": []int{}}
-		}
-
-		meta_defaults[default_col]["custom"] = append(meta_defaults[default_col]["custom"].([]int), i)
-	}
-
-	for key, row := range v_sheet.Rows {
-		// default cols
-		for _, m := range meta_defaults {
-			default_col := m["default"].(int)
-			for _, custom_col := range m["custom"].([]int) {
-				if row[custom_col] != "" {
-					continue
-				}
-				row[custom_col] = row[default_col]
-			}
-		}
-
-		// type checks
-		for j, item := range row {
-			if strings.Contains(v_sheet.ColumnTypes[j], "external[") && item == "" {
-				error_messages = append(error_messages, fmt.Sprintf(
-					"missing external key in row with primary key '%s' for column '%s'",
-					key, v_sheet.ColumnNames[j],
-				))
-				continue
-			}
-
-			if strings.Contains(v_sheet.ColumnTypes[j], "set") {
-				set_values := make(map[string]struct{})
-				for _, val := range strings.FieldsFunc(item.(string), split_set) {
-					set_values[val] = struct{}{}
-				}
-				v_sheet.Rows[key][j] = set_values
-			} else { // default
-				if item == "" {
-					v_sheet.Rows[key][j] = " "
-				}
-			}
-		}
-	}
-
-	if len(error_messages) > 0 {
-		return fmt.Errorf("errors in sheet with key column '%s':\n%s",
-			v_sheet.KeyColumn,
-			strings.Join(error_messages, "\n"),
-		)
-	}
-
-	v_sheet.ColumnCassTypes = make([]string, len(v_sheet.ColumnTypes))
-	for i, _type := range v_sheet.ColumnTypes {
-		col_name := v_sheet.ColumnNames[i]
-		if strings.Contains(_type, "set") {
-			v_sheet.ColumnCassTypes[i] = col_name + " SET<TEXT>"
-		} else { // default
-			v_sheet.ColumnCassTypes[i] = col_name + " TEXT"
-		}
-	}
-
-	v_sheet.ArrangeOfExternals = make([]string, len(v_sheet.ColumnTypes))
-	for i, _type := range v_sheet.ColumnTypes {
-		arrange := ""
-
-		// find 'external[<name>]'
-		if strings.Contains(_type, "external") {
-			arrange = strings.Split(
-				strings.Split(_type, "external[")[1],
-				"]",
-			)[0]
-		}
-		v_sheet.ArrangeOfExternals[i] = arrange
-	}
-
-	v_sheet.is_postprocessed = true
-	return nil
 }
