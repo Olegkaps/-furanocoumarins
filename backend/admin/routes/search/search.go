@@ -1,6 +1,7 @@
 package search
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -32,14 +33,10 @@ func Search_main_app(c *fiber.Ctx) error {
 		return http.RespErr(c, err)
 	}
 
-	columns, err := cassandra.GetColumnMeta(session, activeTable)
-	if err != nil {
-		return http.RespErr(c, err)
-	}
+	columns, err1 := cassandra.GetColumnMeta(session, activeTable)
+	err2 := Validate_request(searchRequest, columns)
 
-	// validate search_request
-	err = Validate_request(searchRequest, columns)
-	if err != nil {
+	if err := errors.Join(err1, err2); err != nil {
 		return http.RespErr(c, err)
 	}
 

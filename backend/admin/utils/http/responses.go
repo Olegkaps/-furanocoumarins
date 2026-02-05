@@ -21,6 +21,13 @@ func Resp400(c *fiber.Ctx, err error) error {
 	})
 }
 
+func Resp401(c *fiber.Ctx) error {
+	common.WriteLog("Unauthorized")
+	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+		"error": "unauthorized",
+	})
+}
+
 func RespErr(c *fiber.Ctx, err error) error {
 	var err400 *UserError
 	if errors.As(err, &err400) {

@@ -12,6 +12,7 @@ import (
 	"admin/utils/common"
 	"admin/utils/dbs"
 	"admin/utils/dbs/postgres"
+	"admin/utils/http"
 	"admin/utils/mail"
 )
 
@@ -21,16 +22,16 @@ func Login(c *fiber.Ctx) error {
 
 	db_user, err := postgres.GetUser(login_or_email)
 	if err != nil {
-		return c.SendStatus(fiber.StatusBadRequest)
+		return http.Resp500(c, err)
 	}
 
 	if !common.CheckPasswordHash(password, db_user.Hashed_password) {
-		return c.SendStatus(fiber.StatusUnauthorized)
+		return http.Resp401(c)
 	}
 
 	t, err := common.GetToken(db_user.Username, db_user.Role)
 	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return http.Resp500(c, err)
 	}
 
 	return c.JSON(fiber.Map{"token": t})
@@ -46,7 +47,7 @@ func Login_mail(c *fiber.Ctx) error {
 
 	word, err := common.HashPassword(strconv.Itoa(time.Time.Nanosecond(time.Now())))
 	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return http.Resp500(c, err)
 	}
 
 	word = "lin" + strings.ReplaceAll(word, "/", "")
@@ -55,7 +56,7 @@ func Login_mail(c *fiber.Ctx) error {
 
 	err = dbs.Redis.SetEx(context.Background(), word, user.Username, time.Hour*1).Err()
 	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return http.Resp500(c, err)
 	}
 
 	link := settings.DOMAIN_PREF + "/admit/" + word
@@ -81,7 +82,7 @@ func Confirm_login_mail(c *fiber.Ctx) error {
 
 	t, err := common.GetToken(user, "admin")
 	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return http.Resp500(c, err)
 	}
 
 	return c.JSON(fiber.Map{"token": t})

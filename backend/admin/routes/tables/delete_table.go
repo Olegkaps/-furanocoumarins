@@ -4,7 +4,7 @@ import (
 	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
 	"admin/utils/http"
-	"fmt"
+	"errors"
 	"sync"
 
 	"github.com/gofiber/fiber/v2"
@@ -12,9 +12,6 @@ import (
 
 func Delete_table(c *fiber.Ctx) error {
 	tableTimestamp := c.FormValue("table_timestamp")
-	if tableTimestamp == "" {
-		return http.Resp400(c, fmt.Errorf("timestamp must not be empty"))
-	}
 
 	session, err := dbs.CQL.CreateSession()
 	if err != nil {
@@ -61,10 +58,8 @@ func Delete_all_bad_tables(c *fiber.Ctx) error {
 	}
 	wg.Wait()
 
-	for _, err := range errs {
-		if err != nil {
-			return http.RespErr(c, err)
-		}
+	if err := errors.Join(errs...); err != nil {
+		return http.RespErr(c, err)
 	}
 
 	return c.SendStatus(fiber.StatusOK)
