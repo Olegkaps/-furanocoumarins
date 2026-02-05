@@ -2,6 +2,7 @@ package search
 
 import (
 	"admin/utils/dbs/cassandra"
+	"admin/utils/http"
 	"fmt"
 	"regexp"
 	"strings"
@@ -9,7 +10,7 @@ import (
 
 func Validate_request(searchRequest string, columns []*cassandra.ColumnMeta) error {
 	if searchRequest == "" {
-		return fmt.Errorf("search_request is required")
+		return &http.UserError{E: fmt.Errorf("search_request is required")}
 	}
 
 	// TO DO: validate order
@@ -39,7 +40,7 @@ func Validate_request(searchRequest string, columns []*cassandra.ColumnMeta) err
 
 	// expect empty string
 	if cleanedRequest != "" {
-		return fmt.Errorf("request have incorrect words (merged): %v", ""+cleanedRequest)
+		return &http.UserError{E: fmt.Errorf("request have incorrect words (merged): %v", ""+cleanedRequest)}
 	}
 	return nil
 }

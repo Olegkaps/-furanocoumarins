@@ -24,12 +24,6 @@ func Change_password(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	redis, err := dbs.NewRedisClient(context.Background())
-	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-	defer redis.Close()
-
 	word, err := common.HashPassword(strconv.Itoa(time.Time.Nanosecond(time.Now())))
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
@@ -37,7 +31,7 @@ func Change_password(c *fiber.Ctx) error {
 
 	word = "psw" + strings.ReplaceAll(word, "/", "")
 	common.WriteLog("Generate link %s for %s", word, user.Username)
-	err = redis.SetEx(context.Background(), word, user.Username, time.Hour*1).Err()
+	err = dbs.Redis.SetEx(context.Background(), word, user.Username, time.Hour*1).Err()
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
@@ -53,16 +47,11 @@ func Change_password(c *fiber.Ctx) error {
 }
 
 func Confirm_password_change(c *fiber.Ctx) error {
-	redis, err := dbs.NewRedisClient(context.Background())
-	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-	defer redis.Close()
-
 	word := c.FormValue("word")
 	common.WriteLog("Processing link %s", word)
 	var user string = ""
-	user, err = redis.Get(context.Background(), word).Result()
+
+	user, err := dbs.Redis.Get(context.Background(), word).Result()
 	if err != nil || len(user) <= 3 {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
@@ -73,7 +62,7 @@ func Confirm_password_change(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	redis.Del(context.Background(), word)
+	dbs.Redis.Del(context.Background(), word)
 
 	return c.SendStatus(200)
 }

@@ -1,6 +1,10 @@
 package cassandra
 
-import "github.com/gocql/gocql"
+import (
+	"admin/utils/http"
+
+	"github.com/gocql/gocql"
+)
 
 type BatchData struct {
 	query string
@@ -38,7 +42,7 @@ func (e *Executor) Execute() error {
 		}
 
 		if err := e.Session.ExecuteBatch(currentBatch); err != nil {
-			return err
+			return &http.ServerError{E: err}
 		}
 	}
 	return nil

@@ -1,11 +1,11 @@
 package search
 
 import (
-	"admin/settings"
-	"admin/utils/common"
+	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
+	"admin/utils/http"
+	"fmt"
 
-	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -17,33 +17,23 @@ func Autocomletion(c *fiber.Ctx) error {
 	column := c.Params("column")
 	value := c.Query("value", "")
 	if value == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "cannot complete empty value",
-		})
+		return http.Resp400(c, fmt.Errorf("cannot complete empty value"))
 	}
 
-	cluster := gocql.NewCluster(settings.CASSANDRA_HOST)
-	session, err := cluster.CreateSession()
+	session, err := dbs.CQL.CreateSession()
 	if err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return http.Resp500(c, err)
 	}
 	defer session.Close()
 
 	table, err := cassandra.GetActiveTable(session)
 	if err != nil {
-		common.WriteLog("Search query failed: " + err.Error())
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return http.RespErr(c, err)
 	}
 
 	values, err := cassandra.GetPrefix(session, table.TableData, column, value)
 	if err != nil {
-		common.WriteLog("Search query failed: " + err.Error())
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return http.RespErr(c, err)
 	}
 
 	return c.JSON(AutocompleteResponse{values})

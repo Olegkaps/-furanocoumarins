@@ -1,58 +1,50 @@
 package tables
 
 import (
-	"admin/settings"
-	"admin/utils/common"
 	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
+	"admin/utils/http"
+	"fmt"
 	"sync"
 
-	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2"
 )
 
 func Delete_table(c *fiber.Ctx) error {
 	tableTimestamp := c.FormValue("table_timestamp")
 	if tableTimestamp == "" {
-		return c.SendStatus(fiber.StatusBadRequest)
+		return http.Resp400(c, fmt.Errorf("timestamp must not be empty"))
 	}
 
-	cluster := gocql.NewCluster(settings.CASSANDRA_HOST)
-	session, err := cluster.CreateSession()
+	session, err := dbs.CQL.CreateSession()
 	if err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return http.Resp500(c, err)
 	}
 	defer session.Close()
 
 	table_time, err := dbs.String2Time(tableTimestamp)
 	if err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusBadRequest)
+		return http.Resp400(c, err)
 	}
 
 	err = cassandra.DeleteTable(session, table_time)
 	if err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusBadRequest)
+		return http.RespErr(c, err)
 	}
 
 	return c.SendStatus(fiber.StatusOK)
 }
 
 func Delete_all_bad_tables(c *fiber.Ctx) error {
-	cluster := gocql.NewCluster(settings.CASSANDRA_HOST)
-	session, err := cluster.CreateSession()
+	session, err := dbs.CQL.CreateSession()
 	if err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return http.Resp500(c, err)
 	}
 	defer session.Close()
 
 	tables, err := cassandra.GetAllTables(session)
 	if err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return http.RespErr(c, err)
 	}
 
 	var wg sync.WaitGroup
@@ -71,8 +63,7 @@ func Delete_all_bad_tables(c *fiber.Ctx) error {
 
 	for _, err := range errs {
 		if err != nil {
-			common.WriteLog(err.Error())
-			return c.SendStatus(fiber.StatusInternalServerError)
+			return http.RespErr(c, err)
 		}
 	}
 

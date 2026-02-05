@@ -2,6 +2,7 @@ package cassandra
 
 import (
 	"admin/utils/common"
+	"admin/utils/http"
 	"fmt"
 	"time"
 
@@ -41,7 +42,7 @@ func InserTable(session *gocql.Session, t *Table) error {
 		t.IsOk,
 	).Exec()
 	if err != nil {
-		return err
+		return &http.UserError{E: err}
 	}
 	return nil
 }
@@ -55,7 +56,7 @@ func SetTableOk(session *gocql.Session, t *Table) error {
 	).Exec()
 
 	if err != nil {
-		return err
+		return &http.ServerError{E: err}
 	}
 	return nil
 }
@@ -85,15 +86,15 @@ func GetActiveTable(session *gocql.Session) (*Table, error) {
 
 	if err := iter.Close(); err != nil {
 		common.WriteLog(err.Error())
-		return nil, err
+		return nil, &http.ServerError{E: err}
 	}
 	if len(results) == 0 {
 		common.WriteLog("no active table found")
-		return nil, fmt.Errorf("no active table found")
+		return nil, &http.UserError{E: fmt.Errorf("no active table found")}
 	}
 	if len(results) > 1 {
 		common.WriteLog("multiple active tables found")
-		return nil, fmt.Errorf("multiple active tables found")
+		return nil, &http.UserError{E: fmt.Errorf("multiple active tables found")}
 	}
 
 	return &results[0], nil
@@ -112,8 +113,7 @@ func GetAllTables(session *gocql.Session) ([]*Table, error) {
 	}
 
 	if err := iter.Close(); err != nil {
-		common.WriteLog(err.Error())
-		return nil, err
+		return nil, &http.ServerError{E: err}
 	}
 
 	return tables, nil
@@ -162,8 +162,7 @@ func GetColumnMeta(session *gocql.Session, t *Table) ([]*ColumnMeta, error) {
 	}
 
 	if err := iter.Close(); err != nil {
-		common.WriteLog(err.Error())
-		return nil, err
+		return nil, &http.UserError{E: err}
 	}
 
 	return columns, nil
@@ -171,7 +170,7 @@ func GetColumnMeta(session *gocql.Session, t *Table) ([]*ColumnMeta, error) {
 
 func DeleteTable(session *gocql.Session, timestamp time.Time) error {
 	if timestamp.After(time.Now().Add(-5 * time.Minute)) {
-		common.WriteLog("trying to delete table %v too early", timestamp)
+		common.WriteLog("trying to delete table %v - too early", timestamp)
 		return nil
 	}
 
@@ -184,8 +183,7 @@ func DeleteTable(session *gocql.Session, timestamp time.Time) error {
 
 	err := session.Query(updateQuery, timestamp).Exec()
 	if err != nil {
-		common.WriteLog(err.Error())
-		return err
+		return &http.UserError{E: err}
 	}
 
 	selectQuery := `
@@ -203,11 +201,10 @@ func DeleteTable(session *gocql.Session, timestamp time.Time) error {
 		&curr_is_ok,
 	)
 	if err != nil {
-		common.WriteLog(err.Error())
-		return err
+		return &http.ServerError{E: err}
 	}
 	if curr_is_ok {
-		return fmt.Errorf("table %s had is_ok while deleting", timestamp)
+		return &http.ServerError{E: fmt.Errorf("table %s had is_ok while deleting", timestamp)}
 	}
 
 	tablesToDrop := []string{
@@ -220,16 +217,14 @@ func DeleteTable(session *gocql.Session, timestamp time.Time) error {
 		dropQuery := "DROP TABLE IF EXISTS " + tableName
 		err = session.Query(dropQuery).Exec()
 		if err != nil {
-			common.WriteLog("Error dropping table " + tableName + ": " + err.Error())
-			return err
+			return &http.ServerError{E: err}
 		}
 	}
 
 	deleteQuery := `DELETE FROM chemdb.tables WHERE created_at = ?`
 	err = session.Query(deleteQuery, timestamp).Exec()
 	if err != nil {
-		common.WriteLog(err.Error())
-		return err
+		return &http.ServerError{E: err}
 	}
 
 	return nil
@@ -244,7 +239,7 @@ func ActivateTable(session *gocql.Session, timestamp time.Time) error {
 	`
 
 	if err := session.Query(activateQuery, timestamp).Exec(); err != nil {
-		return err
+		return &http.UserError{E: err}
 	}
 
 	selectQuery := `
@@ -267,7 +262,7 @@ func ActivateTable(session *gocql.Session, timestamp time.Time) error {
 
 	err := iter.Close()
 	if err != nil {
-		return err
+		return &http.ServerError{E: err}
 	}
 
 	deactivateQuery := `
@@ -279,7 +274,7 @@ func ActivateTable(session *gocql.Session, timestamp time.Time) error {
 	for _, curr_timestamp := range active_tables {
 		err = session.Query(deactivateQuery, curr_timestamp).Exec()
 		if err != nil {
-			return err
+			return &http.ServerError{E: err}
 		}
 	}
 	return nil

@@ -1,15 +1,15 @@
 package search
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
-	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2"
 
-	"admin/settings"
-	"admin/utils/common"
+	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
+	"admin/utils/http"
 )
 
 type SearchResponse struct {
@@ -21,34 +21,26 @@ type SearchResponse struct {
 func Search_main_app(c *fiber.Ctx) error {
 	searchRequest := c.FormValue("search_request")
 
-	cluster := gocql.NewCluster(settings.CASSANDRA_HOST)
-	session, err := cluster.CreateSession()
+	session, err := dbs.CQL.CreateSession()
 	if err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return http.Resp500(c, err)
 	}
 	defer session.Close()
 
 	activeTable, err := cassandra.GetActiveTable(session)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return http.RespErr(c, err)
 	}
 
 	columns, err := cassandra.GetColumnMeta(session, activeTable)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return http.RespErr(c, err)
 	}
 
 	// validate search_request
 	err = Validate_request(searchRequest, columns)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return http.RespErr(c, err)
 	}
 
 	// select state
@@ -60,19 +52,14 @@ func Search_main_app(c *fiber.Ctx) error {
 	}
 
 	if len(selectedColumns) == 0 {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "no visible columns found in metadata",
-		})
+		return http.Resp400(c, fmt.Errorf("no visible columns found in metadata"))
 	}
 
 	selectClause := strings.Join(selectedColumns, ", ")
 
 	searchResults, err := cassandra.GetColumnWhere(session, activeTable.TableData, selectClause, searchRequest)
 	if err != nil {
-		common.WriteLog("Search query failed: " + err.Error())
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return http.RespErr(c, err)
 	}
 
 	response := SearchResponse{

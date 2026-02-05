@@ -1,15 +1,15 @@
 package bibtex
 
 import (
-	"admin/settings"
 	"admin/utils/bibtex"
 	"admin/utils/common"
+	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
 	"admin/utils/dbs/postgres"
+	"admin/utils/http"
 	"admin/utils/mail"
 	"strings"
 
-	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -26,30 +26,22 @@ func Update_file(c *fiber.Ctx) error {
 
 	file, err := c.FormFile("file")
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Can`t extract file",
-		})
+		return http.Resp400(c, err)
 	}
 
 	f, err := file.Open()
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Can`t open file",
-		})
+		return http.Resp400(c, err)
 	}
 
 	corr_ids, err := bibtex.ParseBibtexFile(f)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "error during file reading",
-		})
+		return http.Resp400(c, err)
 	}
 
-	cluster := gocql.NewCluster(settings.CASSANDRA_HOST)
-	session, err := cluster.CreateSession()
+	session, err := dbs.CQL.CreateSession()
 	if err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return http.Resp500(c, err)
 	}
 	defer session.Close()
 
@@ -66,22 +58,17 @@ func Update_file(c *fiber.Ctx) error {
 		10,
 	)
 	if err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return http.RespErr(c, err)
 	}
 
 	activeTable, err := cassandra.GetActiveTable(session)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return http.RespErr(c, err)
 	}
 
 	columns, err := cassandra.GetColumnMeta(session, activeTable)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return http.RespErr(c, err)
 	}
 
 	timestamp := activeTable.Timestamp.Format("2006-01-02 15:04:05.00000 -07:00 MST")
@@ -108,8 +95,7 @@ func Update_file(c *fiber.Ctx) error {
 
 	ids_to_check, err := cassandra.GetColumn(session, activeTable.TableData, ref_column)
 	if err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return http.RespErr(c, err)
 	}
 
 	warnings := bibtex.Check_artickle_ids(corr_ids, ids_to_check)

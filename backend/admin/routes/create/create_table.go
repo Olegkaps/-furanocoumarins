@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
 
-	"github.com/gocql/gocql"
 	_ "github.com/lib/pq"
 
 	"github.com/gofiber/fiber/v2"
@@ -22,6 +21,7 @@ import (
 	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
 	"admin/utils/dbs/postgres"
+	"admin/utils/http"
 	"admin/utils/mail"
 )
 
@@ -37,23 +37,17 @@ func Create_table(c *fiber.Ctx) error { // TO DO: no more than 10 tables
 
 	file, err := c.FormFile("file")
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Can`t extract file",
-		})
+		return http.Resp400(c, err)
 	}
 
 	f, err := file.Open()
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Can`t open file",
-		})
+		return http.Resp400(c, err)
 	}
 
 	xlsx, err := excelize.OpenReader(f)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("Can`t open xlsx file: %v", err),
-		})
+		return http.Resp400(c, err)
 	}
 
 	meta := c.FormValue("meta")
@@ -90,8 +84,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		sendErrorMail(message)
 	}
 
-	cluster := gocql.NewCluster(settings.CASSANDRA_HOST)
-	session, err := cluster.CreateSession()
+	session, err := dbs.CQL.CreateSession()
 	if err != nil {
 		sendErrorMail(err)
 		return

@@ -1,6 +1,7 @@
 package cassandra
 
 import (
+	"admin/utils/http"
 	"fmt"
 
 	"github.com/gocql/gocql"
@@ -18,7 +19,7 @@ func CreateSASIIndex(session *gocql.Session, table string, column string) error 
 		column,
 	)).Exec()
 	if err != nil {
-		return err
+		return &http.UserError{E: err}
 	}
 	return nil
 }
@@ -44,7 +45,7 @@ func GetPrefix(session *gocql.Session, table string, column string, prefix strin
 	}
 
 	if err := iter.Close(); err != nil {
-		return nil, err
+		return nil, &http.UserError{E: err}
 	}
 
 	arr := make([]string, 0)
@@ -68,7 +69,7 @@ func GetColumn(session *gocql.Session, table string, column string) ([]string, e
 	}
 
 	if err := iter.Close(); err != nil {
-		return nil, err
+		return nil, &http.UserError{E: err}
 	}
 
 	return values, nil
@@ -93,7 +94,7 @@ func GetColumnWhere(session *gocql.Session, table string, column string, where s
 	}
 
 	if err := iter.Close(); err != nil {
-		return nil, err
+		return nil, &http.UserError{E: err}
 	}
 
 	return results, nil

@@ -15,9 +15,13 @@ import (
 	"admin/routes/tables"
 	"admin/settings"
 	"admin/utils/common"
+	"admin/utils/dbs"
 )
 
 func SetUp() *fiber.App {
+	defer dbs.DB.Close()
+	defer dbs.Redis.Close()
+
 	app := fiber.New(fiber.Config{
 		BodyLimit: 10 * 1024 * 1024,
 	})

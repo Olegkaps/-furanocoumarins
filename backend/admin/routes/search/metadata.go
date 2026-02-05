@@ -1,12 +1,11 @@
 package search
 
 import (
-	"admin/settings"
-	"admin/utils/common"
+	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
+	"admin/utils/http"
 	"time"
 
-	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -16,26 +15,20 @@ type GetMetadataResponse struct {
 }
 
 func Get_current_metadata(c *fiber.Ctx) error {
-	cluster := gocql.NewCluster(settings.CASSANDRA_HOST)
-	session, err := cluster.CreateSession()
+	session, err := dbs.CQL.CreateSession()
 	if err != nil {
-		common.WriteLog(err.Error())
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return http.Resp500(c, err)
 	}
 	defer session.Close()
 
 	activeTable, err := cassandra.GetActiveTable(session)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return http.RespErr(c, err)
 	}
 
 	columns, err := cassandra.GetColumnMeta(session, activeTable)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return http.RespErr(c, err)
 	}
 
 	response := GetMetadataResponse{

@@ -2,6 +2,7 @@ package cassandra
 
 import (
 	"admin/utils/common"
+	"admin/utils/http"
 
 	"github.com/gocql/gocql"
 )
@@ -21,8 +22,7 @@ func GetArticle(session *gocql.Session, id string) (string, error) {
 	}
 
 	if err := iter.Close(); err != nil {
-		common.WriteLog(err.Error())
-		return "", err
+		return "", &http.ServerError{E: err}
 	}
 	return text, nil
 }
@@ -41,7 +41,7 @@ func GetArticleIds(session *gocql.Session) (map[string]string, error) {
 	}
 
 	if err := iter.Close(); err != nil {
-		return nil, err
+		return nil, &http.ServerError{E: err}
 	}
 	return ids, nil
 }
