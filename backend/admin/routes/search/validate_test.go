@@ -3,6 +3,7 @@ package search_test
 import (
 	"admin/routes/search"
 	"admin/utils/dbs/cassandra"
+	"admin/utils/http"
 	"fmt"
 	"testing"
 
@@ -74,6 +75,10 @@ func TestValidateRequest(t *testing.T) {
 
 	for _, test := range tests {
 		err := search.Validate_request(test.request, test.columns)
-		assert.Equalf(t, test.expectedError, err, test.description)
+		if err != nil {
+			assert.Equalf(t, test.expectedError, err.(*http.UserError).E, test.description)
+		} else {
+			assert.Equalf(t, test.expectedError, err, test.description)
+		}
 	}
 }

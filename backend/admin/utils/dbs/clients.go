@@ -11,6 +11,10 @@ import (
 )
 
 func newRedisClient() *redis.Client {
+	if settings.ENV_TYPE == "AUTOTEST" {
+		return nil
+	}
+
 	r := redis.NewClient(settings.REDIS_SOURCE)
 
 	if err := r.Ping(context.Background()).Err(); err != nil {
@@ -23,6 +27,10 @@ func newRedisClient() *redis.Client {
 var Redis *redis.Client = newRedisClient()
 
 func openPostgres() *sql.DB {
+	if settings.ENV_TYPE == "AUTOTEST" {
+		return nil
+	}
+
 	db, err := sql.Open(
 		"postgres",
 		settings.POSTGRES_SOURCE,

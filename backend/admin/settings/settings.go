@@ -12,7 +12,17 @@ import (
 	"github.com/redis/go-redis/v9/maintnotifications"
 )
 
+func GetEnvDefault(key, default_val string) string {
+	v := os.Getenv(key)
+	if v == "" {
+		return default_val
+	}
+	return v
+}
+
 var BACK_VERSION = "v2.0"
+
+var ENV_TYPE = GetEnvDefault("ENV_TYPE", "PROD")
 
 var SECRET_KEY = []byte(os.Getenv("SECRET_KEY"))
 var ALLOW_ORIGIN = os.Getenv("ALLOW_ORIGIN")
