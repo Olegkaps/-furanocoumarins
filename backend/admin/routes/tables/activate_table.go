@@ -11,7 +11,7 @@ import (
 func Activate_table(c *fiber.Ctx) error {
 	tableTimestamp := c.Params("timestamp")
 
-	table_time, err := dbs.String2Time(tableTimestamp)
+	table_time, err := dbs.String2Time(c, tableTimestamp)
 	if err != nil {
 		return http.Resp400(c, err)
 	}
@@ -27,5 +27,5 @@ func Activate_table(c *fiber.Ctx) error {
 		return http.RespErr(c, err)
 	}
 
-	return c.SendStatus(fiber.StatusOK)
+	return http.Resp200(c)
 }

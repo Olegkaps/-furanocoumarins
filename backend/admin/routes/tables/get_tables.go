@@ -22,5 +22,5 @@ func Get_tables_list(c *fiber.Ctx) error {
 		return http.RespErr(c, err)
 	}
 
-	return c.JSON(tables)
+	return http.JSON(c, tables)
 }

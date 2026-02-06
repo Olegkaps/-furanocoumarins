@@ -2,11 +2,11 @@ package bibtex
 
 import (
 	"admin/utils/bibtex"
-	"admin/utils/common"
 	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
 	"admin/utils/dbs/postgres"
 	"admin/utils/http"
+	"admin/utils/logging"
 	"admin/utils/mail"
 	"fmt"
 	"strings"
@@ -20,7 +20,7 @@ func Update_file(c *fiber.Ctx) error {
 	claims := user.Claims.(jwt.MapClaims)
 	name := claims["name"].(string)
 
-	db_user, err := postgres.GetUser(name)
+	db_user, err := postgres.GetUser(c, name)
 	if err != nil {
 		return http.Resp400(c, err)
 	}
@@ -35,7 +35,7 @@ func Update_file(c *fiber.Ctx) error {
 		return http.Resp400(c, err)
 	}
 
-	corr_ids, err := bibtex.ParseBibtexFile(f)
+	corr_ids, err := bibtex.ParseBibtexFile(c, f)
 	if err != nil {
 		return http.Resp400(c, err)
 	}
@@ -62,12 +62,12 @@ func Update_file(c *fiber.Ctx) error {
 		return http.RespErr(c, err)
 	}
 
-	activeTable, err := cassandra.GetActiveTable(session)
+	activeTable, err := cassandra.GetActiveTable(c, session)
 	if err != nil {
 		return http.RespErr(c, err)
 	}
 
-	columns, err := cassandra.GetColumnMeta(session, activeTable)
+	columns, err := cassandra.GetColumnMeta(c, session, activeTable)
 	if err != nil {
 		return http.RespErr(c, err)
 	}
@@ -84,15 +84,15 @@ func Update_file(c *fiber.Ctx) error {
 
 	if strings.Trim(ref_column, " ") == "" {
 		mail.SendMail(
-			db_user.Mail,
+			c, db_user.Mail,
 			"Updated bibtex file",
 			fmt.Sprintf(
 				"Bibtex file updated, but active table %s has no column with type `ref[]`, check skiped",
 				timestamp,
 			),
 		)
-		common.WriteLog("for table %s ref-check skipped.", timestamp)
-		return c.SendStatus(fiber.StatusOK)
+		logging.Warn(c, "for table %s ref-check skipped.", timestamp)
+		return http.Resp200(c)
 	}
 
 	ids_to_check, err := cassandra.GetColumn(session, activeTable.TableData, ref_column)
@@ -104,7 +104,7 @@ func Update_file(c *fiber.Ctx) error {
 
 	message := "Bibtex file updated, for active table " + timestamp
 
-	common.WriteLog("for table %s have %d warnings", timestamp, len(warnings))
+	logging.Warn(c, "for table %s have %d warnings", timestamp, len(warnings))
 	if len(warnings) == 0 {
 		message += " all reference exists."
 	} else {
@@ -112,10 +112,10 @@ func Update_file(c *fiber.Ctx) error {
 	}
 
 	mail.SendMail(
-		db_user.Mail,
+		c, db_user.Mail,
 		"Updated bibtex file",
 		message,
 	)
 
-	return c.SendStatus(fiber.StatusOK)
+	return http.Resp200(c)
 }

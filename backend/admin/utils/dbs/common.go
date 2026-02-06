@@ -1,9 +1,11 @@
 package dbs
 
 import (
-	"admin/utils/common"
+	"admin/utils/logging"
 	"strings"
 	"time"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 func FixCassandraTimestamp(s string) string {
@@ -14,12 +16,12 @@ func FixCassandraTimestamp(s string) string {
 	return s
 }
 
-func String2Time(s string) (time.Time, error) {
+func String2Time(c *fiber.Ctx, s string) (time.Time, error) {
 	t, err := time.Parse("2006-01-02T15:04:05.000Z", s)
 	if err != nil {
 		t, err = time.Parse("2006-01-02T15:04:05.00Z", s)
 		if err != nil {
-			common.WriteLog(err.Error())
+			logging.Warn(c, "%s", err.Error())
 			return time.Time{}, err
 		}
 	}

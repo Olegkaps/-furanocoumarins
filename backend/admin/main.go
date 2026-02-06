@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "github.com/lib/pq"
+	"github.com/sirupsen/logrus"
 
 	"github.com/ansrivas/fiberprometheus/v2"
 	jwtware "github.com/gofiber/contrib/jwt"
@@ -14,13 +15,17 @@ import (
 	"admin/routes/search"
 	"admin/routes/tables"
 	"admin/settings"
-	"admin/utils/common"
 	"admin/utils/dbs"
+	"admin/utils/http"
+	"admin/utils/logging"
 )
 
 func SetUp() *fiber.App {
+	logrus.SetFormatter(&logrus.JSONFormatter{})
+
 	app := fiber.New(fiber.Config{
-		BodyLimit: 10 * 1024 * 1024,
+		EnableTrustedProxyCheck: true,
+		BodyLimit:               10 * 1024 * 1024,
 	})
 
 	prometheus := fiberprometheus.New("fuco-backend")
@@ -36,7 +41,7 @@ func SetUp() *fiber.App {
 	app.Get("/search", search.Search_main_app)
 	app.Get("/article/:id", bibtex.Get_article)
 
-	app.Get("/ping", func(c *fiber.Ctx) error { return c.SendStatus(200) })
+	app.Get("/ping", http.Resp200)
 	app.Post("/login", auth.Login)
 	app.Post("/login-mail", auth.Login_mail)
 	app.Post("/confirm-login-mail", auth.Confirm_login_mail)
@@ -68,5 +73,5 @@ func main() {
 
 	app := SetUp()
 
-	common.WriteLogFatal(app.Listen(":80").Error())
+	logging.Fatal("%s", app.Listen(":80").Error())
 }

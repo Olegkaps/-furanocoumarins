@@ -14,13 +14,14 @@ import (
 	"admin/utils/dbs"
 	"admin/utils/dbs/postgres"
 	"admin/utils/http"
+	"admin/utils/logging"
 	"admin/utils/mail"
 )
 
 func Change_password(c *fiber.Ctx) error {
 	mail_or_login := c.FormValue("uname_or_email")
 
-	user, err := postgres.GetUser(mail_or_login)
+	user, err := postgres.GetUser(c, mail_or_login)
 	if err != nil {
 		return http.Resp400(c, err)
 	}
@@ -31,7 +32,7 @@ func Change_password(c *fiber.Ctx) error {
 	}
 
 	word = "psw" + strings.ReplaceAll(word, "/", "")
-	common.WriteLog("Generate link %s for %s", word, user.Username)
+	logging.Info(c, "Generate link %s for %s", word, user.Username)
 	err = dbs.Redis.SetEx(context.Background(), word, user.Username, time.Hour*1).Err()
 	if err != nil {
 		return http.Resp500(c, err)
@@ -39,32 +40,32 @@ func Change_password(c *fiber.Ctx) error {
 
 	link := settings.DOMAIN_PREF + "/admit/" + word
 	go mail.SendMail(
-		user.Mail,
+		c, user.Mail,
 		"Change password",
 		mail.GetLinkMailBody("change password", link),
 	)
-	return c.SendStatus(200)
+	return http.Resp200(c)
 }
 
 func Confirm_password_change(c *fiber.Ctx) error {
 	word := c.FormValue("word")
-	common.WriteLog("Processing link %s", word)
+	logging.Info(c, "Processing link %s", word)
 	var user string = ""
 
 	user, err := dbs.Redis.Get(context.Background(), word).Result()
-	if err != nil || len(user) <= 3 {
-		return c.SendStatus(fiber.StatusBadRequest)
+	if err != nil {
+		return http.Resp400(c, err)
 	}
-	common.WriteLog("Changing password for %s", user)
+	logging.Info(c, "Changing password for %s", user)
 
-	err = postgres.Change_password(user, c.FormValue("password"))
+	err = postgres.Change_password(c, user, c.FormValue("password"))
 	if err != nil {
 		return http.Resp400(c, err)
 	}
 
 	dbs.Redis.Del(context.Background(), word)
 
-	return c.SendStatus(200)
+	return http.Resp200(c)
 }
 
 func Renew_token(c *fiber.Ctx) error {
@@ -73,7 +74,7 @@ func Renew_token(c *fiber.Ctx) error {
 	name := claims["name"].(string)
 	role := claims["role"].(string)
 
-	exists, err := postgres.UserExists(name, role)
+	exists, err := postgres.UserExists(c, name, role)
 	if err != nil {
 		return http.Resp500(c, err)
 	}
@@ -81,10 +82,10 @@ func Renew_token(c *fiber.Ctx) error {
 		return http.Resp401(c)
 	}
 
-	t, err := common.GetToken(name, role)
+	t, err := common.GetToken(c, name, role)
 	if err != nil {
 		return http.Resp500(c, err)
 	}
 
-	return c.JSON(fiber.Map{"token": t})
+	return http.JSON(c, fiber.Map{"token": t})
 }

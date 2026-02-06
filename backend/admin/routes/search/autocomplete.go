@@ -26,7 +26,7 @@ func Autocomletion(c *fiber.Ctx) error {
 	}
 	defer session.Close()
 
-	table, err := cassandra.GetActiveTable(session)
+	table, err := cassandra.GetActiveTable(c, session)
 	if err != nil {
 		return http.RespErr(c, err)
 	}
@@ -36,5 +36,5 @@ func Autocomletion(c *fiber.Ctx) error {
 		return http.RespErr(c, err)
 	}
 
-	return c.JSON(AutocompleteResponse{values})
+	return http.JSON(c, AutocompleteResponse{values})
 }

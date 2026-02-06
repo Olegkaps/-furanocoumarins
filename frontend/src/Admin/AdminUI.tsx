@@ -92,7 +92,7 @@ const AdminPage: React.FC = () => {
         }
 
         setShowCreateForm(false);
-        setTimeout(() => fetchTables(), 15000);
+        setTimeout(() => fetchTables(), 3000);
     };
 
     const handleSetActiveTable = async (e: React.FormEvent, tableTimestamp: string) => {
@@ -114,7 +114,7 @@ const AdminPage: React.FC = () => {
             headers: { Authorization: `Bearer ${token}` }
         }).catch((err) => {return err.response});
 
-        setTimeout(() => fetchTables(), 5000);
+        setTimeout(() => fetchTables(), 3000);
     };
 
     const handleDeleteBadTables = async (e: React.FormEvent) => {
@@ -125,7 +125,7 @@ const AdminPage: React.FC = () => {
             headers: { Authorization: `Bearer ${token}` }
         }).catch((err) => {return err.response});
 
-        setTimeout(() => fetchTables(), 10000);
+        setTimeout(() => fetchTables(), 3000);
     };
 
     const handleSaveBibtex = async (e: React.FormEvent) => {

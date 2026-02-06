@@ -1,30 +1,15 @@
 package common
 
 import (
-	"fmt"
-	"os"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 
 	"admin/settings"
+	"admin/utils/logging"
 )
-
-func WriteLog(format string, a ...any) (n int, err error) {
-	return fmt.Printf(
-		time.Now().Format("2006-01-02 15:04:05.00000 -07:00 MST")+"> "+format+"\n",
-		a...,
-	)
-}
-
-func WriteLogFatal(format string, a ...any) {
-	fmt.Printf(
-		time.Now().Format("2006-01-02 15:04:05.00000 -07:00 MST")+" FATAL> "+format+"\n",
-		a...,
-	)
-	os.Exit(1)
-}
 
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
@@ -36,7 +21,7 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
-func GetToken(user string, role string) (string, error) {
+func GetToken(c *fiber.Ctx, user string, role string) (string, error) {
 	claims := jwt.MapClaims{
 		"name":    user,
 		"role":    role,
@@ -44,7 +29,7 @@ func GetToken(user string, role string) (string, error) {
 		"exp":     time.Now().Add(time.Hour * 24 * 30).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	WriteLog("Created token for %s %s", role, user)
+	logging.Info(c, "Created token for %s %s", role, user)
 
 	return token.SignedString(settings.SECRET_KEY)
 }

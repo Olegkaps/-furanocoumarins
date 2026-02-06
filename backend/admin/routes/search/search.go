@@ -28,12 +28,12 @@ func Search_main_app(c *fiber.Ctx) error {
 	}
 	defer session.Close()
 
-	activeTable, err := cassandra.GetActiveTable(session)
+	activeTable, err := cassandra.GetActiveTable(c, session)
 	if err != nil {
 		return http.RespErr(c, err)
 	}
 
-	columns, err1 := cassandra.GetColumnMeta(session, activeTable)
+	columns, err1 := cassandra.GetColumnMeta(c, session, activeTable)
 	err2 := Validate_request(searchRequest, columns)
 
 	if err := errors.Join(err1, err2); err != nil {
@@ -65,5 +65,5 @@ func Search_main_app(c *fiber.Ctx) error {
 		TableTimestamp: activeTable.Timestamp,
 	}
 
-	return c.JSON(response)
+	return http.JSON(c, response)
 }

@@ -19,17 +19,17 @@ func Delete_table(c *fiber.Ctx) error {
 	}
 	defer session.Close()
 
-	table_time, err := dbs.String2Time(tableTimestamp)
+	table_time, err := dbs.String2Time(c, tableTimestamp)
 	if err != nil {
 		return http.Resp400(c, err)
 	}
 
-	err = cassandra.DeleteTable(session, table_time)
+	err = cassandra.DeleteTable(c, session, table_time)
 	if err != nil {
 		return http.RespErr(c, err)
 	}
 
-	return c.SendStatus(fiber.StatusOK)
+	return http.Resp200(c)
 }
 
 func Delete_all_bad_tables(c *fiber.Ctx) error {
@@ -53,7 +53,7 @@ func Delete_all_bad_tables(c *fiber.Ctx) error {
 		wg.Add(1)
 		go func(i int, t *cassandra.Table) {
 			defer wg.Done()
-			errs[i] = cassandra.DeleteTable(session, t.Timestamp)
+			errs[i] = cassandra.DeleteTable(c, session, t.Timestamp)
 		}(i, t)
 	}
 	wg.Wait()
@@ -62,5 +62,5 @@ func Delete_all_bad_tables(c *fiber.Ctx) error {
 		return http.RespErr(c, err)
 	}
 
-	return c.SendStatus(fiber.StatusOK)
+	return http.Resp200(c)
 }

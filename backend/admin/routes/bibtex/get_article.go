@@ -4,12 +4,14 @@ import (
 	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
 	"admin/utils/http"
+	"admin/utils/logging"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 func Get_article(c *fiber.Ctx) error {
 	id := c.Params("id")
+	logging.Info(c, "get article '%s'", id)
 
 	session, err := dbs.CQL.CreateSession()
 	if err != nil {
@@ -23,10 +25,10 @@ func Get_article(c *fiber.Ctx) error {
 	}
 
 	if text == "" {
-		return c.SendStatus(fiber.StatusNotFound)
+		return http.Resp404(c)
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+	return http.JSON(c, fiber.Map{
 		"val": text,
 	})
 }

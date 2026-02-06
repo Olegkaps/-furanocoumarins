@@ -4,14 +4,14 @@ type UserError struct {
 	E error
 }
 
-func (ue *UserError) Error() string {
-	return "Bad request: " + ue.E.Error()
+func (e *UserError) Error() string {
+	return "Bad request: " + e.E.Error()
 }
 
 type ServerError struct {
 	E error
 }
 
-func (se *ServerError) Error() string {
-	return "Internal error: " + se.E.Error()
+func (e *ServerError) Error() string {
+	return "Internal error: " + e.E.Error()
 }

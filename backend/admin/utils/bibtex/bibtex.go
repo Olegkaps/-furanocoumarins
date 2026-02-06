@@ -1,15 +1,17 @@
 package bibtex
 
 import (
-	"admin/utils/common"
+	"admin/utils/logging"
 	"bufio"
 	"fmt"
 	"mime/multipart"
 	"regexp"
 	"strings"
+
+	"github.com/gofiber/fiber/v2"
 )
 
-func ParseBibtexFile(file multipart.File) (map[string]string, error) {
+func ParseBibtexFile(c *fiber.Ctx, file multipart.File) (map[string]string, error) {
 	defer file.Close()
 
 	identifiers := make(map[string]string, 0)
@@ -33,7 +35,7 @@ func ParseBibtexFile(file multipart.File) (map[string]string, error) {
 			}
 
 			if _, exists := identifiers[matches[1]]; exists {
-				common.WriteLog("duplicate key in .bib file: ", matches[1])
+				logging.Warn(c, "duplicate key in .bib file: %s", matches[1])
 			}
 			prev_identifier = matches[1]
 		} else {

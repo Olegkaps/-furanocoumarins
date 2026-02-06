@@ -1,10 +1,12 @@
 package mail
 
 import (
-	"admin/utils/common"
+	"admin/utils/logging"
 	"fmt"
 	"net/smtp"
 	"os"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 func GetLinkMailBody(action string, link string) string {
@@ -16,8 +18,8 @@ var smtpPort = "587"
 var senderEmail = os.Getenv("MAIL")
 var mailSecret = os.Getenv("MAIL_SECRET")
 
-func SendMail(recivier, subject, body string) error {
-	common.WriteLog("Sending mail to %s", recivier)
+func SendMail(c *fiber.Ctx, recivier, subject, body string) error {
+	logging.Info(c, "sending mail to %s", recivier)
 
 	auth := smtp.PlainAuth("", senderEmail, mailSecret, smtpServer)
 

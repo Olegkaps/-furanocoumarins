@@ -16,11 +16,11 @@ import (
 	"admin/routes/create/excel"
 	"admin/settings"
 	"admin/utils/bibtex"
-	"admin/utils/common"
 	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
 	"admin/utils/dbs/postgres"
 	"admin/utils/http"
+	"admin/utils/logging"
 	"admin/utils/mail"
 )
 
@@ -29,7 +29,7 @@ func Create_table(c *fiber.Ctx) error { // TO DO: no more than 10 tables
 	claims := user.Claims.(jwt.MapClaims)
 	name := claims["name"].(string)
 
-	db_user, err := postgres.GetUser(name)
+	db_user, err := postgres.GetUser(c, name)
 	if err != nil {
 		return http.Resp400(c, err)
 	}
@@ -52,16 +52,16 @@ func Create_table(c *fiber.Ctx) error { // TO DO: no more than 10 tables
 	meta := c.FormValue("meta")
 	table_name := c.FormValue("name")
 
-	go create_table(xlsx, meta, db_user.Mail, table_name)
+	create_table(c, xlsx, meta, db_user.Mail, table_name)
 
-	return c.SendStatus(fiber.StatusCreated)
+	return http.Resp200(c)
 }
 
-func create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileName string) {
+func create_table(c *fiber.Ctx, TableFile *excelize.File, MetaListName, AuthorMail, FileName string) {
 	sendErrorMail := func(err error) {
-		common.WriteLog(err.Error())
+		logging.Warn(c, "%s", err.Error())
 		mail.SendMail(
-			AuthorMail,
+			c, AuthorMail,
 			fmt.Sprintf("Creating table %s failed.", TableFile.Path),
 			"Recieved following error: "+err.Error(),
 		)
@@ -74,7 +74,7 @@ func create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileName s
 	}
 
 	mail.SendMail(
-		AuthorMail,
+		c, AuthorMail,
 		fmt.Sprintf("Table %s created successfully.", TableFile.Path),
 		"Table created, don`t forget to activate it.\n"+message,
 	)
@@ -430,12 +430,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 	}
 
 	if ref_ind == -1 {
-		mail.SendMail(
-			AuthorMail,
-			"Table "+TableFile.Path+" created successfully.",
-			`Table created, don't forget to activate it.
-			Column with type 'ref[]' not found, reference check skipped.`,
-		)
+		return "Column with type 'ref[]' not found, reference check skipped.", nil
 	}
 
 	ids_to_check := make([]string, len(joined_data))

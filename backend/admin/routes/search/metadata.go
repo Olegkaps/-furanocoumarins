@@ -21,12 +21,12 @@ func Get_current_metadata(c *fiber.Ctx) error {
 	}
 	defer session.Close()
 
-	activeTable, err := cassandra.GetActiveTable(session)
+	activeTable, err := cassandra.GetActiveTable(c, session)
 	if err != nil {
 		return http.RespErr(c, err)
 	}
 
-	columns, err := cassandra.GetColumnMeta(session, activeTable)
+	columns, err := cassandra.GetColumnMeta(c, session, activeTable)
 	if err != nil {
 		return http.RespErr(c, err)
 	}
@@ -36,5 +36,5 @@ func Get_current_metadata(c *fiber.Ctx) error {
 		TableTimestamp: activeTable.Timestamp,
 	}
 
-	return c.JSON(response)
+	return http.JSON(c, response)
 }

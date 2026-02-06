@@ -3,10 +3,12 @@ package cassandra
 import (
 	"admin/utils/common"
 	"admin/utils/http"
+	"admin/utils/logging"
 	"fmt"
 	"time"
 
 	"github.com/gocql/gocql"
+	"github.com/gofiber/fiber/v2"
 )
 
 type Table struct {
@@ -61,7 +63,7 @@ func SetTableOk(session *gocql.Session, t *Table) error {
 	return nil
 }
 
-func GetActiveTable(session *gocql.Session) (*Table, error) {
+func GetActiveTable(c *fiber.Ctx, session *gocql.Session) (*Table, error) {
 	iter := session.Query(`
 		SELECT created_at, table_meta, table_data, version, is_ok, is_active, name
 		FROM chemdb.tables
@@ -85,16 +87,16 @@ func GetActiveTable(session *gocql.Session) (*Table, error) {
 	}
 
 	if err := iter.Close(); err != nil {
-		common.WriteLog(err.Error())
+		logging.Error(c, "%s", err.Error())
 		return nil, &http.ServerError{E: err}
 	}
 	if len(results) == 0 {
-		common.WriteLog("no active table found")
+		logging.Warn(c, "no active table found")
 		return nil, &http.UserError{E: fmt.Errorf("no active table found")}
 	}
 	if len(results) > 1 {
-		common.WriteLog("multiple active tables found")
-		return nil, &http.UserError{E: fmt.Errorf("multiple active tables found")}
+		logging.Error(c, "multiple active tables found")
+		return nil, &http.ServerError{E: fmt.Errorf("multiple active tables found")}
 	}
 
 	return &results[0], nil
@@ -126,8 +128,8 @@ type ColumnMeta struct {
 	Description string `json:"description"`
 }
 
-func GetColumnMeta(session *gocql.Session, t *Table) ([]*ColumnMeta, error) {
-	common.WriteLog("get meta for '%s'", t.Timestamp)
+func GetColumnMeta(c *fiber.Ctx, session *gocql.Session, t *Table) ([]*ColumnMeta, error) {
+	logging.Info(c, "get meta for '%s'", t.Timestamp)
 
 	ge_v2 := common.IsVersionGreater(t.Version, "v2")
 
@@ -168,9 +170,9 @@ func GetColumnMeta(session *gocql.Session, t *Table) ([]*ColumnMeta, error) {
 	return columns, nil
 }
 
-func DeleteTable(session *gocql.Session, timestamp time.Time) error {
+func DeleteTable(c *fiber.Ctx, session *gocql.Session, timestamp time.Time) error {
 	if timestamp.After(time.Now().Add(-5 * time.Minute)) {
-		common.WriteLog("trying to delete table %v - too early", timestamp)
+		logging.Warn(c, "trying to delete table %v - too early", timestamp)
 		return nil
 	}
 

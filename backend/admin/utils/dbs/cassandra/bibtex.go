@@ -1,15 +1,12 @@
 package cassandra
 
 import (
-	"admin/utils/common"
 	"admin/utils/http"
 
 	"github.com/gocql/gocql"
 )
 
 func GetArticle(session *gocql.Session, id string) (string, error) {
-	common.WriteLog("get article '%s'", id)
-
 	iter := session.Query(`
 		SELECT bibtex_text 
 		FROM chemdb.bibtex
