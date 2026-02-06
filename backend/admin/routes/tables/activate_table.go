@@ -9,7 +9,7 @@ import (
 )
 
 func Activate_table(c *fiber.Ctx) error {
-	tableTimestamp := c.FormValue("table_timestamp")
+	tableTimestamp := c.Params("timestamp")
 
 	table_time, err := dbs.String2Time(tableTimestamp)
 	if err != nil {

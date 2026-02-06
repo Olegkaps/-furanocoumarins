@@ -98,10 +98,8 @@ const AdminPage: React.FC = () => {
     const handleSetActiveTable = async (e: React.FormEvent, tableTimestamp: string) => {
         e.preventDefault();
         let token = getToken();
-        var bodyFormData = new FormData();
         
-        bodyFormData.append("table_timestamp", tableTimestamp)
-        await api.post('/make-table-active', bodyFormData, {
+        await api.post('/make-table-active/'+tableTimestamp, {}, {
             headers: { Authorization: `Bearer ${token}` }
         }).catch((err) => {return err.response});
 
@@ -111,10 +109,8 @@ const AdminPage: React.FC = () => {
     const handleDeleteTable = async (e: React.FormEvent, tableTimestamp: string) => {
         e.preventDefault();
         let token = getToken();
-        var bodyFormData = new FormData();
 
-        bodyFormData.append("table_timestamp", tableTimestamp)
-        await api.post(`/delete-table`, bodyFormData, {
+        await api.delete(`/table/` + tableTimestamp, {
             headers: { Authorization: `Bearer ${token}` }
         }).catch((err) => {return err.response});
 
@@ -124,9 +120,8 @@ const AdminPage: React.FC = () => {
     const handleDeleteBadTables = async (e: React.FormEvent) => {
         e.preventDefault();
         let token = getToken();
-        var bodyFormData = new FormData();
 
-        await api.post(`/delete-tables`, bodyFormData, {
+        await api.delete(`/tables`, {
             headers: { Authorization: `Bearer ${token}` }
         }).catch((err) => {return err.response});
 

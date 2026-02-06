@@ -30,7 +30,10 @@ func UserExists(mail_or_login string, role string) (bool, error) {
 	common.WriteLog("is user exists %s", mail_or_login)
 
 	var exists bool
-	err := dbs.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE username=$1 OR role=$2)", mail_or_login, role).Scan(&exists)
+	err := dbs.DB.QueryRow(
+		"SELECT EXISTS(SELECT 1 FROM users WHERE (username=$1 OR email=$2) AND role=$3)",
+		mail_or_login, mail_or_login, role,
+	).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
@@ -44,7 +47,7 @@ func Change_password(username string, password string) error {
 	if err != nil {
 		return err
 	}
-	err = dbs.DB.QueryRow("UPDATE users SEt hashed_password=$1 WHERE username=$2", hashed_password, username).Err()
+	err = dbs.DB.QueryRow("UPDATE users SET hashed_password=$1 WHERE username=$2", hashed_password, username).Err()
 
 	return nil
 }

@@ -30,8 +30,8 @@ func Create_table(c *fiber.Ctx) error { // TO DO: no more than 10 tables
 	name := claims["name"].(string)
 
 	db_user, err := postgres.GetUser(name)
-	if err != nil || len(db_user.Mail) <= 3 {
-		return c.SendStatus(fiber.StatusBadRequest)
+	if err != nil {
+		return http.Resp400(c, err)
 	}
 
 	file, err := c.FormFile("file")

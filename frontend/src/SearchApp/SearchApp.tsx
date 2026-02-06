@@ -12,10 +12,7 @@ let isDataFetched = false
 
 const fetchSearchResult = async (e: React.FormEvent | null, seqrch_req: string, setSearchResponse: React.Dispatch<React.SetStateAction<{}>>) => {
   e?.preventDefault();
-  var bodyFormData = new FormData();
-
-  bodyFormData.append("search_request", seqrch_req)
-  var response = await api.post('/search', bodyFormData).catch((err) => {return err.response});
+  var response = await api.get('/search?q='+seqrch_req).catch((err) => {return err.response});
 
   if (response && response.status === 200) {
     setSearchResponse(response.data)

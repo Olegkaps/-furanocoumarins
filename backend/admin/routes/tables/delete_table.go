@@ -11,7 +11,7 @@ import (
 )
 
 func Delete_table(c *fiber.Ctx) error {
-	tableTimestamp := c.FormValue("table_timestamp")
+	tableTimestamp := c.Params("timestamp")
 
 	session, err := dbs.CQL.CreateSession()
 	if err != nil {

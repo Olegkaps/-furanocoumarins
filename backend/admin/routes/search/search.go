@@ -20,7 +20,7 @@ type SearchResponse struct {
 }
 
 func Search_main_app(c *fiber.Ctx) error {
-	searchRequest := c.FormValue("search_request")
+	searchRequest := c.Query("q")
 
 	session, err := dbs.CQL.CreateSession()
 	if err != nil {

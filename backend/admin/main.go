@@ -19,9 +19,6 @@ import (
 )
 
 func SetUp() *fiber.App {
-	defer dbs.DB.Close()
-	defer dbs.Redis.Close()
-
 	app := fiber.New(fiber.Config{
 		BodyLimit: 10 * 1024 * 1024,
 	})
@@ -36,7 +33,7 @@ func SetUp() *fiber.App {
 
 	app.Get("/metadata", search.Get_current_metadata)
 	app.Get("/autocomplete/:column", search.Autocomletion)
-	app.Post("/search", search.Search_main_app)
+	app.Get("/search", search.Search_main_app)
 	app.Get("/article/:id", bibtex.Get_article)
 
 	app.Get("/ping", func(c *fiber.Ctx) error { return c.SendStatus(200) })
@@ -56,9 +53,9 @@ func SetUp() *fiber.App {
 
 	app.Post("/create-table", create.Create_table)
 	app.Post("/get-tables-list", tables.Get_tables_list)
-	app.Post("/make-table-active", tables.Activate_table)
-	app.Post("/delete-table", tables.Delete_table)
-	app.Post("/delete-tables", tables.Delete_all_bad_tables)
+	app.Post("/make-table-active/:timestamp", tables.Activate_table)
+	app.Delete("/table/:timestamp", tables.Delete_table)
+	app.Delete("/tables", tables.Delete_all_bad_tables)
 
 	app.Put("/bibtex", bibtex.Update_file)
 
@@ -66,6 +63,9 @@ func SetUp() *fiber.App {
 }
 
 func main() {
+	defer dbs.DB.Close()
+	defer dbs.Redis.Close()
+
 	app := SetUp()
 
 	common.WriteLogFatal(app.Listen(":80").Error())

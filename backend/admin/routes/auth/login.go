@@ -22,7 +22,7 @@ func Login(c *fiber.Ctx) error {
 
 	db_user, err := postgres.GetUser(login_or_email)
 	if err != nil {
-		return http.Resp500(c, err)
+		return http.Resp400(c, err)
 	}
 
 	if !common.CheckPasswordHash(password, db_user.Hashed_password) {
@@ -41,8 +41,8 @@ func Login_mail(c *fiber.Ctx) error {
 	mail_or_login := c.FormValue("uname_or_email")
 
 	user, err := postgres.GetUser(mail_or_login)
-	if err != nil || len(user.Mail) <= 3 {
-		return c.SendStatus(fiber.StatusBadRequest)
+	if err != nil {
+		return http.Resp400(c, err)
 	}
 
 	word, err := common.HashPassword(strconv.Itoa(time.Time.Nanosecond(time.Now())))
