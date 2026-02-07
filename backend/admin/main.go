@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+
 	_ "github.com/lib/pq"
 	"github.com/sirupsen/logrus"
 
@@ -8,6 +10,7 @@ import (
 	jwtware "github.com/gofiber/contrib/jwt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"admin/routes/auth"
 	"admin/routes/bibtex"
@@ -16,7 +19,7 @@ import (
 	"admin/routes/tables"
 	"admin/settings"
 	"admin/utils/dbs"
-	"admin/utils/http"
+	http_lib "admin/utils/http"
 	"admin/utils/logging"
 )
 
@@ -41,7 +44,7 @@ func SetUp() *fiber.App {
 	app.Get("/search", search.Search_main_app)
 	app.Get("/article/:id", bibtex.Get_article)
 
-	app.Get("/ping", http.Resp200)
+	app.Get("/ping", http_lib.Resp200)
 	app.Post("/login", auth.Login)
 	app.Post("/login-mail", auth.Login_mail)
 	app.Post("/confirm-login-mail", auth.Confirm_login_mail)
@@ -70,6 +73,9 @@ func SetUp() *fiber.App {
 func main() {
 	defer dbs.DB.Close()
 	defer dbs.Redis.Close()
+
+	http.Handle("/metrics", promhttp.Handler())
+	go http.ListenAndServe(":5000", nil)
 
 	app := SetUp()
 

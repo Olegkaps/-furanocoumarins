@@ -6,4 +6,8 @@ scrape_configs:
   - job_name: 'prometheus'
     static_configs:
       - targets: ['go-auth:80']
+
+  - job_name: 'prometheus-runtime'
+    static_configs:
+      - targets: ['go-auth:5000']
   
