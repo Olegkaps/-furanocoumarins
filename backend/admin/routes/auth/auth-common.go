@@ -54,7 +54,7 @@ func Confirm_password_change(c *fiber.Ctx) error {
 
 	user, err := dbs.Redis.Get(context.Background(), word).Result()
 	if err != nil {
-		return http.Resp400(c, err)
+		return http.Resp401(c, err)
 	}
 	logging.Info(c, "Changing password for %s", user)
 
@@ -79,7 +79,7 @@ func Renew_token(c *fiber.Ctx) error {
 		return http.Resp500(c, err)
 	}
 	if !exists {
-		return http.Resp401(c)
+		return http.Resp401(c, nil)
 	}
 
 	t, err := common.GetToken(c, name, role)

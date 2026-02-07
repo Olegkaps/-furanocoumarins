@@ -21,8 +21,12 @@ func Resp400(c *fiber.Ctx, err error) error {
 	})
 }
 
-func Resp401(c *fiber.Ctx) error {
-	logging.Error(c, "Unauthorized")
+func Resp401(c *fiber.Ctx, err error) error {
+	if err != nil {
+		logging.Error(c, "Unauthorized: %s", err.Error())
+	} else {
+		logging.Error(c, "Unauthorized")
+	}
 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 		"error": "unauthorized",
 	})

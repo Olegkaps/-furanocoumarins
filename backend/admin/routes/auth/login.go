@@ -23,11 +23,11 @@ func Login(c *fiber.Ctx) error {
 
 	db_user, err := postgres.GetUser(c, login_or_email)
 	if err != nil {
-		return http.Resp400(c, err)
+		return http.Resp401(c, err)
 	}
 
 	if !common.CheckPasswordHash(password, db_user.Hashed_password) {
-		return http.Resp401(c)
+		return http.Resp401(c, nil)
 	}
 
 	t, err := common.GetToken(c, db_user.Username, db_user.Role)
@@ -43,7 +43,7 @@ func Login_mail(c *fiber.Ctx) error {
 
 	user, err := postgres.GetUser(c, mail_or_login)
 	if err != nil {
-		return http.Resp400(c, err)
+		return http.Resp401(c, err)
 	}
 
 	word, err := common.HashPassword(strconv.Itoa(time.Time.Nanosecond(time.Now())))
@@ -76,7 +76,7 @@ func Confirm_login_mail(c *fiber.Ctx) error {
 
 	user, err := dbs.Redis.Get(context.Background(), word).Result()
 	if err != nil {
-		return http.Resp400(c, err)
+		return http.Resp401(c, err)
 	}
 
 	dbs.Redis.Del(context.Background(), word)
