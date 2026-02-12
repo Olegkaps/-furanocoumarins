@@ -208,10 +208,20 @@ function PhilogeneticTreeOrNull(
   }
 
   let metadata_response = response["metadata"]
-  metadata_response.sort((a: { [x: string]: number; }, b: { [x: string]: number; }) => {
-    if (a["type"] === b["type"]) {
+  metadata_response.sort((a: { [x: string]: string; }, b: { [x: string]: string; }) => {
+    let t_a = a["type"]
+    if (t_a.startsWith("table_")) {
+      t_a = t_a.split(" ")[1]
+    }
+
+    let t_b = b["type"]
+    if (t_b.startsWith("table_")) {
+      t_b = t_b.split(" ")[1]
+    }
+  
+    if (t_a === t_b) {
       return 0
-    } else if (a["type"] < b["type"]) {
+    } else if (t_a < t_b) {
       return 1
     }
     return -1
@@ -227,12 +237,12 @@ function PhilogeneticTreeOrNull(
 
   metadata_response.forEach((meta_item: {[index: string]: any}) => {
     // e.g 'clas[00]', 'clas[02][powo]', ...
-    let _type = meta_item["type"]    
-    if (!_type.startsWith("clas[")) {
+    let _type = meta_item["type"]
+    if (!_type.includes("clas[")) {
       return
     }
   
-    let curr_num: string = _type.split("[")[1].split("]")[0]
+    let curr_num: string = _type.split("clas[")[1].split("]")[0]
 
     let curr_tag = "default"
     if (_type.includes("][")) {

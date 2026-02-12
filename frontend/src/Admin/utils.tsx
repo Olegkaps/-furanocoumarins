@@ -72,16 +72,29 @@ export function getName() {
     return localStorage.getItem(NAME)
 }
 
-export function ScrollableContainer({children}: {children: React.ReactNode}) {
+export function Container({children, maxHeight='600px'}: {children: React.ReactNode, maxHeight?: string}) {
     return <div className="tree"
     style={{
         backgroundColor: 'white',
         padding: '30px',
-        paddingRight: '70px',
         paddingTop: 0,
         border: '1px solid #d4d4d4ff',
         borderRadius: '20px',
-        maxHeight: '600px',
+        maxHeight: maxHeight,
+        maxWidth: '100%',
+        position: 'relative',
+    }}>{children}</div>
+}
+
+export function ScrollableContainer({children, maxHeight='600px'}: {children: React.ReactNode, maxHeight?: string}) {
+    return <div className="tree"
+    style={{
+        backgroundColor: 'white',
+        padding: '30px',
+        paddingTop: 0,
+        border: '1px solid #d4d4d4ff',
+        borderRadius: '20px',
+        maxHeight: maxHeight,
         maxWidth: '100%',
         overflow: 'scroll',
         position: 'relative',

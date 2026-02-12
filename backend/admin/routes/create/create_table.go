@@ -67,7 +67,7 @@ func create_table(c *fiber.Ctx, TableFile *excelize.File, MetaListName, AuthorMa
 		)
 	}
 
-	message, err := make_create_table(TableFile, MetaListName, AuthorMail, FileName)
+	message, err := make_create_table(TableFile, MetaListName, FileName)
 	if err != nil {
 		sendErrorMail(err)
 		return
@@ -80,7 +80,7 @@ func create_table(c *fiber.Ctx, TableFile *excelize.File, MetaListName, AuthorMa
 	)
 }
 
-func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileName string) (string, error) {
+func make_create_table(TableFile *excelize.File, MetaListName, FileName string) (string, error) {
 	defer TableFile.Close()
 
 	session, err := dbs.CQL.CreateSession()
@@ -130,9 +130,20 @@ func make_create_table(TableFile *excelize.File, MetaListName, AuthorMail, FileN
 		if strings.HasPrefix(sheet, "__") {
 			continue
 		}
+
+		if strings.Contains(c_type, "external[structures]") ||
+			strings.Contains(c_type, "external[classification]") ||
+			(sheet == "structures" && strings.Contains(c_type, "primary")) ||
+			(sheet == "classification" && strings.Contains(c_type, "primary")) {
+			c_type += " keycolumn"
+		}
+
 		if strings.HasPrefix(sheet, "structures") || strings.Contains(c_type, "external[structures") {
 			c_type += " chemical"
+		} else if strings.HasPrefix(sheet, "classification") || strings.Contains(c_type, "external[classification") {
+			c_type += " specie"
 		}
+
 		if strings.Contains(c_type, "ref[]") {
 			ref_col = column
 		}

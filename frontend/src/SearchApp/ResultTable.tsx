@@ -1,18 +1,16 @@
 import { useState } from "react";
-import { isEmpty, ScrollableContainer } from "../Admin/utils";
+import { Container, isEmpty, ScrollableContainer } from "../Admin/utils";
 import config from "../config";
 import DataMeta from "./DataMeta";
 import DataRows from "./RowsData";
 import {FileArrowUp, CircleInfo} from '@gravity-ui/icons';
 
 
-const maxPageSize = 100
-
 function ResultTableHead({meta}: {meta: Array<DataMeta>}) {
   return <thead style={{position: 'sticky', top: 0,}}>
     <tr>
       { meta.map((curr_meta) => {
-        if (curr_meta.is_grouping) {
+        if (curr_meta.is_grouping || curr_meta.is_ignore) {
           return <></>
         }
         return <th scope='col' style={{backgroundColor: "#ccd8b7ff", padding: 0}}>
@@ -29,7 +27,7 @@ function ResultTableBody({ rows, meta }: {rows: Array<Map<string, string>>, meta
     { rows.map((row) => (
       <tr>
         { meta.map((meta_val, ind) => {
-          if (meta_val.is_grouping) {
+          if (meta_val.is_grouping || meta_val.is_ignore) {
             return <></>
           }
           return <td style={{minWidth: '120px', maxWidth: '200px'}}>
@@ -64,64 +62,105 @@ function ResultTable({ rows, meta }: {rows: Array<Map<string, string>>, meta: Ar
 
 
 function GroupedResultTable(
-  { rows, meta, countsPrefSum, currentPage }: 
+  { rows, meta, currentSpecie, currentChemical }: 
   {
     rows: Array<DataRows>, 
     meta: Array<DataMeta>,
-    countsPrefSum: number[],
-    currentPage: number,
+    currentSpecie: string,
+    currentChemical: string,
   }
-) {  
-  let lowerBound = (currentPage-1)*maxPageSize
-  let upperBound = currentPage*maxPageSize
+) {
+  if (currentSpecie === "" && currentChemical === "") {
+    return <p style={{
+      width: '100%',
+      padding: 'auto',
+      textAlign: 'center',
+      fontSize: 'larger',
+      fontWeight: 600
+    }}>Select specie or chemical</p>
+  }
 
-  return <>{rows.map((dataRows, ind) => {
-      if (countsPrefSum[ind+1] < lowerBound || countsPrefSum[ind] > upperBound) {
-        return <></>
-      }
+  let filteredRows: DataRows[] = []
+  rows.forEach((data_rows) => {
+    let specie_ok = false
+    let chemical_ok = false
+    if (currentSpecie == "" || currentSpecie == data_rows.specie_val) {
+      specie_ok = true
+    }
+    if (currentChemical == "" || currentChemical == data_rows.chemical_val) {
+      chemical_ok = true
+    }
+    if (specie_ok && chemical_ok) {
+      filteredRows.push(data_rows)
+    }
+  })
 
-      let from = (
-        countsPrefSum[ind] >= lowerBound
-        ? 0
-        : countsPrefSum[ind+1] - lowerBound
-      )
-      let to = (
-        from + maxPageSize > dataRows.value_rows.length
-        ? undefined
-        : from + maxPageSize
-      )
-      let rowsOnPage = dataRows.value_rows.slice(from, to)
-
-      return <>
+  return <>{filteredRows.map((dataRows, row_ind) => (
+    <div style={{maxHeight: '600px'}}>
       <br></br>
-      {dataRows.key_row.size > 0 &&
+      {dataRows.chemical_row.size * dataRows.specie_row.size > 0 ?
+      <div>
       <div style={{display: 'flex'}}>
-        { meta.map((meta_val, ind) => {
-            if (meta_val.type !== "smiles") {
-              return
-            }
-            return meta[ind].render(dataRows.key_row.get(meta_val.name))
-        })}
-        <table><tbody>
-          <tr style={{backgroundColor: 'lightgreen'}}><td>total rows</td><td><b>{dataRows.value_rows.length}</b></td></tr>
+        <Container maxHeight="500px"><table>
+          <p style={{textAlign: 'center', color: 'red'}}>Chemical</p>
+          <tbody>
           { meta.map((meta_val, ind) => {
-            if (!meta_val.is_grouping || meta_val.type === "smiles") {
+            if (!meta_val.is_chemical || meta_val.type === "smiles") {
               return
             }
             return <tr>
-              <td title={meta_val.description}><CircleInfo />&nbsp;{meta_val.show_name}</td>
-              <td>{meta[ind].render(dataRows.key_row.get(meta_val.name))}</td>
+              <td title={meta_val.description} style={{maxWidth: '180px'}}><CircleInfo />&nbsp;{meta_val.show_name}</td>
+              <td style={{maxWidth: '130px'}}>{meta[ind].render(dataRows.chemical_row.get(meta_val.name))}</td>
             </tr>
-        })}</tbody></table>
-      </div>
-      }
+        })}</tbody></table></Container>
 
-      <br></br>
+        <table>
+        <tr><Container>{ meta.map((meta_val, ind) => {
+            if (meta_val.type !== "smiles") {
+              return
+            }
+            return meta[ind].render(dataRows.chemical_row.get(meta_val.name))
+        })}</Container></tr>
+
+        <tr style={{maxWidth: '300px'}}>
+          <ScrollableContainer maxHeight="250px">
+            <ResultTable {...{rows: dataRows.value_rows, meta: meta}}/>
+          </ScrollableContainer>
+        </tr>
+        </table>
+
+      <Container maxHeight="500px"><table>
+        <p style={{textAlign: 'center', color: 'blue'}}>Specie</p>
+        <tbody>
+        { meta.map((meta_val, ind) => {
+          if (!meta_val.is_specie) {
+            return
+          }
+          return <tr>
+            <td title={meta_val.description} style={{maxWidth: '180px'}}><CircleInfo />&nbsp;{meta_val.show_name}</td>
+            <td style={{maxWidth: '130px'}}>{meta[ind].render(dataRows.specie_row.get(meta_val.name))}</td>
+          </tr>
+      })}</tbody></table></Container>
+
+      </div>
+      </div>
+
+      :
+
       <ScrollableContainer>
-        <ResultTable {...{rows: rowsOnPage, meta: meta}}/>
+        <ResultTable {...{rows: dataRows.value_rows, meta: meta}}/>
       </ScrollableContainer>
-      </>
-    })}</>
+
+      }
+        {row_ind < filteredRows.length &&
+          <>
+            <br></br>
+            <hr style={{border: '1px dashed black'}}></hr>
+            <br></br>
+          </>
+        }
+      </div>
+    ))}</>
 }
 
 
@@ -140,8 +179,10 @@ function loadDataRowsAsCSV(rows: Array<DataRows>, meta: Array<DataMeta>) {
 
       meta.forEach((curr_meta) => {
         let value
-        if (curr_meta.is_grouping) {
-          value = dataRows.key_row.get(curr_meta.name)
+        if (curr_meta.is_chemical) {
+          value = dataRows.chemical_row.get(curr_meta.name)
+        } else if (curr_meta.is_specie) {
+          value = dataRows.specie_row.get(curr_meta.name)
         } else {
           value = currRow.get(curr_meta.name)
         }
@@ -159,15 +200,31 @@ function loadDataRowsAsCSV(rows: Array<DataRows>, meta: Array<DataMeta>) {
 }
 
 function TableStateBar(
-  { rows, meta, currentPage, numPages, setCurrentPage, }: 
+  { rows, meta, currentSpecie, setCurrentSpecie, species, currentChemical, setCurrentChemical, chemicals }: 
   {
     rows: DataRows[],
     meta: DataMeta[],
-    currentPage: number,
-    numPages: number,
-    setCurrentPage: React.Dispatch<React.SetStateAction<number>>,
+    currentSpecie: string,
+    setCurrentSpecie: React.Dispatch<React.SetStateAction<string>>,
+    species: string[],
+    currentChemical: string,
+    setCurrentChemical: React.Dispatch<React.SetStateAction<string>>,
+    chemicals: string[]
   }
 ) {
+  let total_rows = 0
+  rows.forEach((data_rows) => {
+    if (currentChemical != "" && data_rows.chemical_val != currentChemical ) {
+      return
+    }
+    if (currentSpecie != "" && data_rows.specie_val != currentSpecie ) {
+      return
+    }
+    total_rows += data_rows.total_length
+  })
+
+  let chemical_key = rows[0].chemical_key
+  let specie_key = rows[0].specie_key
   return <div 
     style={{
       marginLeft: '25px',
@@ -178,14 +235,36 @@ function TableStateBar(
       paddingLeft: '20px',
     }}>
 
-  <label>Page number:&nbsp;&nbsp;
-    <select
-      value={currentPage}
-      onChange={e => setCurrentPage(Number(e.target.value))}
-    >{Array(numPages).fill(null).map((_, i) => <option value={i+1}>{i+1}</option>)}</select>
+  <label>Specie ({specie_key}):&nbsp;&nbsp;
+    {
+      species.length > 1 ?
+      <select
+        value={currentSpecie}
+        onChange={e => setCurrentSpecie(e.target.value)}
+      ><option value="">not selected</option>
+        {species.map((specie, i) => <option value={specie}>{i+1}: {specie}</option>)}</select>
+      :
+      <label style={{fontWeight: 630}}>{species[0]}</label>
+    }
   </label>
 
   <label>&nbsp;&nbsp;&nbsp;&nbsp;</label>
+
+  <label>Chemical ({chemical_key}):&nbsp;&nbsp;
+    {
+      chemicals.length > 1 ?
+      <select
+        value={currentChemical}
+        onChange={e => setCurrentChemical(e.target.value)}
+      ><option value="">not selected</option>
+        {chemicals.map((chemical, i) => <option value={chemical}>{i+1}: {chemical}</option>)}</select>
+      :
+      <label>{chemicals[0]}</label>
+    }
+  </label>
+
+  <label>&nbsp;&nbsp;&nbsp;&nbsp;</label>
+
   <label>Download results:&nbsp;&nbsp;
     <button
       onClick={() => loadDataRowsAsCSV(rows, meta)}
@@ -193,6 +272,12 @@ function TableStateBar(
         <FileArrowUp {...{style: {width: '25px', height: '25px', alignSelf: 'center', color: '#41b9ff'}}}/>
       </button>
   </label>
+
+  <label>&nbsp;&nbsp;&nbsp;&nbsp;</label>
+
+  <label style={{color: 'green'}}>Rows in selection:&nbsp;&nbsp;<b>{total_rows}</b>
+  </label>
+
   </div>
 }
 
@@ -201,18 +286,41 @@ function ResultTableWrapper({ rows, meta }: {rows: Array<DataRows>, meta: Array<
     return <></>
   }
 
-  let [currentPage, setCurrentPage] = useState(1)
+  let [currentSpecie, setCurrentSpecie] = useState("")
+  let [currentChemical, setCurrentChemical] = useState("")
 
-  let countsPrefSum: number[] = [0]
+  let species: string[] = []
+  let used_species = new Set<string>()
+  let chemicals: string[] = []
+  let used_chemicals = new Set<string>()
+
   rows.forEach((val) => {
-    countsPrefSum.push(countsPrefSum.slice(-1)[0] + val.total_length)
+    let specie = val.specie_val
+    if (!used_species.has(specie)) {
+      species.push(specie)
+      used_species.add(specie)
+    }
+
+    let chemical = val.chemical_val
+    if (!used_chemicals.has(chemical)) {
+      chemicals.push(chemical)
+      used_chemicals.add(chemical)
+    }
   })
-  let numPages = Math.ceil(countsPrefSum.slice(-1)[0] / maxPageSize)
+
+  species = species.sort()
+  chemicals = chemicals.sort()
 
   return <>
-  <TableStateBar {...{rows: rows, meta: meta, currentPage: currentPage, numPages: numPages, setCurrentPage: setCurrentPage}}/>
+  <TableStateBar 
+    {...{
+      rows: rows, meta: meta,
+      currentSpecie: currentSpecie, setCurrentSpecie: setCurrentSpecie, species: species,
+      currentChemical: currentChemical, setCurrentChemical: setCurrentChemical, chemicals: chemicals,
+    }}
+    />
 
-  <GroupedResultTable {...{rows: rows, meta: meta, countsPrefSum: countsPrefSum, currentPage: currentPage}}/>
+  <GroupedResultTable {...{rows: rows, meta: meta, currentSpecie: currentSpecie, currentChemical: currentChemical}}/>
   </>
 }
 
@@ -224,9 +332,23 @@ function ResultTableOrNull(response: {[index: string]: any}) {
 
   let data_meta: Array<DataMeta> = []
   let data = new Map<string, DataRows>()
-  let group_inds = new Set<number>()
+  let group_chem_inds = new Set<number>()
+  let chem_key_column = ""
+  let group_specie_inds = new Set<number>()
+  let specie_key_column = ""
 
-  response["metadata"].forEach((meta_item: {[index: string]: any}) => {
+  let metadata = response["metadata"].sort(
+    (
+      meta_1: {[index: string]: any},
+      meta_2: {[index: string]: any},
+    ) => {
+      if (meta_1["type"] > meta_2["type"]) {
+        return 1
+      }
+      return -1
+    }
+  )
+  metadata.forEach((meta_item: {[index: string]: any}) => {
 
     let data_name = meta_item["column"]
     let data_type = ""
@@ -245,33 +367,59 @@ function ResultTableOrNull(response: {[index: string]: any}) {
     }
 
     if (full_type.includes("chemical")) {
-      group_inds.add(data_meta.length)
+      group_chem_inds.add(data_meta.length)
+      if (full_type.includes("keycolumn")) {
+        chem_key_column = data_name
+      }
+    } else if (full_type.includes("specie")) {
+      group_specie_inds.add(data_meta.length)
+      if (full_type.includes("keycolumn")) {
+        specie_key_column = data_name
+      }
     }
 
-    data_meta.push(new DataMeta(data_type, data_name, meta_item["name"], meta_item["description"], additional_data, full_type.includes("chemical")))
+    let group_type = ""
+    if (full_type.includes("chemical")) {
+      group_type = "chemical"
+    } else if (full_type.includes("specie")) {
+      group_type = "specie"
+    }
+    if (!full_type.includes("table_")) {
+      group_type = "ignore"
+    }
+    data_meta.push(new DataMeta(data_type, data_name, meta_item["name"], meta_item["description"], additional_data, group_type))
   })
 
   response["data"].forEach((data_item: {[index: string]: any}) => {
     let row = new Map<string, string>()
-    let group_row = new Map<string, string>()
+    let group_chem_row = new Map<string, string>()
+    let group_specie_row = new Map<string, string>()
 
     data_meta.forEach((meta_item: DataMeta, ind) => {
       let item = data_item[meta_item.name] ? data_item[meta_item.name] : ""
-      if (group_inds.has(ind)) {
-        group_row.set(meta_item.name, item)
+      if (group_chem_inds.has(ind)) {
+        group_chem_row.set(meta_item.name, item)
+      } else if (group_specie_inds.has(ind)) {
+        group_specie_row.set(meta_item.name, item)
       } else {
         row.set(meta_item.name, item)
       }
     })
 
-    let key: string[] = []
-    group_row.forEach((val) => {key.push(val)})
-    let key_str = key.sort().join("")
+    let chem_key: string[] = []
+    group_chem_row.forEach((val) => {chem_key.push(val)})
+    let chem_key_str = chem_key.sort().join("")
 
-    if (!data.has(key_str)) {
-      data.set(key_str, new DataRows(group_row, []))
+    let specie_key: string[] = []
+    group_specie_row.forEach((val) => {specie_key.push(val)})
+    let specie_key_str = specie_key.sort().join("")
+
+    let key = chem_key_str + specie_key_str
+
+    if (!data.has(key)) {
+      data.set(key, new DataRows(group_specie_row, specie_key_column, group_chem_row, chem_key_column, []))
     }
-    data.get(key_str)?.add_row(row)
+    data.get(key)?.add_row(row)
   })
 
   let rows: Array<DataRows> = []

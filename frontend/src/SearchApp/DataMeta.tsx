@@ -23,16 +23,22 @@ class DataMeta {
   show_name: string
   description: string
   additional_data: string
+  is_ignore: boolean
   is_grouping: boolean
+  is_chemical: boolean
+  is_specie: boolean
 
-  constructor(type: string, name: string, show_name: string, description: string, data: string, is_grouping: boolean) {
+  constructor(type: string, name: string, show_name: string, description: string, data: string, group_type: string) {
     // TO DO: validate type
     this.type = type
     this.name = name
     this.show_name = show_name
     this.description = description
     this.additional_data = data
-    this.is_grouping = is_grouping
+    this.is_ignore = group_type == "ignore"
+    this.is_chemical = group_type == "chemical"
+    this.is_specie = group_type == "specie"
+    this.is_grouping = this.is_chemical || this.is_specie
   }
 
   render(value: string | undefined) { // rewrite to classes

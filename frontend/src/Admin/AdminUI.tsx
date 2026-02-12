@@ -82,6 +82,7 @@ const AdminPage: React.FC = () => {
         bodyFormData.append("file", googleSheetFile)
         bodyFormData.append("meta", googleMetaList)
         bodyFormData.append("name", googleSheetName)
+        setShowCreateForm(false);
 
         let response = await api.post('/create-table', bodyFormData, {
             headers: { Authorization: `Bearer ${token}` }
@@ -91,7 +92,6 @@ const AdminPage: React.FC = () => {
             alert('Incorrect link');
         }
 
-        setShowCreateForm(false);
         setTimeout(() => fetchTables(), 3000);
     };
 

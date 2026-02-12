@@ -97,7 +97,7 @@ function filterResponse(searchResponse: {[index: string]: any;}) {
   searchResponse["metadata"].forEach((meta_item: {[index: string]: any}) => {
     // e.g 'clas[00]', 'clas[02][powo]', ...
     let _type = meta_item["type"]    
-    if (!_type.startsWith("clas[") || _type.includes("invisible")) {
+    if (!_type.includes("clas[") || _type.includes("invisible")) {
       return
     }
   
