@@ -22,20 +22,8 @@ services:
       context: ./backend/admin
     ports:
       - "8081:80"
-    environment:
-      - BACKEND_VERSION=
-      - SECRET_KEY=
-      - ALLOW_ORIGIN=
-      - REDIS_PASSWORD=
-      - PG_USER=
-      - PG_PASSWORD=
-      - PG_DB=
-      - CASSANDRA_HOST=
-      - VM_PSWD=
-      - MAIL=
-      - MAIL_SECRET=
-      - MAIL_PASSWORD=
-      - DOMAIN_PREF=http://localhost  # without / at the end
+    env_file:
+      "env/.env"
     depends_on:
       - postgres
       - redis
@@ -46,8 +34,8 @@ services:
   redis:
     hostname: redis
     image: redis:latest
-    environment:
-      - REDIS_PASSWORD=
+    env_file:
+      "env/redis.env"
     ports:
       - "6379:6379"
     volumes:
@@ -61,10 +49,8 @@ services:
     image: postgres:latest
     ports:
       - "5432:5432"
-    environment:
-      - POSTGRES_DB=
-      - POSTGRES_USER=
-      - POSTGRES_PASSWORD=
+    env_file:
+      "env/postgres.env"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -106,10 +92,7 @@ services:
     networks:
       - appnet
     env_file:
-      - backend/cassandra/nf-data-explorer/.env
-    environment:
-      - CASSANDRA_HOST=cassandra
-      - REDIS_HOST=redis
+      "env/cassandra.env"
     volumes:
       - neflix_explorer_data:/apps/nf-data-explorer/data
 
@@ -127,12 +110,10 @@ services:
     image: grafana/grafana
     ports:
       - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=
-      - GF_SECURITY_ADMIN_PASSWORD=
     volumes:
       - ./monitoring/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
       - ./monitoring/grafana.ini:/etc/grafana/grafana.ini
+      - ./monitoring/dashboards/:/etc/grafana/provisioning/dashboards/
       - grafanadata:/var/lib/grafana
     depends_on:
       - prometheus
