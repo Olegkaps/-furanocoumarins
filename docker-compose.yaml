@@ -30,12 +30,14 @@ services:
     networks:
       - back
       - metrics
-  
+
   redis:
     hostname: redis
     image: redis:latest
     env_file:
       "env/redis.env"
+    expose:
+      - "53"
     ports:
       - "6379:6379"
     volumes:
@@ -46,7 +48,9 @@ services:
 
   postgres:
     restart: always
-    image: postgres:latest
+    image: postgres:17
+    expose:
+      - "53"
     ports:
       - "5432:5432"
     env_file:
@@ -57,44 +61,45 @@ services:
       - ps
       - back
 
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - 8080:8080
-    depends_on:
-      - postgres
-    networks:
-      - ps
+#  adminer:
+#    image: adminer
+#    restart: always
+#    ports:
+#      - 8080:8080
+#    depends_on:
+#      - postgres
+#    networks:
+#      - ps
 
   cassandra:
     hostname: cassandra
     image: cassandra:3.11.9
+    expose:
+      - "53"
     ports:
       - "9042:9042"
-      - "53:53"
     volumes:
       - cassandra3_data:/var/lib/cassandra
     networks:
       - appnet
       - back
 
-  neflix-explorer:
-    hostname: netflix-explorer
-    platform: linux/arm64/v8
-    image: olegkaps/nf-data-explorer:v1
-    depends_on:
-      - cassandra
-      - redis
-    ports:
-      - '5050:80'
-    command: yarn start
-    networks:
-      - appnet
-    env_file:
-      "env/cassandra.env"
-    volumes:
-      - neflix_explorer_data:/apps/nf-data-explorer/data
+#  neflix-explorer:
+#    hostname: netflix-explorer
+#    platform: linux/arm64/v8
+#    image: olegkaps/nf-data-explorer:v1
+#    depends_on:
+#      - cassandra
+#      - redis
+#    ports:
+#      - '5050:80'
+#    command: yarn start
+#    networks:
+#      - appnet
+#    env_file:
+#      "env/cassandra.env"
+#    volumes:
+#      - neflix_explorer_data:/apps/nf-data-explorer/data
 
   prometheus:
     image: prom/prometheus
@@ -144,7 +149,7 @@ services:
       - loki
     networks:
       - metrics
-  
+
 
 volumes:
   postgres_data:
