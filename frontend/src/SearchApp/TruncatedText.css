@@ -1,0 +1,59 @@
+.truncated-text-container {
+  position: relative;
+  display: inline-block;
+  cursor: default;
+  max-width: 100%;
+}
+
+.truncated-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  word-break: break-all;
+}
+
+.tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 8px;
+  background: #dfdfdf;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  white-space: normal;
+  width: 300px;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 12px;
+  margin-top: -1px;
+  border: 6px solid transparent;
+  border-top-color: #333;
+}
+
+.tooltip-content {
+  display: flex;
+  align-items: center;
+  word-break: break-all;
+  gap: 8px;
+}
+
+.copy-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #787878;
+  padding: 0;
+}
+
+.copy-button:hover {
+  color: #fff;
+}

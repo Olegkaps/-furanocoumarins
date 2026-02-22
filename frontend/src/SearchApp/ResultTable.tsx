@@ -7,7 +7,7 @@ import {FileArrowUp, CircleInfo} from '@gravity-ui/icons';
 
 
 function ResultTableHead({meta}: {meta: Array<DataMeta>}) {
-  return <thead style={{position: 'sticky', top: 0,}}>
+  return <thead style={{position: 'sticky', top: 0, zIndex: 900}}>
     <tr>
       { meta.map((curr_meta) => {
         if (curr_meta.is_grouping || curr_meta.is_ignore) {
