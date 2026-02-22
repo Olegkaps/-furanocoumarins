@@ -77,7 +77,7 @@ function GroupedResultTable(
       textAlign: 'center',
       fontSize: 'larger',
       fontWeight: 600
-    }}>Select specie or chemical</p>
+    }}>Select species or chemical</p>
   }
 
   let filteredRows: DataRows[] = []
@@ -130,7 +130,7 @@ function GroupedResultTable(
         </table>
 
       <Container maxHeight="500px"><table>
-        <p style={{textAlign: 'center', color: 'blue'}}>Specie</p>
+        <p style={{textAlign: 'center', color: 'blue'}}>Species</p>
         <tbody>
         { meta.map((meta_val, ind) => {
           if (!meta_val.is_specie) {

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import {ArrowUpRightFromSquare, ChevronRight, CircleInfo, House} from '@gravity-ui/icons';
 import { api, isEmpty } from '../Admin/utils';
-import PhilogeneticTreeOrNull from './PhilogeneticTree';
+import PhilogeneticTreeOrNull from './PhylogeneticTree';
 import ResultTableOrNull from './ResultTable';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Autocomplete from './Autocomplete';
@@ -376,7 +376,7 @@ export function AppResultTable() {
       <div>{searchResponse["data"].length === 0 ?
         <EmptyResponse />
         :
-        <SearchLink {...{path: "/tree", text: "Philogenetic Tree"}}/>
+        <SearchLink {...{path: "/tree", text: "Phylogenetic Tree"}}/>
       }</div>
     }
     <br></br>
@@ -396,7 +396,6 @@ export function AppPhilogeneticTree() {
     <HomeLink />
     <br></br>
     <SearchLine {...{setSearchResponse: setSearchResponse}} />
-    <br></br>
     {!isEmpty(searchResponse) && 
       <div>
       {searchResponse["data"].length === 0 ?
@@ -405,7 +404,6 @@ export function AppPhilogeneticTree() {
         <SearchLink {...{path: "/table", text: "Result Table"}}/>
       }</div>
     }
-    <br></br>
     <PhilogeneticTreeOrNull {...{response: filteredResponse, tag: classificationTag, setTag: setClassificationTag}} />
     <br></br>
   </>

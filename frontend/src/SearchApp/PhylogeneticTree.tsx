@@ -294,15 +294,23 @@ function PhilogeneticTreeOrNull(
 
   return <div style={{marginTop: '20px'}}>
     <div style={{marginLeft: '25px', marginRight: '25px', border: '1px dashed grey', borderRadius: '5px', padding: '4px', paddingLeft: '20px'}}>
-      <span style={{}}>Classification: </span>
+      <span>
+        Taxonomy according to NCBI is given starting with subtribes.
+        Taxonomy of genus and species is given according to original articles,
+        POWO site and Pimenov (the expert in Apiaceae taxonomy) opinion
+      </span>
+      <br></br>
+      <br></br>
+      <span style={{}}>Select classification: </span>
       {Array(...all_tags).sort().map((item, _) => (
         <button
           style={item !== tag ? 
             {padding: '7px', border: '1px solid blue', borderRadius: '4px', marginLeft: '10px', backgroundColor: '#e5e2ffff',}
-          : {padding: '7px', border: '1px solid yellow', borderRadius: '4px', marginLeft: '10px', backgroundColor: '#fcffe2ff',}}
+          : {padding: '7px', border: '1px solid yellow', borderRadius: '4px', marginLeft: '10px', backgroundColor: 'rgb(254, 255, 244)', fontWeight: 600}}
           onClick={() => {setTag(item)}}
         >{item}</button>
-      ))}</div>
+      ))}
+    </div>
     <PhilogeneticTree {...{species: species, meta: species_meta, meta_names: meta_names}} />
   </div>
 }
