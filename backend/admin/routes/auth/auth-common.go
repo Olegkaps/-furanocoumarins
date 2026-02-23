@@ -39,7 +39,7 @@ func Change_password(c *fiber.Ctx) error {
 	}
 
 	link := settings.DOMAIN_PREF + "/admit/" + word
-	go mail.SendMail(
+	mail.SendMail(
 		c, user.Mail,
 		"Change password",
 		mail.GetLinkMailBody("change password", link),

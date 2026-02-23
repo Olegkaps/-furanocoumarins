@@ -61,7 +61,7 @@ func Login_mail(c *fiber.Ctx) error {
 	}
 
 	link := settings.DOMAIN_PREF + "/admit/" + word
-	go mail.SendMail(
+	mail.SendMail(
 		c, user.Mail,
 		"Login to site",
 		mail.GetLinkMailBody("log in", link),
