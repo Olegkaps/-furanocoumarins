@@ -10,7 +10,7 @@ import (
 	"admin/settings"
 )
 
-func newRedisClient() *redis.Client {
+func mustLoadRedisClient() *redis.Client {
 	if settings.ENV_TYPE == "AUTOTEST" {
 		return nil
 	}
@@ -24,9 +24,9 @@ func newRedisClient() *redis.Client {
 	return r
 }
 
-var Redis *redis.Client = newRedisClient()
+var Redis *redis.Client = mustLoadRedisClient()
 
-func openPostgres() *sql.DB {
+func mustLoadPostgres() *sql.DB {
 	if settings.ENV_TYPE == "AUTOTEST" {
 		return nil
 	}
@@ -43,10 +43,10 @@ func openPostgres() *sql.DB {
 	return db
 }
 
-var DB *sql.DB = openPostgres()
+var DB *sql.DB = mustLoadPostgres()
 
-func openCassandra() *gocql.ClusterConfig {
+func mustLoadCassandra() *gocql.ClusterConfig {
 	return gocql.NewCluster(settings.CASSANDRA_HOST)
 }
 
-var CQL *gocql.ClusterConfig = openCassandra()
+var CQL *gocql.ClusterConfig = mustLoadCassandra()

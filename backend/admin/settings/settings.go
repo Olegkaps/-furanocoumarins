@@ -2,41 +2,58 @@ package settings
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/redis/go-redis/v9"
 	"github.com/redis/go-redis/v9/maintnotifications"
 )
 
-func GetEnvDefault(key, default_val string) string {
-	v := os.Getenv(key)
-	if v == "" {
-		return default_val
-	}
-	return v
+// envConfig хранит переменные окружения, загружаемые через cleanenv.
+type envConfig struct {
+	EnvType      string `env:"ENV_TYPE" env-default:"PROD"`
+	SecretKey    string `env:"SECRET_KEY"`
+	AllowOrigin  string `env:"ALLOW_ORIGIN"`
+	PgUser       string `env:"PG_USER"`
+	PgPassword   string `env:"PG_PASSWORD"`
+	PgDb         string `env:"PG_DB"`
+	RedisAddr    string `env:"REDIS_ADDR" env-default:"redis:6379"`
+	RedisPassword string `env:"REDIS_PASSWORD"`
+	CassandraHost string `env:"CASSANDRA_HOST"`
+	DomainPref   string `env:"DOMAIN_PREF"`
 }
+
+
+func mustLoadSettings() envConfig {
+	var cfg envConfig
+	if err := cleanenv.ReadEnv(&cfg); err != nil {
+		panic(fmt.Sprintf("settings: read env: %v", err))
+	}
+	return cfg
+}
+
+var cfg = mustLoadSettings()
 
 var BACK_VERSION = "v2.0"
 
-var ENV_TYPE = GetEnvDefault("ENV_TYPE", "PROD")
+var ENV_TYPE = cfg.EnvType
 
-var SECRET_KEY = []byte(os.Getenv("SECRET_KEY"))
-var ALLOW_ORIGIN = os.Getenv("ALLOW_ORIGIN")
+var SECRET_KEY = []byte(cfg.SecretKey)
+var ALLOW_ORIGIN = cfg.AllowOrigin
 
 var POSTGRES_SOURCE = fmt.Sprintf(
 	"user=%s password=%s dbname=%s host=postgres port=5432 sslmode=disable",
-	os.Getenv("PG_USER"),
-	os.Getenv("PG_PASSWORD"),
-	os.Getenv("PG_DB"),
+	cfg.PgUser,
+	cfg.PgPassword,
+	cfg.PgDb,
 )
 
 var REDIS_SOURCE = &redis.Options{
-	Addr:         "redis:6379",
-	Password:     os.Getenv("REDIS_PASSWORD"),
+	Addr:         cfg.RedisAddr,
+	Password:     cfg.RedisPassword,
 	DB:           0,
 	MaxRetries:   5,
 	DialTimeout:  10 * time.Second,
@@ -63,7 +80,7 @@ var CORS_SETTINGS = cors.Config{
 	MaxAge: 3600,
 }
 
-var CASSANDRA_HOST = os.Getenv("CASSANDRA_HOST")
+var CASSANDRA_HOST = cfg.CassandraHost
 var CASSANDRA_COLLECTION_SEPARATORS = []rune{' ', '_'}
 
-var DOMAIN_PREF = os.Getenv("DOMAIN_PREF")
+var DOMAIN_PREF = cfg.DomainPref

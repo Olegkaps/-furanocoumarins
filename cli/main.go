@@ -7,9 +7,28 @@ import (
 	"strings"
 
 	"github.com/gocql/gocql"
+	"github.com/ilyakaznacheev/cleanenv"
 	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
 )
+
+type envConfig struct {
+	PgUser     string `env:"PG_USER" env-default:"postgres"`
+	PgPassword string `env:"PG_PASSWORD" env-default:"password"`
+	PgDb       string `env:"PG_DB" env-default:"mydb"`
+	PgHost     string `env:"PG_HOST" env-default:"localhost"`
+	PgPort     string `env:"PG_PORT" env-default:"5432"`
+	PgSSLMode  string `env:"PG_SSLMODE" env-default:"disable"`
+	CassandraHost string `env:"CASSANDRA_HOST" env-default:"127.0.0.1"`
+}
+
+var cfg envConfig
+
+func init() {
+	if err := cleanenv.ReadEnv(&cfg); err != nil {
+		log.Fatalf("config: %v", err)
+	}
+}
 
 const (
 	postgresqlSchema = `CREATE TABLE IF NOT EXISTS users (
@@ -79,8 +98,13 @@ var createAdminCmd = &cobra.Command{
 	},
 }
 
-func initPostgreSQL() { // TO DO: read from env
-	db, err := sql.Open("postgres", "user=postgres password=password dbname=mydb host=localhost port=5432 sslmode=disable")
+func postgresDSN() string {
+	return fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=%s",
+		cfg.PgUser, cfg.PgPassword, cfg.PgDb, cfg.PgHost, cfg.PgPort, cfg.PgSSLMode)
+}
+
+func initPostgreSQL() {
+	db, err := sql.Open("postgres", postgresDSN())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -94,7 +118,7 @@ func initPostgreSQL() { // TO DO: read from env
 }
 
 func initCassandra() {
-	cluster := gocql.NewCluster("127.0.0.1")
+	cluster := gocql.NewCluster(cfg.CassandraHost)
 	session, err := cluster.CreateSession()
 	if err != nil {
 		log.Fatal(err)
@@ -111,7 +135,7 @@ func initCassandra() {
 }
 
 func initCassandraKey() {
-	cluster := gocql.NewCluster("127.0.0.1")
+	cluster := gocql.NewCluster(cfg.CassandraHost)
 	session, err := cluster.CreateSession()
 	if err != nil {
 		log.Fatal(err)
@@ -125,8 +149,8 @@ func initCassandraKey() {
 	fmt.Println("Keyspace initialized")
 }
 
-func createAdmin(username, email string) { // TO DO: read from env
-	db, err := sql.Open("postgres", "user=postgres password=password dbname=mydb host=localhost port=5432 sslmode=disable")
+func createAdmin(username, email string) {
+	db, err := sql.Open("postgres", postgresDSN())
 	if err != nil {
 		log.Fatal(err)
 	}
