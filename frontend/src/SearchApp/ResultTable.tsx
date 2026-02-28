@@ -3,7 +3,7 @@ import { Container, isEmpty, ScrollableContainer } from "../Admin/utils";
 import config from "../config";
 import DataMeta from "./DataMeta";
 import DataRows from "./RowsData";
-import {FileArrowUp, CircleInfo} from '@gravity-ui/icons';
+import {FileArrowUp, CircleInfo, ArrowUpRightFromSquare} from '@gravity-ui/icons';
 
 
 function ResultTableHead({meta}: {meta: Array<DataMeta>}) {
@@ -62,9 +62,9 @@ function ResultTable({ rows, meta }: {rows: Array<Map<string, string>>, meta: Ar
 
 
 function GroupedResultTable(
-  { rows, meta, currentSpecie, currentChemical }: 
+  { rows, meta, currentSpecie, currentChemical }:
   {
-    rows: Array<DataRows>, 
+    rows: Array<DataRows>,
     meta: Array<DataMeta>,
     currentSpecie: string,
     currentChemical: string,
@@ -95,6 +95,13 @@ function GroupedResultTable(
     }
   })
 
+  let smiles_ind = -1
+  meta.forEach((meta_val, ind) => {
+    if (meta_val.type === "smiles") {
+      smiles_ind = ind
+    }
+  })
+
   return <>{filteredRows.map((dataRows, row_ind) => (
     <div style={{maxHeight: '600px'}}>
       <br></br>
@@ -102,7 +109,13 @@ function GroupedResultTable(
       <div>
       <div style={{display: 'flex'}}>
         <Container maxHeight="500px"><table>
-          <p style={{textAlign: 'center', color: 'red'}}>Chemical</p>
+          <p style={{textAlign: 'center', color: 'red'}}>
+            Chemical
+            <a
+            href={"/page/" + encodeURIComponent(dataRows.chemical_row.get(meta[smiles_ind].name) ?? "")}
+            target="_blank"
+          ><ArrowUpRightFromSquare /></a>
+          </p>
           <tbody>
           { meta.map((meta_val, ind) => {
             if (!meta_val.is_chemical || meta_val.type === "smiles") {
@@ -115,12 +128,9 @@ function GroupedResultTable(
         })}</tbody></table></Container>
 
         <table>
-        <tr><Container>{ meta.map((meta_val, ind) => {
-            if (meta_val.type !== "smiles") {
-              return
-            }
-            return meta[ind].render(dataRows.chemical_row.get(meta_val.name))
-        })}</Container></tr>
+        <tr><Container>
+          {meta[smiles_ind].render(dataRows.chemical_row.get(meta[smiles_ind].name))}
+        </Container></tr>
 
         <tr style={{maxWidth: '300px'}}>
           <ScrollableContainer maxHeight="250px">
@@ -166,7 +176,7 @@ function GroupedResultTable(
 
 function loadDataRowsAsCSV(rows: Array<DataRows>, meta: Array<DataMeta>) {
   let csvContent = "data:text/csv;charset=utf-8,";
-  
+
   let parsedRow: string[] = []
   meta.forEach((curr_meta) => {parsedRow.push(curr_meta.name)})
 
@@ -200,7 +210,7 @@ function loadDataRowsAsCSV(rows: Array<DataRows>, meta: Array<DataMeta>) {
 }
 
 function TableStateBar(
-  { rows, meta, currentSpecie, setCurrentSpecie, species, currentChemical, setCurrentChemical, chemicals }: 
+  { rows, meta, currentSpecie, setCurrentSpecie, species, currentChemical, setCurrentChemical, chemicals }:
   {
     rows: DataRows[],
     meta: DataMeta[],
@@ -225,7 +235,7 @@ function TableStateBar(
 
   let chemical_key = rows[0].chemical_key
   let specie_key = rows[0].specie_key
-  return <div 
+  return <div
     style={{
       marginLeft: '25px',
       marginRight: '25px',
@@ -281,7 +291,7 @@ function TableStateBar(
   </div>
 }
 
-function ResultTableWrapper({ rows, meta }: {rows: Array<DataRows>, meta: Array<DataMeta>}) {  
+function ResultTableWrapper({ rows, meta }: {rows: Array<DataRows>, meta: Array<DataMeta>}) {
   if (rows.length === 0) {
     return <></>
   }
@@ -312,7 +322,7 @@ function ResultTableWrapper({ rows, meta }: {rows: Array<DataRows>, meta: Array<
   chemicals = chemicals.sort()
 
   return <>
-  <TableStateBar 
+  <TableStateBar
     {...{
       rows: rows, meta: meta,
       currentSpecie: currentSpecie, setCurrentSpecie: setCurrentSpecie, species: species,
@@ -353,7 +363,7 @@ function ResultTableOrNull(response: {[index: string]: any}) {
     let data_name = meta_item["column"]
     let data_type = ""
     let additional_data = ""
-  
+
     let full_type = meta_item["type"]
     if (full_type.includes("link")) {
       data_type = "link"

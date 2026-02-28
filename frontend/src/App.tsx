@@ -8,7 +8,8 @@ import {
 import './App.css'
 import SearchApp, { AppPhilogeneticTree, AppResultTable, AppAbout } from "./SearchApp/SearchApp";
 import Admin from "./Admin/Admin";
-import { Reference } from "./SearchApp/DataMeta";
+import { Reference } from "./Reference/Reference";
+import SubstancePage from "./SubstancePage/SubstancePage";
 
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
       <Routes>
           <Route path="/" element={<SearchApp />}/>
           <Route path="/about" element={<AppAbout />}/>
+          <Route path="/page/:smiles" element={<SubstancePage />}/>
           <Route path="/table" element={<AppResultTable />}/>
           <Route path="/tree" element={<AppPhilogeneticTree />}/>
           <Route path="/login" element={<Admin.Login />}/>

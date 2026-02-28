@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 
-import {ArrowUpRightFromSquare, ChevronRight, CircleInfo, House} from '@gravity-ui/icons';
+import {ArrowUpRightFromSquare, ChevronRight, CircleInfo} from '@gravity-ui/icons';
 import { api, isEmpty } from '../Admin/utils';
 import PhilogeneticTreeOrNull from './PhylogeneticTree';
 import ResultTableOrNull from './ResultTable';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Autocomplete from './Autocomplete';
 import About from "../About/About";
+import FullNavigation from "../FullNavigation/FullNavigation";
 
 
 let isDataFetched = false
@@ -191,42 +192,6 @@ function SearchLink({path, text} : {path: string, text: string}) {
   >{text}<ArrowUpRightFromSquare /></Link></label>
 }
 
-function HomeLink() {
-  return <Link to={"/"} target='_blank'
-    style={{
-      position: 'absolute',
-      left: '10px',
-      top: '10px',
-      backgroundColor: '#e1c8ff',
-      border: '1px solid grey',
-      borderRadius: '10px',
-      padding: '10px 10px 5px 10px',
-  }}
-  ><House width={'30px'} height={'30px'}/></Link>
-}
-
-function AboutLink() {
-  return <Link to={"/about"} target='_blank'
-  style={{
-    position: 'absolute',
-    left: '70px',
-    top: '10px',
-    backgroundColor: '#e1c8ff',
-    border: '1px solid grey',
-    borderRadius: '10px',
-    padding: '10px 10px 5px 10px',
-}}
-  ><CircleInfo width={'30px'} height={'30px'}/></Link>
-}
-
-function FullNavigation() {
-  return <>
-    <HomeLink />
-    <AboutLink />
-  </>
-}
-
-
 const fetchAutocomplete = (column: string): any => {
   return async (query: string): Promise<string[]> => {
     let data: string[] = [];
@@ -325,7 +290,7 @@ function SearchApp() {
   };
 
   return <>
-  <AboutLink />
+  <FullNavigation pageName="home" />
   <form onSubmit={handleSearchRequest}
     style={{
       border: '1px dashed grey',
@@ -435,7 +400,7 @@ export function AppPhilogeneticTree() {
 
 export function AppAbout() {
     return <>
-      <HomeLink />
+      <FullNavigation pageName="about" />
       <About />
     </>
 }

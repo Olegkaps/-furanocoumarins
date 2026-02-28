@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { useParams } from 'react-router-dom';
 import { api, getToken } from '../Admin/utils';
+import FullNavigation from '../FullNavigation/FullNavigation';
 
-const PAGE_NAME = 'about';
 const MAX_CHARS = 10_000;
 
-export default function About() {
+export default function SubstancePage() {
+  const { smiles: smilesEncoded } = useParams<{ smiles: string }>();
+  const smiles = smilesEncoded ? decodeURIComponent(smilesEncoded) : '';
+
   const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -14,10 +18,11 @@ export default function About() {
   const [saving, setSaving] = useState(false);
 
   const fetchPage = useCallback(async () => {
+    if (!smiles) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get(`/pages/${PAGE_NAME}`, { responseType: 'text' });
+      const res = await api.get(`/pages/${encodeURIComponent(smiles)}`, { responseType: 'text' });
       const text = typeof res.data === 'string' ? res.data : '';
       setContent(text);
       setEditText(text);
@@ -34,7 +39,7 @@ export default function About() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [smiles]);
 
   useEffect(() => {
     fetchPage();
@@ -42,6 +47,7 @@ export default function About() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!smiles) return;
     const text = editText;
     if ([...text].length > MAX_CHARS) {
       alert(`Text must not exceed ${MAX_CHARS} characters. Current: ${[...text].length}`);
@@ -50,7 +56,7 @@ export default function About() {
     setSaving(true);
     try {
       const token = getToken();
-      await api.put(`/pages/${PAGE_NAME}`, text, {
+      await api.put(`/pages/${encodeURIComponent(smiles)}`, text, {
         headers: {
           'Content-Type': 'text/plain; charset=utf-8',
           Authorization: `Bearer ${token}`,
@@ -70,16 +76,38 @@ export default function About() {
   const charCount = [...editText].length;
   const overLimit = charCount > MAX_CHARS;
 
+  if (!smiles) {
+    return (
+      <>
+        <FullNavigation />
+        <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+          <p style={{ color: '#666' }}>Invalid page.</p>
+        </div>
+      </>
+    );
+  }
+
   if (loading) {
     return (
-      <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
-        Loading…
-      </div>
+      <>
+        <FullNavigation />
+        <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+          Loading…
+        </div>
+      </>
     );
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+    <>
+      <FullNavigation />
+      <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
+      <div key={smiles} style={{ marginBottom: '24px' }}>
+        <canvas id={smiles} className="smiles" />
+      </div>
+      <div style={{ marginBottom: '8px', color: '#666', fontFamily: 'monospace', fontSize: '14px' }}>
+        SMILES: {smiles}
+      </div>
       {(getToken() ?? '') !== '' && !editMode && (
         <button
           type="button"
@@ -165,6 +193,7 @@ export default function About() {
           )}
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }
