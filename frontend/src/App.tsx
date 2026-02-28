@@ -6,8 +6,9 @@ import {
 
 
 import './App.css'
-import SearchApp, { AppPhilogeneticTree, AppResultTable, AppAbout } from "./SearchApp/SearchApp";
-import Admin from "./Admin/Admin";
+import SearchApp, { AppPhilogeneticTree, AppResultTable } from "./SearchApp/SearchApp";
+import AboutPage from "./About/AboutPage";
+import { AdminApp, AdminLogin, AdminLogout, AdminReset, AdminAdmit } from "./Admin/Admin";
 import { Reference } from "./Reference/Reference";
 import SubstancePage from "./SubstancePage/SubstancePage";
 
@@ -17,15 +18,15 @@ function App() {
     <BrowserRouter>
       <Routes>
           <Route path="/" element={<SearchApp />}/>
-          <Route path="/about" element={<AppAbout />}/>
+          <Route path="/about" element={<AboutPage />}/>
           <Route path="/page/:smiles" element={<SubstancePage />}/>
           <Route path="/table" element={<AppResultTable />}/>
           <Route path="/tree" element={<AppPhilogeneticTree />}/>
-          <Route path="/login" element={<Admin.Login />}/>
-          <Route path="/logout" element={<Admin.Logout />}/>
-          <Route path="/reset" element={<Admin.Reset />}/>
-          <Route path="/admit/:code" element={<Admin.Admit />}/>
-          <Route path="/admin" element={<Admin.App />}/>
+          <Route path="/login" element={<AdminLogin />}/>
+          <Route path="/logout" element={<AdminLogout />}/>
+          <Route path="/reset" element={<AdminReset />}/>
+          <Route path="/admit/:code" element={<AdminAdmit />}/>
+          <Route path="/admin" element={<AdminApp />}/>
           <Route path="/reference/:article_id" element={<Reference />}/>
       </Routes>
     </BrowserRouter>

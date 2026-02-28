@@ -1,7 +1,7 @@
 import { useEffect, useState, type FC, type JSX } from 'react';
 import { useParams } from 'react-router-dom';
 import { ArrowUpRightFromSquare, Check } from '@gravity-ui/icons';
-import { api } from '../Admin/utils';
+import { api } from '../shared/api';
 import FullNavigation from '../FullNavigation/FullNavigation';
 
 interface BibtexEntry {

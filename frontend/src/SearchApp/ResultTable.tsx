@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Container, isEmpty, ScrollableContainer } from "../Admin/utils";
+import { isEmpty } from "../shared/api";
+import { Container, ScrollableContainer } from "../shared/ui";
 import config from "../config";
 import DataMeta from "./DataMeta";
 import DataRows from "./RowsData";

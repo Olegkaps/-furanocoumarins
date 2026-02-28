@@ -1,102 +1,18 @@
-import React, { useState, useRef } from "react";
-import config from "../config"
-import {ArrowUpRightFromSquare, Copy} from '@gravity-ui/icons';
-import './TruncatedText.css';
+import React from "react";
+import { ArrowUpRightFromSquare } from "@gravity-ui/icons";
+import { TruncatedText } from "../shared/ui/TruncatedText";
 
-let ignore_link_prefixes = ["fuco", "NoIPNI", "NoKew"]
+let ignore_link_prefixes = ["fuco", "NoIPNI", "NoKew"];
 
-
-class Link{
-  id: string
-  text: string
+class Link {
+  id: string;
+  text: string;
 
   constructor(id: string, text: string) {
-    this.id = id
-    this.text = text
+    this.id = id;
+    this.text = text;
   }
 }
-
-
-const TruncatedText = ({ text, maxLength = 50 }: {text: string, maxLength: number}) => {
-  const [isTooltipVisible, setIsTooltipVisible] = useState(false);
-  const textRef = useRef(null);
-
-  const isTruncated = text.length > maxLength;
-  const displayText = isTruncated ? `${text.slice(0, maxLength)}...` : text;
-
-  const handleMouseEnter = () => {
-    if (isTruncated) {
-      setIsTooltipVisible(true);
-    }
-  };
-
-  const handleMouseLeave = () => {
-    setIsTooltipVisible(false);
-  };
-
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      console.log('Copied');
-    } catch (err) {
-      console.error('Copy error: ', err);
-      fallbackCopyTextToClipboard(text); // for old browser
-    }
-  };
-
-  // for old browsers without navigator.clipboard
-  const fallbackCopyTextToClipboard = (text: string) => {
-    const textArea = document.createElement('textarea');
-    textArea.value = text;
-    textArea.style.position = 'fixed'; // prevent scroll
-    textArea.style.left = '-999999px';
-    textArea.style.top = '-999999px';
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-
-    try {
-      const successful = document.execCommand('copy');
-      if (successful) {
-        console.log('Copied (fallback)');
-      } else {
-        console.warn('Copy error (fallback)');
-      }
-    } catch (err) {
-      console.error('Copy fallback-error: ', err);
-    }
-
-    document.body.removeChild(textArea);
-  };
-
-  return (
-    <div
-      className="truncated-text-container"
-      ref={textRef}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      <span className="truncated-text" style={{fontSize: config["FONT_SIZE"]}}>{displayText}</span>
-      {isTruncated && isTooltipVisible && (
-        <div className="tooltip">
-          <div className="tooltip-content">
-            <span>{text}</span>
-            <button
-              className="copy-button"
-              onClick={(e) => {
-                e.stopPropagation(); // prevent tooltip
-                copyToClipboard();
-              }}
-              title="Copy"
-            >
-              <Copy height={'25px'} width={'25px'}/>
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 class DataMeta {
   type: string

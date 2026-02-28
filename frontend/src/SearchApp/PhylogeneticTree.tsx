@@ -1,5 +1,6 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { isEmpty, ZoomableContainer } from "../Admin/utils";
+import { isEmpty } from "../shared/api";
+import { ZoomableContainer } from "../shared/ui";
 import config from "../config";
 import { ArrowUpRightFromSquare } from "@gravity-ui/icons";
 
