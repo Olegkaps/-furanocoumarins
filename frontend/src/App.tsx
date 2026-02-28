@@ -6,7 +6,7 @@ import {
 
 
 import './App.css'
-import SearchApp, { AppPhilogeneticTree, AppResultTable } from "./SearchApp/SearchApp";
+import SearchApp, { AppPhilogeneticTree, AppResultTable, AppAbout } from "./SearchApp/SearchApp";
 import Admin from "./Admin/Admin";
 import { Reference } from "./SearchApp/DataMeta";
 
@@ -16,6 +16,7 @@ function App() {
     <BrowserRouter>
       <Routes>
           <Route path="/" element={<SearchApp />}/>
+          <Route path="/about" element={<AppAbout />}/>
           <Route path="/table" element={<AppResultTable />}/>
           <Route path="/tree" element={<AppPhilogeneticTree />}/>
           <Route path="/login" element={<Admin.Login />}/>

@@ -1,0 +1,185 @@
+services:
+  # nginx:
+  #   image: nginx:latest
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx/conf.d:/etc/nginx/conf.d
+  #   depends_on:
+  #     - go-auth
+  #     - go-search
+  #     # - python-app
+
+  go-auth:
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "localhost/ping"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    build:
+      context: ./backend/admin
+    ports:
+      - "8081:80"
+    env_file:
+      "env/.env"
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    networks:
+      - back
+      - metrics
+
+  redis:
+    hostname: redis
+    image: redis:latest
+    env_file:
+      "env/redis.env"
+    expose:
+      - "53"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - appnet
+      - back
+
+  postgres:
+    restart: always
+    image: postgres:17
+    expose:
+      - "53"
+    ports:
+      - "5432:5432"
+    env_file:
+      "env/postgres.env"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ps
+      - back
+
+#  adminer:
+#    image: adminer
+#    restart: always
+#    ports:
+#      - 8080:8080
+#    depends_on:
+#      - postgres
+#    networks:
+#      - ps
+
+  minio:
+    hostname: minio
+    image: minio/minio:latest
+    command: server /data
+    expose:
+      - "9000"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    networks:
+      - back
+
+  cassandra:
+    hostname: cassandra
+    image: cassandra:3.11.9
+    expose:
+      - "53"
+    ports:
+      - "9042:9042"
+    volumes:
+      - cassandra3_data:/var/lib/cassandra
+    networks:
+      - appnet
+      - back
+
+#  neflix-explorer:
+#    hostname: netflix-explorer
+#    platform: linux/arm64/v8
+#    image: olegkaps/nf-data-explorer:v1
+#    depends_on:
+#      - cassandra
+#      - redis
+#    ports:
+#      - '5050:80'
+#    command: yarn start
+#    networks:
+#      - appnet
+#    env_file:
+#      "env/cassandra.env"
+#    volumes:
+#      - neflix_explorer_data:/apps/nf-data-explorer/data
+
+  # prometheus:
+  #   image: prom/prometheus
+  #   volumes:
+  #     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+  #     - prometheusdata:/prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   networks:
+  #     - metrics
+
+  # grafana:
+  #   image: grafana/grafana
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./monitoring/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+  #     - ./monitoring/grafana.ini:/etc/grafana/grafana.ini
+  #     - ./monitoring/dashboards/:/etc/grafana/provisioning/dashboards/
+  #     - grafanadata:/var/lib/grafana
+  #   depends_on:
+  #     - prometheus
+  #   networks:
+  #     - metrics
+
+  # loki:
+  #   image: grafana/loki:2.9.0
+  #   ports:
+  #     - "3100:3100"
+  #   volumes:
+  #     - ./monitoring/loki-config.yaml:/etc/loki/local-config.yaml
+  #   command: -config.file=/etc/loki/local-config.yaml
+  #   networks:
+  #     - metrics
+
+  # promtail:
+  #   image: grafana/promtail:2.9.0
+  #   ports:
+  #     - "9080:9080"
+  #   volumes:
+  #     - /var/lib/docker/containers:/var/lib/docker/containers:ro
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - ./monitoring/promtail-config.yaml:/etc/promtail/config.yaml
+  #   command: -config.file=/etc/promtail/config.yaml
+  #   privileged: true
+  #   depends_on:
+  #     - loki
+  #   networks:
+  #     - metrics
+
+
+volumes:
+  postgres_data:
+  redis-data:
+  cassandra3_data:
+  minio_data:
+  neflix_explorer_data:
+  grafanadata:
+  prometheusdata:
+
+networks:
+  appnet:
+  back:
+  metrics:
+  ps:

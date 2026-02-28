@@ -15,6 +15,7 @@ import (
 	"admin/routes/auth"
 	"admin/routes/bibtex"
 	"admin/routes/create"
+	"admin/routes/pages"
 	"admin/routes/search"
 	"admin/routes/tables"
 	"admin/settings"
@@ -43,6 +44,7 @@ func SetUp() *fiber.App {
 	app.Get("/autocomplete/:column", search.Autocomletion)
 	app.Get("/search", search.Search_main_app)
 	app.Get("/article/:id", bibtex.Get_article)
+	app.Get("/pages/:name", pages.Get_page)
 
 	app.Get("/ping", http_lib.Resp200)
 	app.Post("/login", auth.Login)
@@ -66,6 +68,7 @@ func SetUp() *fiber.App {
 	app.Delete("/tables", tables.Delete_all_bad_tables)
 
 	app.Put("/bibtex", bibtex.Update_file)
+	app.Put("/pages/:name", pages.Put_page)
 
 	return app
 }

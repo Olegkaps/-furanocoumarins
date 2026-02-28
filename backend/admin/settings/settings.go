@@ -14,16 +14,22 @@ import (
 
 // envConfig хранит переменные окружения, загружаемые через cleanenv.
 type envConfig struct {
-	EnvType      string `env:"ENV_TYPE" env-default:"PROD"`
-	SecretKey    string `env:"SECRET_KEY"`
-	AllowOrigin  string `env:"ALLOW_ORIGIN"`
-	PgUser       string `env:"PG_USER"`
-	PgPassword   string `env:"PG_PASSWORD"`
-	PgDb         string `env:"PG_DB"`
-	RedisAddr    string `env:"REDIS_ADDR" env-default:"redis:6379"`
-	RedisPassword string `env:"REDIS_PASSWORD"`
-	CassandraHost string `env:"CASSANDRA_HOST"`
-	DomainPref   string `env:"DOMAIN_PREF"`
+	EnvType        string `env:"ENV_TYPE" env-default:"PROD"`
+	SecretKey      string `env:"SECRET_KEY"`
+	AllowOrigin    string `env:"ALLOW_ORIGIN"`
+	PgUser         string `env:"PG_USER"`
+	PgPassword     string `env:"PG_PASSWORD"`
+	PgDb           string `env:"PG_DB"`
+	RedisAddr      string `env:"REDIS_ADDR" env-default:"redis:6379"`
+	RedisPassword  string `env:"REDIS_PASSWORD"`
+	CassandraHost  string `env:"CASSANDRA_HOST"`
+	DomainPref     string `env:"DOMAIN_PREF"`
+	S3Endpoint     string `env:"S3_ENDPOINT"`
+	S3AccessKey    string `env:"S3_ACCESS_KEY_ID"`
+	S3SecretKey    string `env:"S3_SECRET_ACCESS_KEY"`
+	S3Bucket       string `env:"S3_BUCKET"`
+	S3Region       string `env:"S3_REGION" env-default:"us-east-1"`
+	S3UsePathStyle bool   `env:"S3_USE_PATH_STYLE" env-default:"true"`
 }
 
 
@@ -84,3 +90,10 @@ var CASSANDRA_HOST = cfg.CassandraHost
 var CASSANDRA_COLLECTION_SEPARATORS = []rune{' ', '_'}
 
 var DOMAIN_PREF = cfg.DomainPref
+
+var S3_ENDPOINT = cfg.S3Endpoint
+var S3_ACCESS_KEY = cfg.S3AccessKey
+var S3_SECRET_KEY = cfg.S3SecretKey
+var S3_BUCKET = cfg.S3Bucket
+var S3_REGION = cfg.S3Region
+var S3_USE_PATH_STYLE = cfg.S3UsePathStyle

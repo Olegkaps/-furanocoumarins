@@ -31,15 +31,16 @@ const AdminPage: React.FC = () => {
     const [tables, setTables] = useState(Array<Table>);
 
     const [showCreateForm, setShowCreateForm] = useState(false);
-    
+
     const [googleSheetFile, setGoogleSheetFile] = useState<File>();
     const [googleSheetName, setGoogleSheetName] = useState('');
     const [googleMetaList, setGoogleMetaList] = useState('');
 
     const [showSaveBibtex, setShowSaveBibtex] = useState(false);
     const [bibtexFile, setBibtexFile] = useState<File>();
+    const [tokenBroken, setTokenBroken] = useState(false);
 
-    if (!isTokenExists()) {
+    if (!isTokenExists() || tokenBroken) {
         return <Navigate to="/login" />
     }
     let token = getToken();
@@ -59,7 +60,7 @@ const AdminPage: React.FC = () => {
         }));
 
         if (response?.status === 401) {
-            setTimeout(() => window.location.href = '/login', 3000);
+            setTokenBroken(true);
             alert('Anauthorized...');
         } else if (response?.status >= 400) {
             alert('Error request')
@@ -74,7 +75,7 @@ const AdminPage: React.FC = () => {
         e.preventDefault();
         let token = getToken();
         var bodyFormData = new FormData();
-        
+
         if (!googleSheetFile) {
             alert("error: no file")
             return;
@@ -98,7 +99,7 @@ const AdminPage: React.FC = () => {
     const handleSetActiveTable = async (e: React.FormEvent, tableTimestamp: string) => {
         e.preventDefault();
         let token = getToken();
-        
+
         await api.post('/make-table-active/'+tableTimestamp, {}, {
             headers: { Authorization: `Bearer ${token}` }
         }).catch((err) => {return err.response});
@@ -200,36 +201,36 @@ const AdminPage: React.FC = () => {
                         left: '40%',
                     }}>
                         <p style={{ color: '#e6dedeff' }}>Create table from XLSX file</p>
-                        <input 
-                            type="file" 
+                        <input
+                            type="file"
                             required={true}
-                            onChange={(e) => setGoogleSheetFile(e.target.files?.[0])} 
+                            onChange={(e) => setGoogleSheetFile(e.target.files?.[0])}
                             placeholder="Google sheet file"
-                            style={{ 
+                            style={{
                                 padding: '10px',
                                 marginBottom: '10px',
                             }}
                         />
                         <br></br>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             required={true}
-                            value={googleSheetName} 
-                            onChange={(e) => setGoogleSheetName(e.target.value)} 
+                            value={googleSheetName}
+                            onChange={(e) => setGoogleSheetName(e.target.value)}
                             placeholder="Name of table"
-                            style={{ 
+                            style={{
                                 padding: '10px',
                                 marginBottom: '10px',
                             }}
                         />
                         <br></br>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             required={true}
-                            value={googleMetaList} 
-                            onChange={(e) => setGoogleMetaList(e.target.value)} 
+                            value={googleMetaList}
+                            onChange={(e) => setGoogleMetaList(e.target.value)}
                             placeholder="List with metadata"
-                            style={{ 
+                            style={{
                                 padding: '10px',
                                 marginBottom: '10px',
                             }}
@@ -257,12 +258,12 @@ const AdminPage: React.FC = () => {
                         left: '40%',
                     }}>
                         <p style={{ color: '#e6dedeff' }}>Update bibtex file</p>
-                        <input 
-                            type="file" 
+                        <input
+                            type="file"
                             required={true}
-                            onChange={(e) => setBibtexFile(e.target.files?.[0])} 
+                            onChange={(e) => setBibtexFile(e.target.files?.[0])}
                             placeholder="Bibtex file"
-                            style={{ 
+                            style={{
                                 padding: '10px',
                                 marginBottom: '10px',
                             }}
@@ -284,12 +285,12 @@ const AdminPage: React.FC = () => {
                 borderRadius: '30px',
             }}>
                 {tables?.map(table => (
-                    <div 
+                    <div
                         key={table.created_at}
-                        style={{ 
+                        style={{
                             padding: '20px',
                             borderRadius: '10%',
-                            border: table.is_active ? '2px solid yellow' : (table.is_ok ? '1px solid blue' : '1px solid red'), 
+                            border: table.is_active ? '2px solid yellow' : (table.is_ok ? '1px solid blue' : '1px solid red'),
                             background: table.is_active ? '#f9ffd1ff' : (table.is_ok ? '#f0f8ff' : '#ffd0d0ff')
                         }}
                     >
@@ -329,10 +330,10 @@ const AdminPage: React.FC = () => {
                 ))}
 
                 { tables.length < config["MAX_TABLES_COUNT"] &&
-                <button 
-                    style={{ 
-                        padding: '20px', 
-                        border: '1px dashed #000', 
+                <button
+                    style={{
+                        padding: '20px',
+                        border: '1px dashed #000',
                         borderRadius: '10%',
                         cursor: 'pointer',
                         backgroundColor: '#c3ffc0ff',

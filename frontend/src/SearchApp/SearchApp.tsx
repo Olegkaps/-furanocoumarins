@@ -6,6 +6,7 @@ import PhilogeneticTreeOrNull from './PhylogeneticTree';
 import ResultTableOrNull from './ResultTable';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Autocomplete from './Autocomplete';
+import About from "../About/About";
 
 
 let isDataFetched = false
@@ -23,7 +24,7 @@ const fetchSearchResult = async (e: React.FormEvent | null, seqrch_req: string, 
   }
 }
 
-function SearchLine({setSearchResponse}: {setSearchResponse: React.Dispatch<React.SetStateAction<{}>>}) {  
+function SearchLine({setSearchResponse}: {setSearchResponse: React.Dispatch<React.SetStateAction<{}>>}) {
   const [searchParams, setSearchParams] = useSearchParams();
 
   let query = searchParams.get("query")
@@ -96,11 +97,11 @@ function filterResponse(searchResponse: {[index: string]: any;}) {
   let meta_defaults: {[ind: string]: any} = {}
   searchResponse["metadata"].forEach((meta_item: {[index: string]: any}) => {
     // e.g 'clas[00]', 'clas[02][powo]', ...
-    let _type = meta_item["type"]    
+    let _type = meta_item["type"]
     if (!_type.includes("clas[") || _type.includes("invisible")) {
       return
     }
-  
+
     let curr_num: string = _type.split("clas[")[1].split("]")[0]
     if (!(curr_num in meta_defaults)) {
       meta_defaults[curr_num] = {"default": "", "custom": []}
@@ -110,7 +111,7 @@ function filterResponse(searchResponse: {[index: string]: any;}) {
     if (_type.includes("][")) {
       curr_tag = _type.split("][")[1].split("]")[0]
     }
-  
+
     if (curr_tag === "default") {
       meta_defaults[curr_num]["default"] = meta_item["column"]
     } else {
@@ -121,13 +122,13 @@ function filterResponse(searchResponse: {[index: string]: any;}) {
   // DELETE LATER START 2
   searchResponse["metadata"].forEach((meta_item: {[index: string]: any}) => {
     // e.g 'default[lsid_original]', ...
-    let _type = meta_item["type"]    
+    let _type = meta_item["type"]
     if (!_type.includes("default[") || _type.includes("invisible")) {
       return
     }
 
     let default_col = _type.split("default[")[1].split("]")[0]
-  
+
     if (!(default_col in meta_defaults)) {
       meta_defaults[default_col] = {"default": default_col, "custom": []}
     }
@@ -194,14 +195,35 @@ function HomeLink() {
   return <Link to={"/"} target='_blank'
     style={{
       position: 'absolute',
-      left: '50px',
-      top: '21px',
+      left: '10px',
+      top: '10px',
       backgroundColor: '#e1c8ff',
       border: '1px solid grey',
       borderRadius: '10px',
       padding: '10px 10px 5px 10px',
   }}
   ><House width={'30px'} height={'30px'}/></Link>
+}
+
+function AboutLink() {
+  return <Link to={"/about"} target='_blank'
+  style={{
+    position: 'absolute',
+    left: '70px',
+    top: '10px',
+    backgroundColor: '#e1c8ff',
+    border: '1px solid grey',
+    borderRadius: '10px',
+    padding: '10px 10px 5px 10px',
+}}
+  ><CircleInfo width={'30px'} height={'30px'}/></Link>
+}
+
+function FullNavigation() {
+  return <>
+    <HomeLink />
+    <AboutLink />
+  </>
 }
 
 
@@ -231,7 +253,7 @@ function AutocompletedInput({fetchAutocomplete, onChange, style}: AutocompletesI
   const [_, setSelectedValue] = useState('');
 
   return (
-    <div className="app-container">      
+    <div className="app-container">
       <Autocomplete
         fetchSuggestions={fetchAutocomplete}
         onSelect={(value) => setSelectedValue(value)}
@@ -302,7 +324,9 @@ function SearchApp() {
     navigate('/table?query=' + search_params.join(" AND "));
   };
 
-  return <form onSubmit={handleSearchRequest}
+  return <>
+  <AboutLink />
+  <form onSubmit={handleSearchRequest}
     style={{
       border: '1px dashed grey',
       borderRadius: '15px',
@@ -355,7 +379,7 @@ function SearchApp() {
       borderRadius: '7px',
       backgroundColor: '#efeaff',
     }}>Search<ChevronRight style={{color: 'grey'}}/></button>
-  </form>
+  </form></>
 }
 
 
@@ -368,11 +392,11 @@ export function AppResultTable() {
   let filteredResponse = filterResponse(searchResponse)
 
   return <>
-    <HomeLink />
+    <FullNavigation />
     <br></br>
     <SearchLine {...{setSearchResponse: setSearchResponse}} />
     <br></br>
-    {!isEmpty(searchResponse) && 
+    {!isEmpty(searchResponse) &&
       <div>{searchResponse["data"].length === 0 ?
         <EmptyResponse />
         :
@@ -393,10 +417,10 @@ export function AppPhilogeneticTree() {
   let filteredResponse = filterResponse(searchResponse)
 
   return <>
-    <HomeLink />
+    <FullNavigation />
     <br></br>
     <SearchLine {...{setSearchResponse: setSearchResponse}} />
-    {!isEmpty(searchResponse) && 
+    {!isEmpty(searchResponse) &&
       <div>
       {searchResponse["data"].length === 0 ?
         <EmptyResponse />
@@ -407,4 +431,11 @@ export function AppPhilogeneticTree() {
     <PhilogeneticTreeOrNull {...{response: filteredResponse, tag: classificationTag, setTag: setClassificationTag}} />
     <br></br>
   </>
+}
+
+export function AppAbout() {
+    return <>
+      <HomeLink />
+      <About />
+    </>
 }

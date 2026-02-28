@@ -56,6 +56,10 @@ const (
     article_id TEXT,
 	bibtex_text TEXT,
 	PRIMARY KEY (article_id));`
+
+	cassandraPagesSchema = `CREATE TABLE IF NOT EXISTS chemdb.pages (
+	name text PRIMARY KEY,
+	url text);`
 )
 
 var rootCmd = &cobra.Command{
@@ -125,7 +129,7 @@ func initCassandra() {
 	}
 	defer session.Close()
 
-	for _, q := range []string{cassandraVersionsSchema, cassandraBibtexSchema} {
+	for _, q := range []string{cassandraVersionsSchema, cassandraBibtexSchema, cassandraPagesSchema} {
 		err = session.Query(q).Exec()
 		if err != nil {
 			log.Fatal(err)
