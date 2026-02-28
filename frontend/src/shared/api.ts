@@ -23,7 +23,7 @@ export const api = axios.create({
 
 async function renew_token(token: string) {
   return await api
-    .post("/renew-token", {}, { headers: { Authorization: `Bearer ${token}` } })
+    .post("/auth/renew-token", {}, { headers: { Authorization: `Bearer ${token}` } })
     .catch((err) => err.response);
 }
 

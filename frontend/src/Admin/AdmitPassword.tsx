@@ -30,7 +30,7 @@ const PasswordConfirmForm: React.FC<{word: string}> = (props) => {
     var bodyFormData = new FormData();
     bodyFormData.append("password", newPassword)
     bodyFormData.append("word", props.word)
-    const response = await api.post('/confirm-password-change', bodyFormData).catch((err) => {return err.response});
+    const response = await api.post('/auth/confirm-password-change', bodyFormData).catch((err) => {return err.response});
     
     if (response?.status < 400) {
         navigate("/login")

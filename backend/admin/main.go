@@ -47,19 +47,17 @@ func SetUp() *fiber.App {
 	app.Get("/pages/:name", pages.Get_page)
 
 	app.Get("/ping", http_lib.Resp200)
-	app.Post("/login", auth.Login)
-	app.Post("/login-mail", auth.Login_mail)
-	app.Post("/confirm-login-mail", auth.Confirm_login_mail)
-
-	app.Post("/change-password", auth.Change_password)
-	app.Post("/confirm-password-change", auth.Confirm_password_change)
+	app.Post("/auth/login", auth.Login)
+	app.Post("/auth/login-mail", auth.Login_mail)
+	app.Post("/auth/confirm-login-mail", auth.Confirm_login_mail)
+	app.Post("/auth/change-password", auth.Change_password)
+	app.Post("/auth/confirm-password-change", auth.Confirm_password_change)
 
 	// secure api
 	app.Use(jwtware.New(jwtware.Config{
 		SigningKey: jwtware.SigningKey{Key: settings.SECRET_KEY},
 	}))
-
-	app.Post("/renew-token", auth.Renew_token)
+	app.Post("/auth/renew-token", auth.Renew_token)
 
 	app.Post("/create-table", create.Create_table)
 	app.Post("/get-tables-list", tables.Get_tables_list)

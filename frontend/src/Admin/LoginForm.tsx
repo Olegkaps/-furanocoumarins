@@ -15,7 +15,7 @@ const LoginForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const url = isLoginMode ? '/login' : '/login-mail';
+    const url = isLoginMode ? '/auth/login' : '/auth/login-mail';
     
     var bodyFormData = new FormData();
     bodyFormData.append("uname_or_email", uname_or_email)
@@ -120,7 +120,7 @@ export const MailAdmit: React.FC<{word: string}> = (props) => {
 
   useEffect(() => {
     async function _() {
-      var response = await api.post('/confirm-login-mail', bodyFormData).catch((err) => {return err.response});
+      var response = await api.post('/auth/confirm-login-mail', bodyFormData).catch((err) => {return err.response});
       if (response?.status > 199 && response?.status < 400) {
           setToken(response.data.token);
           setResult("ok")

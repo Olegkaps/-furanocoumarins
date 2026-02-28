@@ -11,7 +11,7 @@ const ResetPasswordForm: React.FC = () => {
         e.preventDefault();
         var bodyFormData = new FormData();
         bodyFormData.append("uname_or_email", loginOrEmail)
-        const response = await api.post('/change-password', bodyFormData).catch((err) => {return err.response});
+        const response = await api.post('/auth/change-password', bodyFormData).catch((err) => {return err.response});
         
         if (response?.status === 200) {
             setSuccess('The confirmation email has been sent');
