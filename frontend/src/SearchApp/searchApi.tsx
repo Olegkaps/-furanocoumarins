@@ -8,7 +8,7 @@ export async function fetchSearchResult(
   setSearchResponse: React.Dispatch<React.SetStateAction<{ [index: string]: any }>>
 ) {
   e?.preventDefault();
-  const response = await api.get("/search?q=" + searchReq).catch((err: { response?: unknown }) => err?.response);
+  const response = await api.get("/search?q=" + searchReq).catch((err: { response?: {status: number, data: any} }) => err?.response);
 
   if (response && response.status === 200) {
     setSearchResponse(response.data);
