@@ -20,9 +20,9 @@
 
       const drawSMILES = function() {
         let elements = document.getElementsByClassName("smiles");
-  
+
         for (let i = 0; i < elements.length; i++)
-          SmilesDrawer.parse(elements[i].id, (tree) => smilesDrawer.draw(tree, elements[i].id, "light", false));
+          SmilesDrawer.parse(elements[i].id.split("_")[0], (tree) => smilesDrawer.draw(tree, elements[i].id, "light", false));
 
         setTimeout(drawSMILES, 300)
       }

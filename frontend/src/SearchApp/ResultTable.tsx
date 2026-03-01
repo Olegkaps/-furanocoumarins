@@ -270,7 +270,7 @@ function TableStateBar(
       ><option value="">not selected</option>
         {chemicals.map((chemical, i) => <option value={chemical}>{i+1}: {chemical}</option>)}</select>
       :
-      <label>{chemicals[0]}</label>
+      <label style={{fontWeight: 630}}>{chemicals[0]}</label>
     }
   </label>
 
@@ -297,9 +297,6 @@ function ResultTableWrapper({ rows, meta }: {rows: Array<DataRows>, meta: Array<
     return <></>
   }
 
-  let [currentSpecie, setCurrentSpecie] = useState("")
-  let [currentChemical, setCurrentChemical] = useState("")
-
   let species: string[] = []
   let used_species = new Set<string>()
   let chemicals: string[] = []
@@ -321,6 +318,9 @@ function ResultTableWrapper({ rows, meta }: {rows: Array<DataRows>, meta: Array<
 
   species = species.sort()
   chemicals = chemicals.sort()
+
+  let [currentSpecie, setCurrentSpecie] = useState(species.length === 1 ? species[0] : "")
+  let [currentChemical, setCurrentChemical] = useState(chemicals.length === 1 ? chemicals[0] : "")
 
   return <>
   <TableStateBar

@@ -2,6 +2,15 @@ import React from "react";
 import { ArrowUpRightFromSquare } from "@gravity-ui/icons";
 import { TruncatedText } from "../shared/ui/TruncatedText";
 
+function generateRandomString(length: number): string {
+  let result = '';
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < length; i++) {
+      result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return result;
+}
+
 let ignore_link_prefixes = ["fuco", "NoIPNI", "NoKew"];
 
 class Link {
@@ -100,7 +109,10 @@ class DataMeta {
   }
 
   render_smiles(value: string) {
-    return <canvas id={value} className="smiles">{value}</canvas>
+    return <canvas
+      id={value+'_'+generateRandomString(5)}
+      className="smiles"
+      >{value}</canvas>
   }
 
   render_reference(value: string) {
