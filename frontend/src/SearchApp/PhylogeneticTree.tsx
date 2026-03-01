@@ -58,7 +58,7 @@ class PhilogeneticTreeNode {
         backgroundColor: 'white',
         display: 'table',
       }}>
-    
+
       <div style={{
           display: 'table-cell',
           verticalAlign: 'middle',
@@ -197,12 +197,26 @@ function PhilogeneticTree({ species, meta, meta_names }: {species: Array<Specie>
   return <ZoomableContainer>{root.render(meta, meta_names)}</ZoomableContainer>
 }
 
+export type CountMode = "chemical" | "article" | "all";
+function collectUniqueValuesFromRow(row: {[index: string]: string}, columnNames: Array<string>, into: Set<string>) {
+  columnNames.forEach((col) => {
+    const v = row[col]
+    if (v != null && String(v).trim() !== "") {
+      String(v).split(/\s*,\s*/).forEach((s) => {
+        const t = s.trim()
+        if (t) into.add(t)
+      })
+    }
+  })
+}
 
 function PhilogeneticTreeOrNull(
-    {response, tag, setTag}:
+    {response, tag, setTag, countMode, setCountMode}:
     {response: {[index: string]: any},
     tag: string,
-    setTag: React.Dispatch<React.SetStateAction<string>>},
+    setTag: React.Dispatch<React.SetStateAction<string>>,
+    countMode: CountMode,
+    setCountMode: React.Dispatch<React.SetStateAction<CountMode>>},
   ) {
   if (isEmpty(response)) {
     return <div></div>
@@ -219,7 +233,7 @@ function PhilogeneticTreeOrNull(
     if (t_b.startsWith("table_")) {
       t_b = t_b.split(" ")[1]
     }
-  
+
     if (t_a === t_b) {
       return 0
     } else if (t_a < t_b) {
@@ -242,14 +256,14 @@ function PhilogeneticTreeOrNull(
     if (!_type.includes("clas[")) {
       return
     }
-  
+
     let curr_num: string = _type.split("clas[")[1].split("]")[0]
 
     let curr_tag = "default"
     if (_type.includes("][")) {
       curr_tag = _type.split("][")[1].split("]")[0]
     }
-  
+
     all_tags.add(curr_tag)
     if (curr_tag === "default" && !(curr_num in class_num_to_tag)) {
       //
@@ -265,24 +279,41 @@ function PhilogeneticTreeOrNull(
     class_num_to_tag[curr_num] = curr_tag
   })
 
-  let counts: {[index: string]: number} = {}
-  
+  const smilesColumns = (response["metadata"] as Array<{[index: string]: string}>)
+    .filter((m) => m["type"]?.includes("SMILES"))
+    .map((m) => m["column"])
+  const refColumns = (response["metadata"] as Array<{[index: string]: string}>)
+    .filter((m) => m["type"]?.includes("ref[]"))
+    .map((m) => m["column"])
+
+  type UniqueSets = { smiles: Set<string>; refs: Set<string> }
+  const uniquesByClades: {[joined_clades: string]: UniqueSets} = {}
+
   response["data"]?.forEach((row: {[index: string]: string}) => {
     let clades: Array<string> = []
-
     species_meta.forEach((clade_name: string, ind: number) => {
-      if (ind === 0) {
-        return
-      }
-      let value = row[clade_name]
-      clades.push(value)
+      if (ind === 0) return
+      clades.push(row[clade_name])
     })
-
-    let joined_clades = clades.join("@")
-    if (!(joined_clades in counts)) {
-      counts[joined_clades] = 0
+    const joined_clades = clades.join("@")
+    if (!(joined_clades in uniquesByClades)) {
+      uniquesByClades[joined_clades] = { smiles: new Set(), refs: new Set() }
     }
-    counts[joined_clades] += 1
+    const u = uniquesByClades[joined_clades]
+    collectUniqueValuesFromRow(row, smilesColumns, u.smiles)
+    collectUniqueValuesFromRow(row, refColumns, u.refs)
+  })
+
+  let counts: {[index: string]: number} = {}
+  Object.entries(uniquesByClades).forEach(([joined_clades, u]) => {
+    const nSmiles = smilesColumns.length ? u.smiles.size : 1
+    const nRefs = refColumns.length ? u.refs.size : 1
+    counts[joined_clades] =
+      countMode === "chemical"
+        ? nSmiles
+        : countMode === "article"
+          ? nRefs
+          : nSmiles * nRefs
   })
 
   let species = [] as Array<Specie>
@@ -305,13 +336,26 @@ function PhilogeneticTreeOrNull(
       <span style={{}}>Select classification: </span>
       {Array(...all_tags).sort().map((item, _) => (
         <button
-          style={item !== tag ? 
-            {padding: '7px', border: '1px solid blue', borderRadius: '4px', marginLeft: '10px', backgroundColor: '#e5e2ffff',}
-          : {padding: '7px', border: '1px solid yellow', borderRadius: '4px', marginLeft: '10px', backgroundColor: 'rgb(254, 255, 244)', fontWeight: 600}}
+          style={item !== tag
+            ? {padding: '7px', border: '1px solid blue', borderRadius: '4px', marginLeft: '10px', backgroundColor: '#e5e2ffff',}
+            : {padding: '7px', border: '1px solid yellow', borderRadius: '4px', marginLeft: '10px', backgroundColor: 'rgb(254, 255, 244)', fontWeight: 600}}
           onClick={() => {setTag(item)}}
         >{item}</button>
       ))}
-    </div>
+      &nbsp;&nbsp;&nbsp;
+      &nbsp;&nbsp;&nbsp;
+      <span style={{}}>Count by: </span>
+      {(["chemical", "article", "all"] as const).map((mode) => (
+        <button
+          key={mode}
+          style={mode !== countMode
+            ? {padding: '7px', border: '1px solid blue', borderRadius: '4px', marginLeft: '10px', backgroundColor: '#e5e2ffff',}
+            : {padding: '7px', border: '1px solid yellow', borderRadius: '4px', marginLeft: '10px', backgroundColor: 'rgb(254, 255, 244)', fontWeight: 600}}
+          onClick={() => {setCountMode(mode)}}
+        >{mode}</button>
+      ))}
+      <br></br>
+      </div>
     <PhilogeneticTree {...{species: species, meta: species_meta, meta_names: meta_names}} />
   </div>
 }

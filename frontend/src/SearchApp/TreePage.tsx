@@ -3,11 +3,12 @@ import { isEmpty } from "../shared/api";
 import FullNavigation from "../FullNavigation/FullNavigation";
 import { SearchLine, EmptyResponse, SearchLink } from "./SearchLine";
 import { filterResponse } from "./searchApi";
-import PhilogeneticTreeOrNull from "./PhylogeneticTree";
+import PhilogeneticTreeOrNull, { type CountMode } from "./PhylogeneticTree";
 
 export function AppPhilogeneticTree() {
   const [searchResponse, setSearchResponse] = useState<{ [index: string]: any }>({});
   const [classificationTag, setClassificationTag] = useState("default");
+  const [countMode, setCountMode] = useState<CountMode>("all");
   const filteredResponse = filterResponse(searchResponse);
 
   return (
@@ -28,6 +29,8 @@ export function AppPhilogeneticTree() {
         response={filteredResponse}
         tag={classificationTag}
         setTag={setClassificationTag}
+        countMode={countMode}
+        setCountMode={setCountMode}
       />
       <br />
     </>
