@@ -25,11 +25,11 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: stable
-          working-directory: backend/admin
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.10
+          working-directory: backend/admin
 
   build:
     runs-on: ubuntu-latest
