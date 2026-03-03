@@ -17,6 +17,19 @@ on:
     - ".github/workflows/backed-go.yml"
 
 jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          working-directory: backend/admin
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.10
 
   build:
     runs-on: ubuntu-latest
