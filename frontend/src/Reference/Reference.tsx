@@ -26,7 +26,7 @@ const parseBibtex = (bibtexStr: string): BibtexEntry | null => {
       const key = match[1].trim().toLowerCase();
       const value = match[2].trim();
 
-      const cleanedValue = value.replace(/^[\{\}"]|(?:[\}]|")$/g, '').trim();
+      const cleanedValue = value.replace(/^[{}"]|(?:[}]|")$/g, '').trim();
 
       entry[key as keyof BibtexEntry] = cleanedValue;
     }
