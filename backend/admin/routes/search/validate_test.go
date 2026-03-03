@@ -62,13 +62,13 @@ func TestValidateRequest(t *testing.T) {
 		{
 			request:       "name = 'user'; DROP TABLE test",
 			columns:       columns,
-			expectedError: fmt.Errorf("request have incorrect words (merged): ;DROPTABLEtest"),
+			expectedError: fmt.Errorf("request contains incorrect words (merged): ;DROPTABLEtest"),
 			description:   "cql injection column",
 		},
 		{
 			request:       "name = 'user'; && touch /etc/f",
 			columns:       columns,
-			expectedError: fmt.Errorf("request have incorrect words (merged): ;&&touch/etc/f"),
+			expectedError: fmt.Errorf("request contains incorrect words (merged): ;&&touch/etc/f"),
 			description:   "bash injection column",
 		},
 	}
