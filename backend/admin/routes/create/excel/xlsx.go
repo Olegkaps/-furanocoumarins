@@ -86,7 +86,7 @@ func ReadXLSXToMap(file *excelize.File, sheetName string, columnNames []string, 
 	}
 
 	if len(error_messages) > 0 {
-		return nil, fmt.Errorf("errors in sheet %q:\n%s", sheetName, strings.Join(error_messages, "\n"))
+		return nil, fmt.Errorf("errors in sheet '%s':\n%s", sheetName, strings.Join(error_messages, "\n"))
 	}
 
 	return result, nil
@@ -112,7 +112,7 @@ func ReadXLSXToMapMerged(file *excelize.File, sheetNames []string, columnNames [
 
 		for key, val := range curr_result {
 			if _, exists := result[key]; exists {
-				return nil, fmt.Errorf("not unique key %q while merging sheet %q", key, sheet)
+				return nil, fmt.Errorf("not unique key '%s' while merging sheet '%s'", key, sheet)
 			}
 			typedVal := make([]any, len(val))
 			for i, v := range val {

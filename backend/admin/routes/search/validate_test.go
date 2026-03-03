@@ -38,7 +38,7 @@ func TestValidateRequest(t *testing.T) {
 		{
 			request:       "",
 			columns:       columns,
-			expectedError: fmt.Errorf("search_request is required"),
+			expectedError: fmt.Errorf("search request is required"),
 			description:   "empty request",
 		},
 		{
@@ -56,7 +56,7 @@ func TestValidateRequest(t *testing.T) {
 		{
 			request:       "name = 'user' AND role = 'admin'",
 			columns:       columns,
-			expectedError: fmt.Errorf("request have incorrect words (merged): role"),
+			expectedError: fmt.Errorf("request contains incorrect words (merged): role"),
 			description:   "non-existent column",
 		},
 		{

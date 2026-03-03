@@ -30,7 +30,7 @@ func Put_page(c *fiber.Ctx) error {
 
 	name := c.Params("name")
 	if name == "" {
-		return http.Resp400(c, fmt.Errorf("name required"))
+		return http.Resp400(c, fmt.Errorf("name is required"))
 	}
 
 	body := c.Body()

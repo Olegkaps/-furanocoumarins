@@ -111,7 +111,7 @@ func (v_sheet *VirtualSheet) Postprocess() error {
 	}
 
 	if len(error_messages) > 0 {
-		return fmt.Errorf("errors in sheet with key column '%s':\n%s",
+		return fmt.Errorf("errors in sheet with primary key '%s':\n%s",
 			v_sheet.KeyColumn,
 			strings.Join(error_messages, "\n"),
 		)

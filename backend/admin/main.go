@@ -72,11 +72,26 @@ func SetUp() *fiber.App {
 }
 
 func main() {
-	defer dbs.DB.Close()
-	defer dbs.Redis.Close()
+	defer func() {
+		err := dbs.DB.Close()
+		if err != nil {
+			logging.Fatal("%s", err)
+		}
+	}()
+	defer func() {
+		err := dbs.Redis.Close()
+		if err != nil {
+			logging.Fatal("%s", err)
+		}
+	}()
 
 	http.Handle("/metrics", promhttp.Handler())
-	go http.ListenAndServe(":5000", nil)
+	go func() {
+		err := http.ListenAndServe(":5000", nil)
+		if err != nil {
+			logging.Fatal("%s", err)
+		}
+	}()
 
 	app := SetUp()
 

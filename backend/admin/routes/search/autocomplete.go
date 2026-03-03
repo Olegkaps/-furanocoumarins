@@ -17,7 +17,7 @@ func Autocomletion(c *fiber.Ctx) error {
 	column := c.Params("column")
 	value := c.Query("value", "")
 	if value == "" {
-		return http.Resp400(c, fmt.Errorf("cannot complete empty value"))
+		return http.Resp400(c, fmt.Errorf("cannot autocomplete empty value"))
 	}
 
 	session, err := dbs.CQL.CreateSession()

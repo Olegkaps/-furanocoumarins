@@ -60,28 +60,39 @@ func Create_table(c *fiber.Ctx) error { // TO DO: no more than 10 tables
 func create_table(c *fiber.Ctx, TableFile *excelize.File, MetaListName, AuthorMail, FileName string) {
 	sendErrorMail := func(err error) {
 		logging.Warn(c, "%s", err.Error())
-		mail.SendMail(
+		err = mail.SendMail(
 			c, AuthorMail,
 			fmt.Sprintf("Creating table %s failed.", TableFile.Path),
 			"Recieved following error: "+err.Error(),
 		)
+		if err != nil {
+			logging.Error(c, "%s", err)
+		}
 	}
 
-	message, err := make_create_table(TableFile, MetaListName, FileName)
+	message, err := make_create_table(c, TableFile, MetaListName, FileName)
 	if err != nil {
 		sendErrorMail(err)
 		return
 	}
 
-	mail.SendMail(
+	err = mail.SendMail(
 		c, AuthorMail,
 		fmt.Sprintf("Table %s created successfully.", TableFile.Path),
 		"Table created, don`t forget to activate it.\n"+message,
 	)
+	if err != nil {
+		logging.Error(c, "%s", err)
+	}
 }
 
-func make_create_table(TableFile *excelize.File, MetaListName, FileName string) (string, error) {
-	defer TableFile.Close()
+func make_create_table(c *fiber.Ctx, TableFile *excelize.File, MetaListName, FileName string) (string, error) {
+	defer func(c *fiber.Ctx) {
+		err := TableFile.Close()
+		if err != nil {
+			logging.Error(c, "%s", err)
+		}
+	}(c)
 
 	session, err := dbs.CQL.CreateSession()
 	if err != nil {
@@ -152,17 +163,17 @@ func make_create_table(TableFile *excelize.File, MetaListName, FileName string) 
 			c_type_old := strings.Split(val, "\t")[0]
 			c_desr_old := strings.Split(val, "\t")[1]
 
-			var is_types_identical bool = check_is_types_equal(c_type_old, c_type)
+			var is_types_identical = check_is_types_equal(c_type_old, c_type)
 
 			if c_desr_old != c_decr || !is_types_identical {
 				return "", fmt.Errorf("%s", fmt.Sprintf(
-					"Column '%s' has different descriptions in different rows:\n",
+					"column '%s' has different descriptions in different rows:\n",
 					column,
 				)+fmt.Sprintf(
-					" - Descriptions:\n\t'%s'\n\t'%s'\n",
+					" - descriptions:\n\t'%s'\n\t'%s'\n",
 					c_decr, c_desr_old,
 				)+fmt.Sprintf(
-					" - Types (may differ only by primary/external):\n\t'%s'\n\t'%s'\n",
+					" - types (may differ only by primary/external):\n\t'%s'\n\t'%s'\n",
 					c_type, c_type_old,
 				))
 			}
@@ -211,7 +222,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, FileName string) 
 		}
 
 		if _, ok := parsed_meta[name]; !ok {
-			err = fmt.Errorf("Got unknown sheet name '%s'. Did you register this sheet as __LIST__ ?", name)
+			err = fmt.Errorf("got unknown sheet name '%s'. Did you register this sheet as __LIST__ ?", name)
 			return "", err
 		}
 
@@ -240,7 +251,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, FileName string) 
 	// parsed_meta[classification]
 	species_sheet, ok := parsed_meta["classification"]
 	if !ok {
-		err = fmt.Errorf("Missing classifaction in meta. Did you register this sheet as __LIST__ ?")
+		err = fmt.Errorf("missing classifaction in meta. Did you register this sheet as __LIST__ ?")
 		return "", err
 	}
 
@@ -279,7 +290,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, FileName string) 
 	// parsed_meta[main]
 	main_sheet, ok := parsed_meta["main"]
 	if !ok {
-		err = fmt.Errorf("Missing main sheet in meta. Did you register this sheet as __LIST__ ?")
+		err = fmt.Errorf("missing main sheet in meta. Did you register this sheet as __LIST__ ?")
 		return "", err
 	}
 
@@ -307,7 +318,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, FileName string) 
 		} else {
 			next_sheet, ok := parsed_meta[curr_arrange]
 			if !ok {
-				err = fmt.Errorf("not found sheet '%s' which is used as 'external'", curr_arrange)
+				err = fmt.Errorf("sheet '%s' which is used as 'external' not found", curr_arrange)
 				return "", err
 			}
 			if _, is_used := sheet_to_count[next_sheet]; is_used {
@@ -373,7 +384,7 @@ func make_create_table(TableFile *excelize.File, MetaListName, FileName string) 
 			} else {
 				next_sheet, ok := parsed_meta[curr_arrange]
 				if !ok {
-					err = fmt.Errorf("not found sheet '%s' which is used as 'external'", curr_arrange)
+					err = fmt.Errorf("sheet '%s' which is used as 'external' not found", curr_arrange)
 					return "", err
 				}
 				if _, is_used := sheet_to_count[next_sheet]; is_used {
@@ -489,8 +500,8 @@ func check_is_types_equal(c_type_old, c_type_new string) bool {
 		}
 	}
 
-	if len(c_types_old_map) != num_visited {
-		return false
+	if len(c_types_old_map) == num_visited {
+		return true
 	}
 
 	return true

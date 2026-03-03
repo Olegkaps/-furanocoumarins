@@ -39,18 +39,20 @@ func Change_password(c *fiber.Ctx) error {
 	}
 
 	link := settings.DOMAIN_PREF + "/admit/" + word
-	mail.SendMail(
+	err = mail.SendMail(
 		c, user.Mail,
 		"Change password",
 		mail.GetLinkMailBody("change password", link),
 	)
+	if err != nil {
+		return http.Resp500(c, err)
+	}
 	return http.Resp200(c)
 }
 
 func Confirm_password_change(c *fiber.Ctx) error {
 	word := c.FormValue("word")
 	logging.Info(c, "Processing link %s", word)
-	var user string = ""
 
 	user, err := dbs.Redis.Get(context.Background(), word).Result()
 	if err != nil {

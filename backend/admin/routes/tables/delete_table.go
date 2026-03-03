@@ -47,7 +47,7 @@ func Delete_all_bad_tables(c *fiber.Ctx) error {
 	var wg sync.WaitGroup
 	errs := make([]error, len(tables))
 	for i, t := range tables {
-		if t.IsOk == true {
+		if t.IsOk {
 			continue
 		}
 		wg.Add(1)

@@ -49,7 +49,7 @@ func Search_main_app(c *fiber.Ctx) error {
 	}
 
 	if len(selectedColumns) == 0 {
-		return http.Resp400(c, fmt.Errorf("no visible columns found in metadata"))
+		return http.Resp400(c, fmt.Errorf("no visible columns found in table metadata"))
 	}
 
 	selectClause := strings.Join(selectedColumns, ", ")

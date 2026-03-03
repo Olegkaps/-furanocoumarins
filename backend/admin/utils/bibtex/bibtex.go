@@ -12,7 +12,12 @@ import (
 )
 
 func ParseBibtexFile(c *fiber.Ctx, file multipart.File) (map[string]string, error) {
-	defer file.Close()
+	defer func(c *fiber.Ctx) {
+		err := file.Close()
+		if err != nil {
+			logging.Error(c, "%s", err)
+		}
+	}(c)
 
 	identifiers := make(map[string]string, 0)
 	scanner := bufio.NewScanner(file)

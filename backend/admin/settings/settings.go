@@ -32,7 +32,6 @@ type envConfig struct {
 	S3UsePathStyle bool   `env:"S3_USE_PATH_STYLE" env-default:"true"`
 }
 
-
 func mustLoadSettings() envConfig {
 	var cfg envConfig
 	if err := cleanenv.ReadEnv(&cfg); err != nil {

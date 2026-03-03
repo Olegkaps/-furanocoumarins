@@ -83,7 +83,7 @@ func Update_file(c *fiber.Ctx) error {
 	}
 
 	if strings.Trim(ref_column, " ") == "" {
-		mail.SendMail(
+		err = mail.SendMail(
 			c, db_user.Mail,
 			"Updated bibtex file",
 			fmt.Sprintf(
@@ -91,6 +91,9 @@ func Update_file(c *fiber.Ctx) error {
 				timestamp,
 			),
 		)
+		if err != nil {
+			return http.Resp500(c, err)
+		}
 		logging.Warn(c, "for table %s ref-check skipped.", timestamp)
 		return http.Resp200(c)
 	}
@@ -111,11 +114,14 @@ func Update_file(c *fiber.Ctx) error {
 		message += " have errors:\n" + strings.Join(warnings, "\n")
 	}
 
-	mail.SendMail(
+	err = mail.SendMail(
 		c, db_user.Mail,
 		"Updated bibtex file",
 		message,
 	)
+	if err != nil {
+		return http.Resp500(c, err)
+	}
 
 	return http.Resp200(c)
 }

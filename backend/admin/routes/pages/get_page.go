@@ -13,12 +13,13 @@ import (
 	"admin/utils/dbs"
 	"admin/utils/dbs/cassandra"
 	"admin/utils/http"
+	"admin/utils/logging"
 )
 
 func Get_page(c *fiber.Ctx) error {
 	name := c.Params("name")
 	if name == "" {
-		return http.Resp400(c, fmt.Errorf("name required"))
+		return http.Resp400(c, fmt.Errorf("name is required"))
 	}
 
 	session, err := dbs.CQL.CreateSession()
@@ -42,7 +43,12 @@ func Get_page(c *fiber.Ctx) error {
 	if err != nil {
 		return http.Resp500(c, err)
 	}
-	defer out.Body.Close()
+	defer func(c *fiber.Ctx) {
+		err := out.Body.Close()
+		if err != nil {
+			logging.Error(c, "%s", err)
+		}
+	}(c)
 
 	body, err := io.ReadAll(out.Body)
 	if err != nil {

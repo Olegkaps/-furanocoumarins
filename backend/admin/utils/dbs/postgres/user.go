@@ -52,5 +52,5 @@ func Change_password(c *fiber.Ctx, username string, password string) error {
 	}
 	err = dbs.DB.QueryRow("UPDATE users SET hashed_password=$1 WHERE username=$2", hashed_password, username).Err()
 
-	return nil
+	return err
 }

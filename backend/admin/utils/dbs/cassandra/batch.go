@@ -24,7 +24,7 @@ func BatchInsertData(
 
 	for _, row := range data {
 		if len(row) != len(columns) {
-			return fmt.Errorf("different length of data rows in table %q: want %d, given %d", tableName, len(columns), len(row))
+			return fmt.Errorf("different length of data rows in table '%s': want %d, given %d", tableName, len(columns), len(row))
 		}
 		batch.Query(insertQuery, row...)
 	}
