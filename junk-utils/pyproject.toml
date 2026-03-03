@@ -1,0 +1,11 @@
+[project]
+name = "junk-utils"
+version = "0.1.0"
+description = "Utils for Sheets that rarely simplify transformations"
+requires-python = ">=3.10"
+dependencies = [
+    "mypy>=1.19.1",
+    "pandas>=2.3.3",
+    "pandas-stubs>=2.3.3.260113",
+    "ruff>=0.15.4",
+]
