@@ -65,7 +65,6 @@ with open("out.txt", "w") as f:
 
             return len(diff_fields) == 0
 
-
     original_rows: dict[str, Specie] = {}
     original_cols = [
         "lsid_original",
@@ -129,7 +128,7 @@ with open("out.txt", "w") as f:
             original_specie = original_rows.get(lsid, None)
 
             if original_specie is None:
-                print("="*10)
+                print("=" * 10)
                 print(f"not found lsid {lsid}")
                 continue
 
