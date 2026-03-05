@@ -60,5 +60,7 @@ func CreateAndBatchInsertData(
 		return fmt.Errorf("error while creating table %s: %w", tableName, err)
 	}
 
-	return BatchInsertData(session, tableName, columns, data, 50)
+	batchSize := 1500 / len(columns)
+
+	return BatchInsertData(session, tableName, columns, data, batchSize)
 }

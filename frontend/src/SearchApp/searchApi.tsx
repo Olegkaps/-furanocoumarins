@@ -70,6 +70,8 @@ export function filterResponse(searchResponse: { [index: string]: any }) {
         const value = row[col] ?? "";
         if (value.replaceAll(" ", "") === "") {
           row[col] = row[default_col];
+        } else if (value.replaceAll(" ", "") === "NoValue") {
+          row[col] = "";
         }
       });
     });

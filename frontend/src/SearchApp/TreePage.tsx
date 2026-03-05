@@ -7,7 +7,7 @@ import PhilogeneticTreeOrNull, { type CountMode } from "./PhylogeneticTree";
 
 export function AppPhilogeneticTree() {
   const [searchResponse, setSearchResponse] = useState<{ [index: string]: any }>({});
-  const [classificationTag, setClassificationTag] = useState("default");
+  const [classificationTag, setClassificationTag] = useState("original");
   const [countMode, setCountMode] = useState<CountMode>("all");
   const filteredResponse = filterResponse(searchResponse);
 

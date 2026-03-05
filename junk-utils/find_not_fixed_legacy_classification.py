@@ -1,7 +1,9 @@
+import re
+
 import pandas as pd
 from functools import partial
 
-filename = "C:/Users/kapsh/Downloads/Furanocoumarins in Apiaceae.xlsx"
+filename = "C:/Users/kapsh/Downloads/Furanocoumarins in Apiaceae (1).xlsx"
 sheet = "Species"
 
 d = pd.read_excel(filename, sheet)
@@ -50,7 +52,13 @@ with open("out.txt", "w") as f:
             other_values = []
             for field in self.comapre_fields:
                 s_val: str = getattr(self, field)
+                s_val.replace("NoValue", "")
+                s_val = re.sub(r"#.*#", "", s_val)
+
                 o_val: str = getattr(other, field)
+                o_val.replace("NoValue", "")
+                o_val = re.sub(r"#.*#", "", s_val)
+
                 if s_val.strip() != o_val.strip():
                     diff_fields.append(field)
                     self_values.append(s_val)
@@ -84,10 +92,10 @@ with open("out.txt", "w") as f:
         "lsid_pimenov",
         "familia",
         "subfamily",
-        "superclade",
-        "tribe",
-        "clade",
-        "subtribe",
+        "superclade_pimenov",
+        "tribe_pimenov",
+        "clade_pimenov",
+        "subtribe_pimenov",
         "genus_pimenov",
         "species_pimenov",
     ]
@@ -98,10 +106,10 @@ with open("out.txt", "w") as f:
         "lsid_accepted",
         "familia",
         "subfamily",
-        "superclade",
-        "tribe",
-        "clade",
-        "subtribe",
+        "superclade_accepted",
+        "tribe_accepted",
+        "clade_accepted",
+        "subtribe_accepted",
         "genus_accepted",
         "species_accepted",
     ]

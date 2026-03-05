@@ -247,7 +247,7 @@ function PhilogeneticTreeOrNull(
   let class_num_to_tag: {[val: string]: string} = {}
 
   let all_tags = new Set<string>()
-  all_tags.add("default")
+  all_tags.add("original")
   all_tags.add(tag)
 
   metadata_response.forEach((meta_item: {[index: string]: any}) => {
@@ -259,13 +259,13 @@ function PhilogeneticTreeOrNull(
 
     let curr_num: string = _type.split("clas[")[1].split("]")[0]
 
-    let curr_tag = "default"
+    let curr_tag = "original"
     if (_type.includes("][")) {
       curr_tag = _type.split("][")[1].split("]")[0]
     }
 
     all_tags.add(curr_tag)
-    if (curr_tag === "default" && !(curr_num in class_num_to_tag)) {
+    if (curr_tag === "original" && !(curr_num in class_num_to_tag)) {
       //
     } else if (curr_tag === tag && curr_num in class_num_to_tag) {
       species_meta.pop()
