@@ -10,6 +10,15 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// Get_tables_list godoc
+// @Summary      Get list of all tables
+// @Description  Returns all tables from Cassandra
+// @Tags         tables
+// @Security     BearerAuth
+// @Produce      json
+// @Success      200 {array} cassandra.Table
+// @Failure      500 {object} http.ErrorResponse
+// @Router       /get-tables-list [post]
 func Get_tables_list(c *fiber.Ctx) error {
 	session, err := dbs.CQL.CreateSession()
 	if err != nil {

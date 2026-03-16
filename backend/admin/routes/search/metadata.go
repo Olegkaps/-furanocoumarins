@@ -14,6 +14,14 @@ type GetMetadataResponse struct {
 	TableTimestamp time.Time               `json:"timestamp"`
 }
 
+// Get_current_metadata godoc
+// @Summary      Get current table metadata
+// @Description  Returns metadata and timestamp of the active table
+// @Tags         search
+// @Produce      json
+// @Success      200 {object} GetMetadataResponse
+// @Failure      500 {object} http.ErrorResponse
+// @Router       /metadata [get]
 func Get_current_metadata(c *fiber.Ctx) error {
 	session, err := dbs.CQL.CreateSession()
 	if err != nil {

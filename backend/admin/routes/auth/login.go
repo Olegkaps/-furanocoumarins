@@ -17,6 +17,17 @@ import (
 	"admin/utils/mail"
 )
 
+// Login godoc
+// @Summary      Login with username/email and password
+// @Description  Returns JWT token on success
+// @Tags         auth
+// @Accept       x-www-form-urlencoded
+// @Param        uname_or_email formData string true "Username or email"
+// @Param        password formData string true "Password"
+// @Produce      json
+// @Success      200 {object} http.TokenResponse
+// @Failure      401,500 {object} http.ErrorResponse
+// @Router       /auth/login [post]
 func Login(c *fiber.Ctx) error {
 	login_or_email := c.FormValue("uname_or_email")
 	password := c.FormValue("password")
@@ -35,9 +46,18 @@ func Login(c *fiber.Ctx) error {
 		return http.Resp500(c, err)
 	}
 
-	return http.JSON(c, fiber.Map{"token": t})
+	return http.JSON(c, http.TokenResponse{Token: t})
 }
 
+// Login_mail godoc
+// @Summary      Request login link by email
+// @Description  Sends a magic link to user email for passwordless login
+// @Tags         auth
+// @Accept       x-www-form-urlencoded
+// @Param        uname_or_email formData string true "Username or email"
+// @Success      200
+// @Failure      401,500 {object} http.ErrorResponse
+// @Router       /auth/login-mail [post]
 func Login_mail(c *fiber.Ctx) error {
 	mail_or_login := c.FormValue("uname_or_email")
 
@@ -72,6 +92,16 @@ func Login_mail(c *fiber.Ctx) error {
 	return http.Resp200(c)
 }
 
+// Confirm_login_mail godoc
+// @Summary      Confirm login via magic link
+// @Description  Exchanges word from email link for JWT token
+// @Tags         auth
+// @Accept       x-www-form-urlencoded
+// @Param        word formData string true "Token from email link"
+// @Produce      json
+// @Success      200 {object} http.TokenResponse
+// @Failure      401,500 {object} http.ErrorResponse
+// @Router       /auth/confirm-login-mail [post]
 func Confirm_login_mail(c *fiber.Ctx) error {
 	word := c.FormValue("word")
 	logging.Info(c, "Processing link %s", word)
@@ -88,5 +118,5 @@ func Confirm_login_mail(c *fiber.Ctx) error {
 		return http.Resp500(c, err)
 	}
 
-	return http.JSON(c, fiber.Map{"token": t})
+	return http.JSON(c, http.TokenResponse{Token: t})
 }

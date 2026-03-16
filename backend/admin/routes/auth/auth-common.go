@@ -18,6 +18,15 @@ import (
 	"admin/utils/mail"
 )
 
+// Change_password godoc
+// @Summary      Request password change
+// @Description  Sends password reset link to user email
+// @Tags         auth
+// @Accept       x-www-form-urlencoded
+// @Param        uname_or_email formData string true "Username or email"
+// @Success      200
+// @Failure      400,500 {object} http.ErrorResponse
+// @Router       /auth/change-password [post]
 func Change_password(c *fiber.Ctx) error {
 	mail_or_login := c.FormValue("uname_or_email")
 
@@ -50,6 +59,16 @@ func Change_password(c *fiber.Ctx) error {
 	return http.Resp200(c)
 }
 
+// Confirm_password_change godoc
+// @Summary      Confirm password change
+// @Description  Sets new password using token from email link
+// @Tags         auth
+// @Accept       x-www-form-urlencoded
+// @Param        word formData string true "Token from email link"
+// @Param        password formData string true "New password"
+// @Success      200
+// @Failure      400,401 {object} http.ErrorResponse
+// @Router       /auth/confirm-password-change [post]
 func Confirm_password_change(c *fiber.Ctx) error {
 	word := c.FormValue("word")
 	logging.Info(c, "Processing link %s", word)
@@ -70,6 +89,15 @@ func Confirm_password_change(c *fiber.Ctx) error {
 	return http.Resp200(c)
 }
 
+// Renew_token godoc
+// @Summary      Renew JWT token
+// @Description  Returns new JWT token for authenticated user
+// @Tags         auth
+// @Security     BearerAuth
+// @Produce      json
+// @Success      200 {object} http.TokenResponse
+// @Failure      401,500 {object} http.ErrorResponse
+// @Router       /auth/renew-token [post]
 func Renew_token(c *fiber.Ctx) error {
 	user := c.Locals("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)
@@ -89,5 +117,5 @@ func Renew_token(c *fiber.Ctx) error {
 		return http.Resp500(c, err)
 	}
 
-	return http.JSON(c, fiber.Map{"token": t})
+	return http.JSON(c, http.TokenResponse{Token: t})
 }

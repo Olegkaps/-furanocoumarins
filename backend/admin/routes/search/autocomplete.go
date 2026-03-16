@@ -13,6 +13,16 @@ type AutocompleteResponse struct {
 	Values []string `json:"values"`
 }
 
+// Autocomletion godoc
+// @Summary      Autocomplete column values
+// @Description  Returns prefix-matched values for a column
+// @Tags         search
+// @Param        column path string true "Column name"
+// @Param        value query string true "Prefix to match"
+// @Produce      json
+// @Success      200 {object} AutocompleteResponse
+// @Failure      400,500 {object} http.ErrorResponse
+// @Router       /autocomplete/{column} [get]
 func Autocomletion(c *fiber.Ctx) error {
 	column := c.Params("column")
 	value := c.Query("value", "")

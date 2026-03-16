@@ -15,10 +15,19 @@ import (
 
 type SearchResponse struct {
 	Metadata       []*cassandra.ColumnMeta `json:"metadata"`
-	Data           interface{}             `json:"data"`
+	Data           []map[string]any `json:"data"`
 	TableTimestamp time.Time               `json:"timestamp"`
 }
 
+// Search_main_app godoc
+// @Summary      Search main app data
+// @Description  Searches the active table by query string
+// @Tags         search
+// @Param        q query string true "Search query"
+// @Produce      json
+// @Success      200 {object} SearchResponse
+// @Failure      400,500 {object} http.ErrorResponse
+// @Router       /search [get]
 func Search_main_app(c *fiber.Ctx) error {
 	searchRequest := c.Query("q")
 

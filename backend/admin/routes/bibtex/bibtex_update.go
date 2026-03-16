@@ -15,6 +15,16 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// Update_file godoc
+// @Summary      Update bibtex file
+// @Description  Uploads bibtex file and updates Cassandra
+// @Tags         bibtex
+// @Security     BearerAuth
+// @Accept       multipart/form-data
+// @Param        file formData file true "Bibtex file"
+// @Success      200
+// @Failure      400,500 {object} http.ErrorResponse
+// @Router       /bibtex [put]
 func Update_file(c *fiber.Ctx) error {
 	user := c.Locals("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)

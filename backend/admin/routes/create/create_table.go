@@ -24,6 +24,16 @@ import (
 	"admin/utils/mail"
 )
 
+// Create_table godoc
+// @Summary      Create table from Excel file
+// @Description  Uploads Excel file and creates a new table
+// @Tags         tables
+// @Security     BearerAuth
+// @Accept       multipart/form-data
+// @Param        file formData file true "Excel file"
+// @Success      200
+// @Failure      400,500 {object} http.ErrorResponse
+// @Router       /create-table [post]
 func Create_table(c *fiber.Ctx) error { // TO DO: no more than 10 tables
 	user := c.Locals("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)

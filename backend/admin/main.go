@@ -1,3 +1,10 @@
+// @title           Furocoumarins Admin API
+// @version         1.0
+// @description     API for Furocoumarins admin backend
+// @BasePath        /
+// @SecurityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 package main
 
 import (
@@ -8,6 +15,7 @@ import (
 
 	"github.com/ansrivas/fiberprometheus/v2"
 	jwtware "github.com/gofiber/contrib/jwt"
+	"github.com/gofiber/contrib/swagger"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -39,6 +47,13 @@ func SetUp() *fiber.App {
 	app.Use(prometheus.Middleware)
 
 	app.Use(cors.New(settings.CORS_SETTINGS))
+
+	app.Use(swagger.New(swagger.Config{
+		BasePath: "/",
+		FilePath: "./docs/swagger.json",
+		Path:     "docs",
+		Title:    "Furocoumarins Admin API",
+	}))
 
 	app.Get("/metadata", search.Get_current_metadata)
 	app.Get("/autocomplete/:column", search.Autocomletion)

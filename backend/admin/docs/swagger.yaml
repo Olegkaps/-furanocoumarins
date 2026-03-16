@@ -1,0 +1,584 @@
+basePath: /
+definitions:
+  cassandra.ColumnMeta:
+    properties:
+      column:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      type:
+        type: string
+    type: object
+  cassandra.Table:
+    properties:
+      created_at:
+        type: string
+      is_active:
+        type: boolean
+      is_ok:
+        type: boolean
+      name:
+        type: string
+      tableData:
+        type: string
+      tableMeta:
+        type: string
+      tableSpecies:
+        type: string
+      version:
+        type: string
+    type: object
+  http.ArticleValResponse:
+    properties:
+      val:
+        example: |-
+          @article{key2024,
+            author = {Smith, J.},
+            title = {Title},
+            year = {2024}
+          }
+        type: string
+    type: object
+  http.ErrorResponse:
+    properties:
+      error:
+        example: error message
+        type: string
+    type: object
+  http.TokenResponse:
+    properties:
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    type: object
+  search.AutocompleteResponse:
+    properties:
+      values:
+        items:
+          type: string
+        type: array
+    type: object
+  search.GetMetadataResponse:
+    properties:
+      metadata:
+        items:
+          $ref: '#/definitions/cassandra.ColumnMeta'
+        type: array
+      timestamp:
+        type: string
+    type: object
+  search.SearchResponse:
+    properties:
+      data:
+        items:
+          additionalProperties: {}
+          type: object
+        type: array
+      metadata:
+        items:
+          $ref: '#/definitions/cassandra.ColumnMeta'
+        type: array
+      timestamp:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: API for Furocoumarins admin backend
+  title: Furocoumarins Admin API
+  version: "1.0"
+paths:
+  /article/{id}:
+    get:
+      description: Returns bibtex text for the given article ID
+      parameters:
+      - description: Article ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.ArticleValResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Get article by ID
+      tags:
+      - bibtex
+  /auth/change-password:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Sends password reset link to user email
+      parameters:
+      - description: Username or email
+        in: formData
+        name: uname_or_email
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Request password change
+      tags:
+      - auth
+  /auth/confirm-login-mail:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Exchanges word from email link for JWT token
+      parameters:
+      - description: Token from email link
+        in: formData
+        name: word
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.TokenResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Confirm login via magic link
+      tags:
+      - auth
+  /auth/confirm-password-change:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Sets new password using token from email link
+      parameters:
+      - description: Token from email link
+        in: formData
+        name: word
+        required: true
+        type: string
+      - description: New password
+        in: formData
+        name: password
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Confirm password change
+      tags:
+      - auth
+  /auth/login:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Returns JWT token on success
+      parameters:
+      - description: Username or email
+        in: formData
+        name: uname_or_email
+        required: true
+        type: string
+      - description: Password
+        in: formData
+        name: password
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.TokenResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Login with username/email and password
+      tags:
+      - auth
+  /auth/login-mail:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Sends a magic link to user email for passwordless login
+      parameters:
+      - description: Username or email
+        in: formData
+        name: uname_or_email
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Request login link by email
+      tags:
+      - auth
+  /auth/renew-token:
+    post:
+      description: Returns new JWT token for authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.TokenResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Renew JWT token
+      tags:
+      - auth
+  /autocomplete/{column}:
+    get:
+      description: Returns prefix-matched values for a column
+      parameters:
+      - description: Column name
+        in: path
+        name: column
+        required: true
+        type: string
+      - description: Prefix to match
+        in: query
+        name: value
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/search.AutocompleteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Autocomplete column values
+      tags:
+      - search
+  /bibtex:
+    put:
+      consumes:
+      - multipart/form-data
+      description: Uploads bibtex file and updates Cassandra
+      parameters:
+      - description: Bibtex file
+        in: formData
+        name: file
+        required: true
+        type: file
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update bibtex file
+      tags:
+      - bibtex
+  /create-table:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Uploads Excel file and creates a new table
+      parameters:
+      - description: Excel file
+        in: formData
+        name: file
+        required: true
+        type: file
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create table from Excel file
+      tags:
+      - tables
+  /get-tables-list:
+    post:
+      description: Returns all tables from Cassandra
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/cassandra.Table'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get list of all tables
+      tags:
+      - tables
+  /make-table-active/{timestamp}:
+    post:
+      description: Sets the given table as the active one
+      parameters:
+      - description: Table timestamp
+        in: path
+        name: timestamp
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Activate table by timestamp
+      tags:
+      - tables
+  /metadata:
+    get:
+      description: Returns metadata and timestamp of the active table
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/search.GetMetadataResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Get current table metadata
+      tags:
+      - search
+  /pages/{name}:
+    get:
+      description: Returns markdown content of a page from S3
+      parameters:
+      - description: Page name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - text/markdown
+      responses:
+        "200":
+          description: Markdown content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Get page content by name
+      tags:
+      - pages
+    put:
+      consumes:
+      - application/octet-stream
+      description: Uploads markdown content for a page (admin only)
+      parameters:
+      - description: Page name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Markdown content
+        in: body
+        name: body
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create or update page
+      tags:
+      - pages
+  /ping:
+    get:
+      description: Returns 200 OK for liveness/readiness checks
+      responses:
+        "200":
+          description: OK
+      summary: Health check ping
+      tags:
+      - health
+  /search:
+    get:
+      description: Searches the active table by query string
+      parameters:
+      - description: Search query
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/search.SearchResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Search main app data
+      tags:
+      - search
+  /table/{timestamp}:
+    delete:
+      description: Deletes the table with the given timestamp
+      parameters:
+      - description: Table timestamp
+        in: path
+        name: timestamp
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete table by timestamp
+      tags:
+      - tables
+  /tables:
+    delete:
+      description: Deletes all tables that are not marked as OK
+      responses:
+        "200":
+          description: OK
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete all bad tables
+      tags:
+      - tables
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

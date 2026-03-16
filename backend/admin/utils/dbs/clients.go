@@ -18,6 +18,9 @@ func mustLoadRedisClient() *redis.Client {
 	r := redis.NewClient(settings.REDIS_SOURCE)
 
 	if err := r.Ping(context.Background()).Err(); err != nil {
+		if settings.ENV_TYPE == "NODB" {
+			return nil
+		}
 		panic(err)
 	}
 
@@ -37,6 +40,9 @@ func mustLoadPostgres() *sql.DB {
 	)
 
 	if err != nil {
+		if settings.ENV_TYPE == "NODB" {
+			return nil
+		}
 		panic(err)
 	}
 

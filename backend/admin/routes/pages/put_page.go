@@ -20,6 +20,18 @@ import (
 
 const maxPageRunes = 10_000
 
+// Put_page godoc
+// @Summary      Create or update page
+// @Description  Uploads markdown content for a page (admin only)
+// @Tags         pages
+// @Security     BearerAuth
+// @Param        name path string true "Page name"
+// @Param        body body string true "Markdown content"
+// @Accept       application/octet-stream
+// @Produce      json
+// @Success      200
+// @Failure      400,401,500 {object} http.ErrorResponse
+// @Router       /pages/{name} [put]
 func Put_page(c *fiber.Ctx) error {
 	user := c.Locals("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)

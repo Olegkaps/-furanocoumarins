@@ -10,6 +10,15 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// Delete_table godoc
+// @Summary      Delete table by timestamp
+// @Description  Deletes the table with the given timestamp
+// @Tags         tables
+// @Security     BearerAuth
+// @Param        timestamp path string true "Table timestamp"
+// @Success      200
+// @Failure      400,500 {object} http.ErrorResponse
+// @Router       /table/{timestamp} [delete]
 func Delete_table(c *fiber.Ctx) error {
 	tableTimestamp := c.Params("timestamp")
 
@@ -32,6 +41,14 @@ func Delete_table(c *fiber.Ctx) error {
 	return http.Resp200(c)
 }
 
+// Delete_all_bad_tables godoc
+// @Summary      Delete all bad tables
+// @Description  Deletes all tables that are not marked as OK
+// @Tags         tables
+// @Security     BearerAuth
+// @Success      200
+// @Failure      500 {object} http.ErrorResponse
+// @Router       /tables [delete]
 func Delete_all_bad_tables(c *fiber.Ctx) error {
 	session, err := dbs.CQL.CreateSession()
 	if err != nil {

@@ -8,6 +8,15 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// Activate_table godoc
+// @Summary      Activate table by timestamp
+// @Description  Sets the given table as the active one
+// @Tags         tables
+// @Security     BearerAuth
+// @Param        timestamp path string true "Table timestamp"
+// @Success      200
+// @Failure      400,500 {object} http.ErrorResponse
+// @Router       /make-table-active/{timestamp} [post]
 func Activate_table(c *fiber.Ctx) error {
 	tableTimestamp := c.Params("timestamp")
 
