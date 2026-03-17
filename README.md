@@ -143,6 +143,24 @@ Main backend (go-auth) variables are loaded from `env/.env` (and related files u
 **Frontend:**
 - `VITE_REACT_APP_BACKEND_SOURCE` — backend API base URL (used as `BASE_URL` in [frontend/src/config.tsx](frontend/src/config.tsx)). Must be set at build/run time for the frontend to call the API.
 
+## Updating API documentation (Swagger)
+
+The admin backend exposes Swagger UI at `/docs` (no auth required). To regenerate the OpenAPI spec after changing routes or annotations:
+
+1. Install the [swag](https://github.com/swaggo/swag) CLI (once):
+   ```bash
+   go install github.com/swaggo/swag/cmd/swag@latest
+   ```
+
+2. From the admin backend directory, generate docs and apply the patch so examples show correct field names (`error`, `token`, `val`) instead of generic placeholders:
+   ```bash
+   cd backend/admin
+   swag init -g main.go --parseDependency --parseInternal
+   go run ./scripts/patch_swagger.go
+   ```
+
+3. Restart the backend (or run it) and open `http://<host>/docs` to view the updated documentation.
+
 ## Admin Panel
 
 Accessible via a secure route (JWT required). It allows:
