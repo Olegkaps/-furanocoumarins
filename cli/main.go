@@ -1,9 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"database/sql"
 	"fmt"
+	env "fuco-cli/env_data"
 	"log"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/gocql/gocql"
@@ -23,11 +28,13 @@ type envConfig struct {
 }
 
 var cfg envConfig
+var envKeys []env.EnvKeys
 
 func init() {
 	if err := cleanenv.ReadEnv(&cfg); err != nil {
 		log.Fatalf("config: %v", err)
 	}
+	envKeys = env.GetEnvKeys()
 }
 
 const (
@@ -60,6 +67,16 @@ const (
 	cassandraPagesSchema = `CREATE TABLE IF NOT EXISTS chemdb.pages (
 	name text PRIMARY KEY,
 	url text);`
+
+	grafanaIniTemplate = `[smtp]
+enabled = true
+host = smtp.yandex.ru:587
+user = furanocoumarins.apiaceae
+password = xxxxxx
+from_address = furanocoumarins.apiaceae@yandex.ru
+from_name = DEV grafana alerts
+skip_verify = false
+`
 )
 
 var rootCmd = &cobra.Command{
@@ -69,6 +86,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(initEnvCmd)
 	rootCmd.AddCommand(createAdminCmd)
 }
 
@@ -88,6 +106,19 @@ var initCmd = &cobra.Command{
 		default:
 			log.Fatalf("Unknown DB: %s", dbType)
 		}
+	},
+}
+
+var initEnvCmd = &cobra.Command{
+	Use:   "init_env [dir]",
+	Short: "Initialize environment (default dir: ..; creates env/ and monitoring/grafana.ini)",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		dir := ".."
+		if len(args) > 0 {
+			dir = args[0]
+		}
+		initEnv(dir)
 	},
 }
 
@@ -151,6 +182,185 @@ func initCassandraKey() {
 		log.Fatal(err)
 	}
 	fmt.Println("Keyspace initialized")
+}
+
+func initEnv(dir string) {
+	log.Println("These variables are for local development only. Do not use in production.")
+
+	absBase, err := filepath.Abs(dir)
+	if err != nil {
+		log.Fatalf("resolve base path: %v", err)
+	}
+
+	envDir := filepath.Join(absBase, "env")
+
+	absDir, err := filepath.Abs(envDir)
+	if err != nil {
+		log.Fatalf("resolve env path: %v", err)
+	}
+
+	info, err := os.Stat(absDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(absDir, 0755); err != nil {
+				log.Fatalf("create directory: %v", err)
+			}
+			log.Printf("Directory did not exist; created: %s", absDir)
+		} else {
+			log.Fatalf("stat directory: %v", err)
+		}
+	} else if !info.IsDir() {
+		log.Fatalf("not a directory: %s", absDir)
+	} else {
+		log.Printf("Directory already existed: %s", absDir)
+	}
+
+	for _, ek := range envKeys {
+		path := filepath.Join(absDir, ek.Filename)
+		if _, err := os.Stat(path); err != nil {
+			if os.IsNotExist(err) {
+				if err := writeEnvFile(path, ek.Keys); err != nil {
+					log.Fatalf("create %s: %v", ek.Filename, err)
+				}
+				log.Printf("Created %s with keys: %s", ek.Filename, keysList(ek.Keys))
+				continue
+			}
+			log.Fatalf("stat %s: %v", ek.Filename, err)
+		}
+
+		existing, err := parseEnvFile(path)
+		if err != nil {
+			log.Fatalf("read %s: %v", ek.Filename, err)
+		}
+
+		extra := extraKeys(existing, ek.Keys)
+		if len(extra) > 0 {
+			log.Printf("Warning: extra keys in %s (not in template): %s", ek.Filename, strings.Join(extra, ", "))
+		}
+
+		var added []string
+		for k, v := range ek.Keys {
+			if _, has := existing[k]; !has {
+				existing[k] = v
+				added = append(added, k)
+			}
+		}
+		if len(added) == 0 {
+			log.Printf("No new keys to add to %s", ek.Filename)
+			continue
+		}
+		if err := appendEnvFile(path, added, ek.Keys); err != nil {
+			log.Fatalf("update %s: %v", ek.Filename, err)
+		}
+		log.Printf("Appended to %s keys: %s", ek.Filename, strings.Join(added, ", "))
+	}
+
+	initGrafanaSMTP(absBase)
+}
+
+func initGrafanaSMTP(absBase string) {
+	monDir := filepath.Join(absBase, "monitoring")
+
+	iniPath := filepath.Join(monDir, "grafana.ini")
+	if _, err := os.Stat(iniPath); err == nil {
+		log.Printf("monitoring/grafana.ini already exists, skipping: %s", iniPath)
+		return
+	}
+	if err := os.WriteFile(iniPath, []byte(grafanaIniTemplate), 0644); err != nil {
+		log.Fatalf("write grafana.ini: %v", err)
+	}
+	log.Printf("Created monitoring/grafana.ini: %s", iniPath)
+}
+
+func keysList(m map[string]string) string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	return strings.Join(ks, ", ")
+}
+
+func extraKeys(existing, template map[string]string) []string {
+	var out []string
+	for k := range existing {
+		if _, inTemplate := template[k]; !inTemplate {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func writeEnvFile(path string, keys map[string]string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	names := make([]string, 0, len(keys))
+	for k := range keys {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	for _, k := range names {
+		if _, err := fmt.Fprintf(f, "%s=%s\n", k, envValue(keys[k])); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func appendEnvFile(path string, keys []string, defaults map[string]string) error {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	for _, k := range keys {
+		v := defaults[k]
+		if _, err := fmt.Fprintf(f, "%s=%s\n", k, envValue(v)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func envValue(v string) string {
+	if v == "" || strings.Contains(v, " ") || strings.Contains(v, "#") {
+		return `"` + strings.ReplaceAll(v, `"`, `\"`) + `"`
+	}
+	return v
+}
+
+func parseEnvFile(path string) (map[string]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	out := make(map[string]string)
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		idx := strings.Index(line, "=")
+		if idx <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:idx])
+		val := strings.TrimSpace(line[idx+1:])
+		if key == "" {
+			continue
+		}
+		if len(val) >= 2 && (val[0] == '"' && val[len(val)-1] == '"' || val[0] == '\'' && val[len(val)-1] == '\'') {
+			val = val[1 : len(val)-1]
+		}
+		out[key] = val
+	}
+	return out, sc.Err()
 }
 
 func createAdmin(username, email string) {
