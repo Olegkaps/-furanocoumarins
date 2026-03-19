@@ -38,12 +38,12 @@ func Resp401(c *fiber.Ctx, err error) error {
 	} else {
 		logging.Error(c, "Unauthorized")
 	}
-	return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "unauthorized"})
+	return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{Error: "unauthorized"})
 }
 
 func Resp404(c *fiber.Ctx) error {
 	logging.Warn(c, "not found")
-	return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{Error: "not found"})
+	return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{Error: "not found"})
 }
 
 func RespErr(c *fiber.Ctx, err error) error {

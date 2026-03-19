@@ -18,7 +18,12 @@ RUN --mount=type=cache,target="/root/.cache/go-build" \
 FROM alpine
 
 WORKDIR /usr/src/app
+
 COPY --from=compiler /usr/src/app/main_app ./
+RUN mkdir ./docs
+COPY --from=compiler /usr/src/app/docs/swagger.json ./docs/swagger.json
+
+RUN apk add --no-cache curl
 
 EXPOSE 80
 CMD [ "./main_app" ]

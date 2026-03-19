@@ -106,7 +106,7 @@ func Renew_token(c *fiber.Ctx) error {
 
 	exists, err := postgres.UserExists(c, name, role)
 	if err != nil {
-		return http.Resp500(c, err)
+		return http.Resp401(c, err)
 	}
 	if !exists {
 		return http.Resp401(c, nil)
