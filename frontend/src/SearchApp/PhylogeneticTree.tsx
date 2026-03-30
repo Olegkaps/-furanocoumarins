@@ -181,7 +181,7 @@ function CountButton(
     </_Button>
 }
 
-export type CountMode = "chemical" | "article" | "all";
+export type CountMode = "chemicals" | "articles" | "all";
 
 function collectUniqueValuesFromRow(row: {[index: string]: string}, columnNames: Array<string>, into: Set<string>) {
   columnNames.forEach((col) => {
@@ -210,7 +210,7 @@ function assignUniqueCountsToTree(
   uniquesByClades: UniquesByClades,
   smilesColumns: Array<string>,
   refColumns: Array<string>,
-  countMode: "chemical" | "article",
+  countMode: "chemicals" | "articles",
 ) {
   const prefix = pathParts.join("@")
   const mergedSmiles = new Set<string>()
@@ -224,7 +224,7 @@ function assignUniqueCountsToTree(
   const nSmiles = smilesColumns.length ? mergedSmiles.size : 1
   const nRefs = refColumns.length ? mergedRefs.size : 1
   node.childs_num =
-    countMode === "chemical" ? nSmiles : nRefs
+    countMode === "chemicals" ? nSmiles : nRefs
 
   Object.values(node.childs).forEach((child) => {
     assignUniqueCountsToTree(
@@ -260,7 +260,7 @@ function PhilogeneticTree(
   for(let specie of species) {
     root.add_child(specie.clades, specie.values_count, aggregateChildCounts)
   }
-  if (countMode === "chemical" || countMode === "article") {
+  if (countMode === "chemicals" || countMode === "articles") {
     assignUniqueCountsToTree(root, [], uniquesByClades, smilesColumns, refColumns, countMode)
   }
 
@@ -368,9 +368,9 @@ function PhilogeneticTreeOrNull(
     const nSmiles = smilesColumns.length ? u.smiles.size : 1
     const nRefs = refColumns.length ? u.refs.size : 1
     counts[joined_clades] =
-      countMode === "chemical"
+      countMode === "chemicals"
         ? nSmiles
-        : countMode === "article"
+        : countMode === "articles"
           ? nRefs
           : nSmiles * nRefs
   })
@@ -404,7 +404,7 @@ function PhilogeneticTreeOrNull(
       &nbsp;&nbsp;&nbsp;
       &nbsp;&nbsp;&nbsp;
       <span style={{}}>Count by: </span>
-      {(["chemical", "article", "all"] as const).map((mode) => (
+      {(["chemicals", "articles", "all"] as const).map((mode) => (
         <button
           key={mode}
           style={mode !== countMode

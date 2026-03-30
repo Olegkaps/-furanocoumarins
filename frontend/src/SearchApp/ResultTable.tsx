@@ -5,6 +5,61 @@ import config from "../config";
 import DataMeta from "./DataMeta";
 import DataRows from "./RowsData";
 import {FileArrowUp, CircleInfo, ArrowUpRightFromSquare} from '@gravity-ui/icons';
+import { type CountMode } from "./PhylogeneticTree";
+
+function collectUniqueTokensFromRow(row: Map<string, string>, columnNames: string[], into: Set<string>) {
+  columnNames.forEach((col) => {
+    const v = row.get(col)
+    if (v != null && String(v).trim() !== "") {
+      String(v).split(/\s*,\s*/).forEach((s) => {
+        const t = s.trim()
+        if (t) into.add(t)
+      })
+    }
+  })
+}
+
+function uniqueArticleCountForSpecie(rows: DataRows[], specie: string, refColumns: string[]): number {
+  const merged = new Set<string>()
+  rows.forEach((dr) => {
+    if (dr.specie_val !== specie) return
+    dr.value_rows.forEach((row) => collectUniqueTokensFromRow(row, refColumns, merged))
+  })
+  return merged.size
+}
+
+function uniqueArticleCountForChemical(rows: DataRows[], chemical: string, refColumns: string[]): number {
+  const merged = new Set<string>()
+  rows.forEach((dr) => {
+    if (dr.chemical_val !== chemical) return
+    dr.value_rows.forEach((row) => collectUniqueTokensFromRow(row, refColumns, merged))
+  })
+  return merged.size
+}
+
+function countLabelForSpecie(rows: DataRows[], specie: string, mode: CountMode, refColumns: string[]): number {
+  const subset = rows.filter((dr) => dr.specie_val === specie)
+  if (mode === "chemicals") {
+    return new Set(subset.map((dr) => dr.chemical_val)).size
+  }
+  if (mode === "articles") {
+    return uniqueArticleCountForSpecie(rows, specie, refColumns)
+  }
+  return subset.reduce((acc, dr) => acc + dr.total_length, 0)
+}
+
+function countLabelForChemical(rows: DataRows[], chemical: string, mode: CountMode, refColumns: string[]): number {
+  const subset = rows.filter((dr) => dr.chemical_val === chemical)
+  if (mode === "chemicals") {
+    return new Set(subset.map((dr) => dr.specie_val)).size
+  }
+  if (mode === "articles") {
+    return uniqueArticleCountForChemical(rows, chemical, refColumns)
+  }
+  return subset.reduce((acc, dr) => acc + dr.total_length, 0)
+}
+
+type SelectOption = { value: string; count: number }
 
 
 function ResultTableHead({meta}: {meta: Array<DataMeta>}) {
@@ -210,17 +265,42 @@ function loadDataRowsAsCSV(rows: Array<DataRows>, meta: Array<DataMeta>) {
   window.open(encodedUri);
 }
 
+function filterCountMode(countMode: CountMode, from: CountMode, to: string) {
+  if (countMode === from) {
+    return to
+  }
+  return countMode
+}
+
+const countModeButtonInactive = {
+  padding: '7px',
+  border: '1px solid blue',
+  borderRadius: '4px',
+  marginLeft: '10px',
+  backgroundColor: '#e5e2ffff',
+} as const
+const countModeButtonActive = {
+  padding: '7px',
+  border: '1px solid yellow',
+  borderRadius: '4px',
+  marginLeft: '10px',
+  backgroundColor: 'rgb(254, 255, 244)',
+  fontWeight: 600,
+} as const
+
 function TableStateBar(
-  { rows, meta, currentSpecie, setCurrentSpecie, species, currentChemical, setCurrentChemical, chemicals }:
+  { rows, meta, currentSpecie, setCurrentSpecie, speciesOptions, currentChemical, setCurrentChemical, chemicalsOptions, countMode, setCountMode }:
   {
     rows: DataRows[],
     meta: DataMeta[],
     currentSpecie: string,
     setCurrentSpecie: React.Dispatch<React.SetStateAction<string>>,
-    species: string[],
+    speciesOptions: SelectOption[],
     currentChemical: string,
     setCurrentChemical: React.Dispatch<React.SetStateAction<string>>,
-    chemicals: string[]
+    chemicalsOptions: SelectOption[],
+    countMode: CountMode,
+    setCountMode: React.Dispatch<React.SetStateAction<CountMode>>,
   }
 ) {
   let total_rows = 0
@@ -246,33 +326,15 @@ function TableStateBar(
       paddingLeft: '20px',
     }}>
 
-  <label>Specie ({specie_key}):&nbsp;&nbsp;
-    {
-      species.length > 1 ?
-      <select
-        value={currentSpecie}
-        onChange={e => setCurrentSpecie(e.target.value)}
-      ><option value="">not selected</option>
-        {species.map((specie, i) => <option value={specie}>{i+1}: {specie}</option>)}</select>
-      :
-      <label style={{fontWeight: 630}}>{species[0]}</label>
-    }
-  </label>
-
-  <label>&nbsp;&nbsp;&nbsp;&nbsp;</label>
-
-  <label>Chemical ({chemical_key}):&nbsp;&nbsp;
-    {
-      chemicals.length > 1 ?
-      <select
-        value={currentChemical}
-        onChange={e => setCurrentChemical(e.target.value)}
-      ><option value="">not selected</option>
-        {chemicals.map((chemical, i) => <option value={chemical}>{i+1}: {chemical}</option>)}</select>
-      :
-      <label style={{fontWeight: 630}}>{chemicals[0]}</label>
-    }
-  </label>
+  <span>Count in lists: </span>
+  {(["chemicals", "articles", "all"] as const).map((mode) => (
+    <button
+      key={mode}
+      type="button"
+      style={mode !== countMode ? countModeButtonInactive : countModeButtonActive}
+      onClick={() => { setCountMode(mode) }}
+    >{filterCountMode(mode, "chemicals", "chemicals / species")}</button>
+  ))}
 
   <label>&nbsp;&nbsp;&nbsp;&nbsp;</label>
 
@@ -289,6 +351,52 @@ function TableStateBar(
   <label style={{color: 'green'}}>Rows in selection:&nbsp;&nbsp;<b>{total_rows}</b>
   </label>
 
+
+  <br />
+  <br />
+
+  <label>Specie ({specie_key}):&nbsp;&nbsp;
+    {
+      speciesOptions.length > 1 ?
+      <select
+        value={currentSpecie}
+        onChange={e => setCurrentSpecie(e.target.value)}
+      ><option value="">not selected</option>
+        {speciesOptions.map((opt, i) => (
+          <option key={opt.value} value={opt.value}>
+            {i + 1}: {opt.value} (total {countMode}: {opt.count})
+          </option>
+        ))}</select>
+      :
+      <label style={{fontWeight: 630}}>
+        {speciesOptions[0]?.value}
+        {speciesOptions[0] != null ? ` (${speciesOptions[0].count})` : ""}
+      </label>
+    }
+  </label>
+
+  <label>&nbsp;&nbsp;&nbsp;&nbsp;</label>
+
+  <label>Chemical ({chemical_key}):&nbsp;&nbsp;
+    {
+      chemicalsOptions.length > 1 ?
+      <select
+        value={currentChemical}
+        onChange={e => setCurrentChemical(e.target.value)}
+      ><option value="">not selected</option>
+        {chemicalsOptions.map((opt, i) => (
+          <option key={opt.value} value={opt.value}>
+            {i + 1}: {opt.value} (total {filterCountMode(countMode, "chemicals", "species")}: {opt.count})
+          </option>
+        ))}</select>
+      :
+      <label style={{fontWeight: 630}}>
+        {chemicalsOptions[0]?.value}
+        {chemicalsOptions[0] != null ? ` (${chemicalsOptions[0].count})` : ""}
+      </label>
+    }
+  </label>
+
   </div>
 }
 
@@ -297,37 +405,56 @@ function ResultTableWrapper({ rows, meta }: {rows: Array<DataRows>, meta: Array<
     return <></>
   }
 
-  let species: string[] = []
+  const refColumns = meta
+    .filter((m) => m.type === "reference")
+    .map((m) => m.name)
+
+  let speciesValues: string[] = []
   let used_species = new Set<string>()
-  let chemicals: string[] = []
+  let chemicalValues: string[] = []
   let used_chemicals = new Set<string>()
 
   rows.forEach((val) => {
     let specie = val.specie_val
     if (!used_species.has(specie)) {
-      species.push(specie)
+      speciesValues.push(specie)
       used_species.add(specie)
     }
 
     let chemical = val.chemical_val
     if (!used_chemicals.has(chemical)) {
-      chemicals.push(chemical)
+      chemicalValues.push(chemical)
       used_chemicals.add(chemical)
     }
   })
 
-  species = species.sort()
-  chemicals = chemicals.sort()
+  const [countMode, setCountMode] = useState<CountMode>("chemicals")
 
-  let [currentSpecie, setCurrentSpecie] = useState(species.length === 1 ? species[0] : "")
-  let [currentChemical, setCurrentChemical] = useState(chemicals.length === 1 ? chemicals[0] : "")
+  const speciesOptions: SelectOption[] = speciesValues
+    .map((value) => ({
+      value,
+      count: countLabelForSpecie(rows, value, countMode, refColumns),
+    }))
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
+
+  const chemicalsOptions: SelectOption[] = chemicalValues
+    .map((value) => ({
+      value,
+      count: countLabelForChemical(rows, value, countMode, refColumns),
+    }))
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
+
+  const [currentSpecie, setCurrentSpecie] = useState(speciesOptions.length === 1 ? speciesOptions[0].value : "")
+  const [currentChemical, setCurrentChemical] = useState(chemicalsOptions.length === 1 ? chemicalsOptions[0].value : "")
 
   return <>
   <TableStateBar
     {...{
-      rows: rows, meta: meta,
-      currentSpecie: currentSpecie, setCurrentSpecie: setCurrentSpecie, species: species,
-      currentChemical: currentChemical, setCurrentChemical: setCurrentChemical, chemicals: chemicals,
+      rows: rows,
+      meta: meta,
+      currentSpecie: currentSpecie, setCurrentSpecie: setCurrentSpecie, speciesOptions: speciesOptions,
+      currentChemical: currentChemical, setCurrentChemical: setCurrentChemical, chemicalsOptions: chemicalsOptions,
+      countMode, setCountMode,
     }}
     />
 
