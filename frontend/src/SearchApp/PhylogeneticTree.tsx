@@ -31,16 +31,18 @@ class PhilogeneticTreeNode {
     this.is_visible = true
   }
 
-  add_child(clades: Array<string>, count: number) {
+  add_child(clades: Array<string>, count: number, aggregateChildCounts: boolean) {
     let curr_clade = clades[0]
     if (!(curr_clade in this.childs)) {
       this.childs[curr_clade] = new PhilogeneticTreeNode(curr_clade)
     }
     this.clades_num += 1
-    this.childs_num += count
+    if (aggregateChildCounts) {
+      this.childs_num += count
+    }
 
     if(clades.length > 1) {
-      this.childs[curr_clade].add_child(clades.slice(1), count)
+      this.childs[curr_clade].add_child(clades.slice(1), count, aggregateChildCounts)
     } else {
       this.childs[curr_clade].clades_num = 1
       this.childs[curr_clade].childs_num = count
@@ -179,25 +181,8 @@ function CountButton(
     </_Button>
 }
 
-
-function PhilogeneticTree({ species, meta, meta_names }: {species: Array<Specie>, meta: Array<string>, meta_names: Array<string>}) {
-  if (species.length === 0) {
-    return <div></div>
-  }
-  // TO DO: all nested arrays must have same lenght eith meta
-  // TO DO: all arrays must be unique
-  let root = new PhilogeneticTreeNode("")
-  for(let specie of species) {
-    root.add_child(specie.clades, specie.values_count)
-  }
-
-  // TO DO: Add visibility for branches and clades
-
-
-  return <ZoomableContainer>{root.render(meta, meta_names)}</ZoomableContainer>
-}
-
 export type CountMode = "chemical" | "article" | "all";
+
 function collectUniqueValuesFromRow(row: {[index: string]: string}, columnNames: Array<string>, into: Set<string>) {
   columnNames.forEach((col) => {
     const v = row[col]
@@ -208,6 +193,81 @@ function collectUniqueValuesFromRow(row: {[index: string]: string}, columnNames:
       })
     }
   })
+}
+
+function joinedCladeMatchesPrefix(fullKey: string, prefix: string): boolean {
+  if (prefix === "") {
+    return true
+  }
+  return fullKey === prefix || fullKey.startsWith(prefix + "@")
+}
+
+type UniquesByClades = {[joined_clades: string]: { smiles: Set<string>; refs: Set<string> }}
+
+function assignUniqueCountsToTree(
+  node: PhilogeneticTreeNode,
+  pathParts: Array<string>,
+  uniquesByClades: UniquesByClades,
+  smilesColumns: Array<string>,
+  refColumns: Array<string>,
+  countMode: "chemical" | "article",
+) {
+  const prefix = pathParts.join("@")
+  const mergedSmiles = new Set<string>()
+  const mergedRefs = new Set<string>()
+  Object.entries(uniquesByClades).forEach(([joined, u]) => {
+    if (joinedCladeMatchesPrefix(joined, prefix)) {
+      u.smiles.forEach((s) => mergedSmiles.add(s))
+      u.refs.forEach((r) => mergedRefs.add(r))
+    }
+  })
+  const nSmiles = smilesColumns.length ? mergedSmiles.size : 1
+  const nRefs = refColumns.length ? mergedRefs.size : 1
+  node.childs_num =
+    countMode === "chemical" ? nSmiles : nRefs
+
+  Object.values(node.childs).forEach((child) => {
+    assignUniqueCountsToTree(
+      child,
+      [...pathParts, child.clade_name],
+      uniquesByClades,
+      smilesColumns,
+      refColumns,
+      countMode,
+    )
+  })
+}
+
+function PhilogeneticTree(
+  { species, meta, meta_names, countMode, uniquesByClades, smilesColumns, refColumns }:
+  {
+    species: Array<Specie>
+    meta: Array<string>
+    meta_names: Array<string>
+    countMode: CountMode
+    uniquesByClades: UniquesByClades
+    smilesColumns: Array<string>
+    refColumns: Array<string>
+  },
+) {
+  if (species.length === 0) {
+    return <div></div>
+  }
+  // TO DO: all nested arrays must have same lenght eith meta
+  // TO DO: all arrays must be unique
+  const aggregateChildCounts = countMode === "all"
+  let root = new PhilogeneticTreeNode("")
+  for(let specie of species) {
+    root.add_child(specie.clades, specie.values_count, aggregateChildCounts)
+  }
+  if (countMode === "chemical" || countMode === "article") {
+    assignUniqueCountsToTree(root, [], uniquesByClades, smilesColumns, refColumns, countMode)
+  }
+
+  // TO DO: Add visibility for branches and clades
+
+
+  return <ZoomableContainer>{root.render(meta, meta_names)}</ZoomableContainer>
 }
 
 function PhilogeneticTreeOrNull(
@@ -286,8 +346,7 @@ function PhilogeneticTreeOrNull(
     .filter((m) => m["type"]?.includes("ref[]"))
     .map((m) => m["column"])
 
-  type UniqueSets = { smiles: Set<string>; refs: Set<string> }
-  const uniquesByClades: {[joined_clades: string]: UniqueSets} = {}
+  const uniquesByClades: UniquesByClades = {}
 
   response["data"]?.forEach((row: {[index: string]: string}) => {
     let clades: Array<string> = []
@@ -356,7 +415,15 @@ function PhilogeneticTreeOrNull(
       ))}
       <br></br>
       </div>
-    <PhilogeneticTree {...{species: species, meta: species_meta, meta_names: meta_names}} />
+    <PhilogeneticTree {...{
+      species,
+      meta: species_meta,
+      meta_names,
+      countMode,
+      uniquesByClades,
+      smilesColumns,
+      refColumns,
+    }} />
   </div>
 }
 
