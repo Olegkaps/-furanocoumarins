@@ -4,6 +4,7 @@ token.json
 backend/cassandra/nf-data-explorer/
 backend/secrets/
 ignores/
+result-cols.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
