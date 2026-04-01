@@ -12,10 +12,11 @@ values = set()
 
 bad_values = []
 for v in r.values:
-    if not isinstance(v, str):
+    if not isinstance(v, str | int):
         bad_values.append(v)
         continue
 
+    v = str(v)
     for i in v.split("_"):
         values.add(i)
 
