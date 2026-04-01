@@ -361,6 +361,7 @@ function TableStateBar(
       <select
         value={currentSpecie}
         onChange={e => setCurrentSpecie(e.target.value)}
+        style={{maxWidth: '200px'}}
       ><option value="">not selected</option>
         {speciesOptions.map((opt, i) => (
           <option key={opt.value} value={opt.value}>
@@ -383,6 +384,7 @@ function TableStateBar(
       <select
         value={currentChemical}
         onChange={e => setCurrentChemical(e.target.value)}
+        style={{maxWidth: '200px'}}
       ><option value="">not selected</option>
         {chemicalsOptions.map((opt, i) => (
           <option key={opt.value} value={opt.value}>
