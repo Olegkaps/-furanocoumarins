@@ -38,8 +38,17 @@ raidicals_filter = {
     "OC2": "acetoxy",
     "OOC2": "acetoxy",
     "OO": "ester",
-    "Coum": "dim_coum",
+    "Coum": "coumarin",
+    "C1Coum": "coumarin",
+    "CCoum": "coumarin",
+    "OCoum": "coumarin",
+    "OOC3Coum": "coumarin",
     "Phenyl": "phenyl",
+    "OOPhenyl": "phenyl",
+    "OOC2Phenyl": "phenyl",
+    "OOC1Phenyl": "phenyl",
+    "OC3Phenyl": "phenyl",
+    "OOC3Phenyl": "phenyl",
 }
 
 ignored_radicals = set[str]()
