@@ -183,18 +183,6 @@ function CountButton(
 
 export type CountMode = "chemicals" | "articles" | "all";
 
-function collectUniqueValuesFromRow(row: {[index: string]: string}, columnNames: Array<string>, into: Set<string>) {
-  columnNames.forEach((col) => {
-    const v = row[col]
-    if (v != null && String(v).trim() !== "") {
-      String(v).split(/\s*,\s*/).forEach((s) => {
-        const t = s.trim()
-        if (t) into.add(t)
-      })
-    }
-  })
-}
-
 function joinedCladeMatchesPrefix(fullKey: string, prefix: string): boolean {
   if (prefix === "") {
     return true
@@ -202,7 +190,7 @@ function joinedCladeMatchesPrefix(fullKey: string, prefix: string): boolean {
   return fullKey === prefix || fullKey.startsWith(prefix + "@")
 }
 
-type UniquesByClades = {[joined_clades: string]: { smiles: Set<string>; refs: Set<string> }}
+type UniquesByClades = {[joined_clades: string]: { smiles: Set<string>; refs: Set<string>; total: number }}
 
 function assignUniqueCountsToTree(
   node: PhilogeneticTreeNode,
@@ -356,23 +344,24 @@ function PhilogeneticTreeOrNull(
     })
     const joined_clades = clades.join("@")
     if (!(joined_clades in uniquesByClades)) {
-      uniquesByClades[joined_clades] = { smiles: new Set(), refs: new Set() }
+      uniquesByClades[joined_clades] = { smiles: new Set(), refs: new Set(), total: 0 }
     }
     const u = uniquesByClades[joined_clades]
-    collectUniqueValuesFromRow(row, smilesColumns, u.smiles)
-    collectUniqueValuesFromRow(row, refColumns, u.refs)
+    u.total += 1
+    u.smiles.add(row[smilesColumns[0]])
+    u.refs.add(row[refColumns[0]])
   })
 
   let counts: {[index: string]: number} = {}
   Object.entries(uniquesByClades).forEach(([joined_clades, u]) => {
-    const nSmiles = smilesColumns.length ? u.smiles.size : 1
-    const nRefs = refColumns.length ? u.refs.size : 1
+    const nSmiles = u.smiles.size
+    const nRefs = u.refs.size
     counts[joined_clades] =
       countMode === "chemicals"
         ? nSmiles
         : countMode === "articles"
           ? nRefs
-          : nSmiles * nRefs
+          : u.total
   })
 
   let species = [] as Array<Specie>

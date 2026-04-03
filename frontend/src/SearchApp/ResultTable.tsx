@@ -355,7 +355,7 @@ function TableStateBar(
   <br />
   <br />
 
-  <label>Specie ({specie_key}):&nbsp;&nbsp;
+  <label>Species ({specie_key}):&nbsp;&nbsp;
     {
       speciesOptions.length > 1 ?
       <select
