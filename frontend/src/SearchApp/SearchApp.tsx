@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, CircleInfo } from "@gravity-ui/icons";
+import { ChevronDown, ChevronRight, CircleInfo } from "@gravity-ui/icons";
 import { api } from "../shared/api";
 import { useNavigate } from "react-router-dom";
 import Autocomplete from "./Autocomplete";
@@ -45,6 +45,10 @@ function AutocompletedInput({fetchAutocomplete, onChange, style}: AutocompletesI
 
 function SearchApp() {
   let [metadata, setMetadata] = useState<Array<{[index: string]:any}>>([]);
+  const [openSection, setOpenSection] = useState<Record<string, boolean>>({
+    specie: false,
+    chemical: false,
+  });
   const navigate = useNavigate();
 
   const fetchMetadata = async () => {
@@ -114,41 +118,77 @@ function SearchApp() {
       width: '600px',
       margin: 'auto'
     }}>
-    <h2 style={{textAlign: 'center'}}>Search species or substances</h2>
-    <ul>{parsed_metadata.map((curr_meta, ind) => {
-
-      let _fetch: (query: string) => Promise<string[]>
-
-      if (curr_meta["type"].includes("set[")) {
-        let values = curr_meta["type"].split("set[")[1].split("]")[0].split(" ")
-
-        _fetch = async (query: string): Promise<string[]> => {
-          return values.filter((item: string) =>
-            item.toLowerCase().includes(query.toLowerCase())
-          );
-        }
-      } else {
-        _fetch = fetchAutocomplete(curr_meta["column"])
-      }
-
-      return <li style={{width: '400px', position: 'relative'}}><label title={curr_meta["description"]}>
-        <CircleInfo />&nbsp;{curr_meta["name"]}:
-        {ind > 0 && <span style={{position: 'absolute', left: '90%', color: 'blue'}}>AND</span>}
-        <br></br>
-        <AutocompletedInput
-          fetchAutocomplete={_fetch}
-          onChange={(value) => {search_values.set(curr_meta, value.trim())}}
+    <h2 style={{textAlign: 'center'}}>Search</h2>
+    {[["Species", "specie"], ["Chemicals", "chemical"]].map(([name, type], ind) => {
+      const isOpen = openSection[type];
+      return (
+      <div key={type} style={{ marginBottom: '12px' }}>
+        <button
+          type="button"
+          onClick={() =>
+            setOpenSection((prev) => ({ ...prev, [type]: !prev[type] }))
+          }
+          aria-expanded={isOpen}
           style={{
-            position: 'relative',
-            left: '20%',
-            width: '300px',
-            height: '30px',
-            borderColor: 'grey'
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            width: '100%',
+            padding: '4px 0',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            textAlign: 'left',
           }}
-        />
-        <hr style={{border: 0, margin: 0, height: '15px'}}></hr>
-      </label></li>
-    })}</ul>
+        >
+          <span style={{ display: 'flex', color: '#666', flexShrink: 0 }} aria-hidden>
+            {isOpen ? <ChevronDown /> : <ChevronRight />}
+          </span>
+          <h2 style={{ margin: 0 }}>{name}</h2>
+        </button>
+        {isOpen && (
+      <ul>
+        {parsed_metadata.map((curr_meta, ind) => {
+          if (!curr_meta["type"].includes(type)) {
+            return null
+          }
+
+          let _fetch: (query: string) => Promise<string[]>
+
+          if (curr_meta["type"].includes("set[")) {
+            let values = curr_meta["type"].split("set[")[1].split("]")[0].split(" ")
+
+            _fetch = async (query: string): Promise<string[]> => {
+              return values.filter((item: string) =>
+                item.toLowerCase().includes(query.toLowerCase())
+              );
+            }
+          } else {
+            _fetch = fetchAutocomplete(curr_meta["column"])
+          }
+
+          return <li key={curr_meta["column"] ?? ind} style={{width: '400px', position: 'relative'}}><label title={curr_meta["description"]}>
+            <CircleInfo />&nbsp;{curr_meta["name"]}:
+            {ind > 0 && <span style={{position: 'absolute', left: '90%', color: 'blue'}}>AND</span>}
+            <br></br>
+            <AutocompletedInput
+              fetchAutocomplete={_fetch}
+              onChange={(value) => {search_values.set(curr_meta, value.trim())}}
+              style={{
+                position: 'relative',
+                left: '20%',
+                width: '300px',
+                height: '30px',
+                borderColor: 'grey'
+              }}
+            />
+            <hr style={{border: 0, margin: 0, height: '15px'}}></hr>
+          </label></li>
+      })}</ul>
+        )}
+        {ind < 1 && <hr style={{border: '1px dashed grey'}}></hr>}
+      </div>
+    )})}
     <button type='submit' style={{
       position: 'relative',
       left: '45%',
