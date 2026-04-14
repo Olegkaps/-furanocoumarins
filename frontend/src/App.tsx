@@ -2,6 +2,7 @@ import {
   BrowserRouter,
   Routes,
   Route,
+  Navigate,
 } from "react-router-dom";
 
 
@@ -17,7 +18,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-          <Route path="/" element={<SearchApp />}/>
+          <Route path="/" element={<Navigate to="/about" />}/>
+          <Route path="/search" element={<SearchApp />}/>
           <Route path="/about" element={<AboutPage />}/>
           <Route path="/page/:smiles" element={<SubstancePage />}/>
           <Route path="/table" element={<AppResultTable />}/>

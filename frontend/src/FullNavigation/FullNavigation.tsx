@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom';
-import { CircleInfo, House } from '@gravity-ui/icons';
+import { CircleInfo, Magnifier } from '@gravity-ui/icons';
 
 function HomeLink() {
   return (
     <Link
-      to="/"
+      to="/search"
       target="_blank"
       style={{
         position: 'absolute',
@@ -16,7 +16,7 @@ function HomeLink() {
         padding: '10px 10px 5px 10px',
       }}
     >
-      <House width={'30px'} height={'30px'} />
+      <Magnifier width={'30px'} height={'30px'} />
     </Link>
   );
 }

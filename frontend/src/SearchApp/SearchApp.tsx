@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, CircleInfo } from "@gravity-ui/icons";
+import { ChevronDown, ChevronRight, CircleInfo, Magnifier } from "@gravity-ui/icons";
 import { api } from "../shared/api";
 import { useNavigate } from "react-router-dom";
 import Autocomplete from "./Autocomplete";
@@ -196,7 +196,7 @@ function SearchApp() {
       border: '1px solid grey',
       borderRadius: '7px',
       backgroundColor: '#efeaff',
-    }}>Search<ChevronRight style={{color: 'grey'}}/></button>
+    }}>Search&nbsp;<Magnifier style={{color: 'grey'}}/></button>
   </form></>
 }
 
