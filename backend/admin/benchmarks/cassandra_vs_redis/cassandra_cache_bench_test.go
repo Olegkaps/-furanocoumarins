@@ -1,4 +1,3 @@
-// Package cassandrabench compares Cassandra WITH CACHING and Redis cold reads.
 package cassandrabench
 
 import (
