@@ -82,12 +82,15 @@ After the first launch of the backend, build the CLI and run init in this order 
 
 - Run tests:
   ```bash
-  cd backend/admin & go test -v ./...
+  cd backend/admin && go test -v ./...
   ```
   or inside container
   ```bash
   docker build backend/admin --file Dockerfile.test --build-arg VAR=$(date +%s)
   ```
+
+- Cassandra vs Redis cache benchmarks (Podman + `go test -bench`, not part of default `./...`): [backend/admin/benchmarks/cassandra_vs_redis/README.md](backend/admin/benchmarks/cassandra_vs_redis/README.md).
+- Cassandra sparse-read grid benchmark (large tables, Cassandra only): [backend/admin/benchmarks/cassandra_sample_grid/README.md](backend/admin/benchmarks/cassandra_sample_grid/README.md).
 
 ### 3. Launching the frontend
 1. Build a Docker image:
