@@ -164,49 +164,98 @@ function GroupedResultTable(
       {dataRows.chemical_row.size * dataRows.specie_row.size > 0 ?
       <div>
       <div style={{display: 'flex'}}>
-        <Container maxHeight="500px"><table>
-          <p style={{textAlign: 'center', color: 'red'}}>
-            Chemical
-            <a
-            href={"/page/" + encodeURIComponent(dataRows.chemical_row.get(meta[smiles_ind].name) ?? "")}
-            target="_blank"
-          ><ArrowUpRightFromSquare /></a>
+        <Container maxHeight="500px">
+          <p style={{ textAlign: "center", color: "red", marginTop: 0 }}>
+            Chemical{" "}
+            <button
+              type="button"
+              title="Open substance page in new tab"
+              onClick={() => {
+                const smiles = dataRows.chemical_row.get(meta[smiles_ind].name) ?? "";
+                window.open(
+                  "/page/" + encodeURIComponent(smiles),
+                  "_blank",
+                  "noopener,noreferrer",
+                );
+              }}
+              style={{
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                padding: 0,
+                verticalAlign: "middle",
+                color: "inherit",
+              }}
+            >
+              <ArrowUpRightFromSquare />
+            </button>
           </p>
-          <tbody>
-          { meta.map((meta_val, ind) => {
-            if (!meta_val.is_chemical || meta_val.type === "smiles") {
-              return
-            }
-            return <tr>
-              <td title={meta_val.description} style={{maxWidth: '180px'}}><CircleInfo />&nbsp;{meta_val.show_name}</td>
-              <td style={{maxWidth: '130px'}}>{meta[ind].render(dataRows.chemical_row.get(meta_val.name))}</td>
-            </tr>
-        })}</tbody></table></Container>
+          <table>
+            <tbody>
+              {meta.map((meta_val, ind) => {
+                if (!meta_val.is_chemical || meta_val.type === "smiles") {
+                  return
+                }
+                return (
+                  <tr key={meta_val.name}>
+                    <td title={meta_val.description} style={{ maxWidth: "180px" }}>
+                      <CircleInfo />
+                      &nbsp;{meta_val.show_name}
+                    </td>
+                    <td style={{ maxWidth: "130px" }}>
+                      {meta[ind].render(dataRows.chemical_row.get(meta_val.name))}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </Container>
 
         <table>
-        <tr><Container>
-          {meta[smiles_ind].render(dataRows.chemical_row.get(meta[smiles_ind].name))}
-        </Container></tr>
-
-        <tr style={{maxWidth: '300px'}}>
-          <ScrollableContainer maxHeight="250px">
-            <ResultTable {...{rows: dataRows.value_rows, meta: meta}}/>
-          </ScrollableContainer>
-        </tr>
+          <tbody>
+            <tr style={{ backgroundColor: "transparent" }}>
+              <td style={{ verticalAlign: "top", border: "none" }}>
+                <Container>
+                  {meta[smiles_ind].render(
+                    dataRows.chemical_row.get(meta[smiles_ind].name),
+                  )}
+                </Container>
+              </td>
+            </tr>
+            <tr style={{ backgroundColor: "transparent" }}>
+              <td style={{ maxWidth: "300px", verticalAlign: "top", border: "none" }}>
+                <ScrollableContainer maxHeight="250px">
+                  <ResultTable {...{ rows: dataRows.value_rows, meta: meta }} />
+                </ScrollableContainer>
+              </td>
+            </tr>
+          </tbody>
         </table>
 
-      <Container maxHeight="500px"><table>
-        <p style={{textAlign: 'center', color: 'blue'}}>Species</p>
-        <tbody>
-        { meta.map((meta_val, ind) => {
-          if (!meta_val.is_specie) {
-            return
-          }
-          return <tr>
-            <td title={meta_val.description} style={{maxWidth: '180px'}}><CircleInfo />&nbsp;{meta_val.show_name}</td>
-            <td style={{maxWidth: '130px'}}>{meta[ind].render(dataRows.specie_row.get(meta_val.name))}</td>
-          </tr>
-      })}</tbody></table></Container>
+      <Container maxHeight="500px">
+        <p style={{ textAlign: "center", color: "blue", marginTop: 0 }}>Species</p>
+        <table>
+          <tbody>
+            {meta.map((meta_val, ind) => {
+              if (!meta_val.is_specie) {
+                return
+              }
+              return (
+                <tr key={meta_val.name}>
+                  <td title={meta_val.description} style={{ maxWidth: "180px" }}>
+                    <CircleInfo />
+                    &nbsp;{meta_val.show_name}
+                  </td>
+                  <td style={{ maxWidth: "130px" }}>
+                    {meta[ind].render(dataRows.specie_row.get(meta_val.name))}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </Container>
 
       </div>
       </div>

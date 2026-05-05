@@ -1,6 +1,77 @@
 import React from "react";
-import { ArrowUpRightFromSquare } from "@gravity-ui/icons";
+import { ArrowUpRightFromSquare, Copy } from "@gravity-ui/icons";
 import { TruncatedText } from "../shared/ui/TruncatedText";
+
+async function copyTextToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    console.error("Copy error: ", err);
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-999999px";
+    textArea.style.top = "-999999px";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand("copy");
+    } catch (fallbackErr) {
+      console.error("Copy fallback error: ", fallbackErr);
+    }
+    document.body.removeChild(textArea);
+  }
+}
+
+function SmilesMetaBlock({ value }: { value: string }) {
+  const canvasId = `${value}_${generateRandomString(5)}`;
+  return (
+    <div
+      style={{
+        position: "relative",
+        display: "inline-block",
+        maxWidth: 320,
+      }}
+    >
+      <button
+        type="button"
+        title="Copy SMILES"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void copyTextToClipboard(value);
+        }}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+        }}
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          zIndex: 1,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
+          border: "none",
+          borderRadius: 4,
+          background: "rgba(255, 255, 255, 0.92)",
+          cursor: "pointer",
+          padding: "4px 8px",
+          fontSize: "11px",
+          fontWeight: 500,
+          color: "#666",
+        }}
+      >
+        <Copy width={14} height={14} />
+        copy smiles
+      </button>
+      <canvas id={canvasId} className="smiles">
+        {value}
+      </canvas>
+    </div>
+  );
+}
 
 function generateRandomString(length: number): string {
   let result = '';
@@ -109,10 +180,7 @@ class DataMeta {
   }
 
   render_smiles(value: string) {
-    return <canvas
-      id={value+'_'+generateRandomString(5)}
-      className="smiles"
-      >{value}</canvas>
+    return <SmilesMetaBlock value={value} />;
   }
 
   render_reference(value: string) {
