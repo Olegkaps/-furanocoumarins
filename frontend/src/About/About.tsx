@@ -15,7 +15,13 @@ export default function About() {
   }
 
   return (
-    <div style={{ padding: "24px", maxWidth: "800px", margin: "0 auto" }}>
+    <div
+      style={{
+        padding: "24px",
+        maxWidth: state.editMode ? "1400px" : "800px",
+        margin: "0 auto",
+      }}
+    >
       <EditablePageContent
         content={state.content}
         error={state.error}

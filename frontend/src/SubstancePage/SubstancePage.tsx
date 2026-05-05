@@ -34,7 +34,13 @@ export default function SubstancePage() {
   return (
     <>
       <FullNavigation />
-      <div style={{ padding: "24px", maxWidth: "800px", margin: "0 auto" }}>
+      <div
+        style={{
+          padding: "24px",
+          maxWidth: state.editMode ? "1400px" : "800px",
+          margin: "0 auto",
+        }}
+      >
         <div key={smiles} style={{ marginBottom: "24px" }}>
           <canvas id={smiles} className="smiles" />
         </div>

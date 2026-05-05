@@ -60,22 +60,60 @@ export function EditablePageContent({
           >
             Characters: {charCount} / {MAX_PAGE_CHARS}
           </div>
-          <textarea
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            maxLength={MAX_PAGE_CHARS + 100}
+          <div
             style={{
-              width: "100%",
-              minHeight: "300px",
-              padding: "12px",
-              fontFamily: "inherit",
-              fontSize: "14px",
-              border: "1px solid #ccc",
-              borderRadius: "8px",
-              boxSizing: "border-box",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "16px",
+              alignItems: "stretch",
             }}
-            placeholder="Text in Markdown format…"
-          />
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ marginBottom: "6px", fontWeight: 600, color: "#444" }}>
+                Markdown input
+              </div>
+              <textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                maxLength={MAX_PAGE_CHARS + 100}
+                style={{
+                  width: "100%",
+                  minHeight: "68vh",
+                  padding: "12px",
+                  fontFamily: "inherit",
+                  fontSize: "14px",
+                  border: "1px solid #ccc",
+                  borderRadius: "8px",
+                  boxSizing: "border-box",
+                  resize: "vertical",
+                }}
+                placeholder="Text in Markdown format…"
+              />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ marginBottom: "6px", fontWeight: 600, color: "#444" }}>
+                Preview
+              </div>
+              <div
+                className="about-markdown editable-markdown-preview"
+                style={{
+                  width: "100%",
+                  minWidth: 0,
+                  height: "68vh",
+                  maxHeight: "68vh",
+                  padding: "12px",
+                  border: "1px solid #ccc",
+                  borderRadius: "8px",
+                  backgroundColor: "#fff",
+                  overflowX: "auto",
+                  overflowY: "auto",
+                  lineHeight: 1.6,
+                }}
+              >
+                <ReactMarkdown>{editText}</ReactMarkdown>
+              </div>
+            </div>
+          </div>
           <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
             <button
               type="submit"

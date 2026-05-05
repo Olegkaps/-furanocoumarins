@@ -157,3 +157,17 @@ tfoot td {
 .suggestion-item:hover {
   background-color: #f0f0f0;
 }
+
+/* Keep large markdown images inside preview with scrollbars */
+.editable-markdown-preview img {
+  max-width: none;
+  height: auto;
+}
+
+.editable-markdown-preview {
+  min-width: 0;
+}
+
+.editable-markdown-preview * {
+  max-width: none;
+}
