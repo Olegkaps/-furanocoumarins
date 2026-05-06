@@ -1,6 +1,6 @@
 # Cassandra sparse-read grid benchmark
 
-Benchmarks **`BenchmarkCache_sample100_rows`**: read exactly **100** keys per timed iteration over tables of size **1000**, **100 000**, and **10 000 000** rows (step `N/100` across the partition). Each read uses **one CQL query** with `id IN (?, …)` (single round-trip). Compares `WITH CACHING` policies on Cassandra only (no Redis).
+Benchmarks **`BenchmarkCache_sample100_rows`**: read exactly **100** keys per timed iteration over tables of size **1000**, **100 000**, and **10 000 000** rows (step `N/100` across the partition). Each read uses **one CQL query** with `id IN (?, …)` (single round-trip). Row values are **512-byte blobs** (`v blob`) per row index (`admin/benchmarks/internal/payload`). Compares `WITH CACHING` policies on Cassandra only (no Redis).
 
 ## Prerequisites
 

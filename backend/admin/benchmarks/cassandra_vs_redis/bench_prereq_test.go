@@ -21,7 +21,7 @@ func TestMain(m *testing.M) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	r := redis.NewClient(&redis.Options{Addr: redisBenchAddr()})
+	r := redis.NewClient(redisBenchOptions())
 	defer func() { _ = r.Close() }()
 	if err := r.Ping(ctx).Err(); err != nil {
 		fmt.Fprintf(os.Stderr,

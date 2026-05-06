@@ -1,6 +1,6 @@
 # Cassandra vs Redis vs PostgreSQL cache benchmarks
 
-Benchmarks compare Apache Cassandra `WITH CACHING` policies, a Redis baseline, and PostgreSQL with several table storage options—same row count (**8192**) and payload size (**512** bytes) for cold/warm full reads by primary key.
+Benchmarks compare Apache Cassandra `WITH CACHING` policies, a Redis baseline, and PostgreSQL with several table storage options—same row count (**8192**) and payload size (**512** bytes) for cold/warm full reads by primary key. Each row stores **512 raw bytes** (`blob` / `BYTEA` / Redis binary value — not UTF-8 text; see `benchmarks/internal/payload`). Redis keys use **non-sequential** hex suffixes per row.
 
 The sparse-read grid (100 keys, large tables) lives in [cassandra_sample_grid](../cassandra_sample_grid/README.md).
 
@@ -96,6 +96,7 @@ CASSANDRA_HOST=127.0.0.1 REDIS_ADDR=127.0.0.1:6379 \
 ### Notes
 
 - **Cold vs warm**: Cassandra/Postgres cold benchmarks time the first full read after insert; warm benchmarks prime once then measure repeated full scans. Redis cold mirrors Cassandra cold (writes outside the timer, 8192 sequential `GET`s inside the timer).
+- **Redis**: the benchmark client disables Valkey/Redis **maintenance notifications** (`MaintNotificationsConfig`), so older `redis` images that do not implement `CLIENT ... maint_notifications` do not log handshake warnings.
 - **Without `-bench`**: `go test ./benchmarks/cassandra_vs_redis/` runs no tests and does not require Redis or Cassandra.
 
 ## 5. Stop containers

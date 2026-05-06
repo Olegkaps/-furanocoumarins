@@ -3,10 +3,11 @@ package cassandrabench
 import (
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"admin/benchmarks/internal/payload"
 
 	"github.com/gocql/gocql"
 	"github.com/google/uuid"
@@ -16,10 +17,7 @@ const (
 	benchKeyspace    = "bench_cache"
 	benchPartKey     = "p1"
 	benchNumRowsFull = 8192
-	benchPayloadSize = 512
 )
-
-var benchPayloadFull = strings.Repeat("x", benchPayloadSize)
 
 type cachingScenario struct {
 	name       string
@@ -92,10 +90,10 @@ func mustBenchSession(b *testing.B) *gocql.Session {
 	return s
 }
 
-func createBenchTableRows(s *gocql.Session, sc cachingScenario, numRows int, payload string) (string, []gocql.UUID, error) {
+func createBenchTableRows(s *gocql.Session, sc cachingScenario, numRows int) (string, []gocql.UUID, error) {
 	tname := fmt.Sprintf("bench_%s", uuid.NewString()[:8])
 	q := fmt.Sprintf(
-		`CREATE TABLE %s.%s (p text, id uuid, v text, PRIMARY KEY (p, id)) %s`,
+		`CREATE TABLE %s.%s (p text, id uuid, v blob, PRIMARY KEY (p, id)) %s`,
 		benchKeyspace, tname, sc.withClause,
 	)
 	if err := s.Query(q).Exec(); err != nil {
@@ -105,13 +103,13 @@ func createBenchTableRows(s *gocql.Session, sc cachingScenario, numRows int, pay
 	for i := range ids {
 		ids[i] = gocql.UUID(uuid.New())
 	}
-	if err := insertRowsBatched(s, tname, ids, payload); err != nil {
+	if err := insertRowsBatched(s, tname, ids); err != nil {
 		return tname, ids, err
 	}
 	return tname, ids, nil
 }
 
-func insertRowsBatched(s *gocql.Session, tname string, ids []gocql.UUID, payload string) error {
+func insertRowsBatched(s *gocql.Session, tname string, ids []gocql.UUID) error {
 	const batchSize = 99
 	ins := fmt.Sprintf(`INSERT INTO %s.%s (p, id, v) VALUES (?, ?, ?)`, benchKeyspace, tname)
 	for off := 0; off < len(ids); off += batchSize {
@@ -121,7 +119,7 @@ func insertRowsBatched(s *gocql.Session, tname string, ids []gocql.UUID, payload
 			end = len(ids)
 		}
 		for i := off; i < end; i++ {
-			b.Query(ins, benchPartKey, ids[i], payload)
+			b.Query(ins, benchPartKey, ids[i], payload.RowBytes(i))
 		}
 		if err := s.ExecuteBatch(b); err != nil {
 			return err
@@ -131,7 +129,7 @@ func insertRowsBatched(s *gocql.Session, tname string, ids []gocql.UUID, payload
 }
 
 func readAllRows(s *gocql.Session, tname string, ids []gocql.UUID) error {
-	var v string
+	var v []byte
 	for _, id := range ids {
 		err := s.Query(fmt.Sprintf(
 			`SELECT v FROM %s.%s WHERE p = ? AND id = ?`,
@@ -155,7 +153,7 @@ func BenchmarkCache_cold(b *testing.B) {
 		b.Run(sc.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				b.StopTimer()
-				tname, ids, err := createBenchTableRows(s, sc, benchNumRowsFull, benchPayloadFull)
+				tname, ids, err := createBenchTableRows(s, sc, benchNumRowsFull)
 				if err != nil {
 					b.Fatalf("setup: %v", err)
 				}
@@ -175,7 +173,7 @@ func BenchmarkCache_warm(b *testing.B) {
 	s := mustBenchSession(b)
 	for _, sc := range cachingScenarios {
 		b.Run(sc.name, func(b *testing.B) {
-			tname, ids, err := createBenchTableRows(s, sc, benchNumRowsFull, benchPayloadFull)
+			tname, ids, err := createBenchTableRows(s, sc, benchNumRowsFull)
 			if err != nil {
 				b.Fatalf("setup: %v", err)
 			}

@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"admin/benchmarks/internal/payload"
+
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 )
@@ -30,20 +32,20 @@ var pgTableScenarios = []pgTableScenario{
 	{
 		name: "heap",
 		createSQL: func(q string) string {
-			return fmt.Sprintf(`CREATE TABLE %s (id BIGSERIAL PRIMARY KEY, v TEXT NOT NULL)`, q)
+			return fmt.Sprintf(`CREATE TABLE %s (id BIGSERIAL PRIMARY KEY, v BYTEA NOT NULL)`, q)
 		},
 	},
 	{
 		name: "unlogged",
 		createSQL: func(q string) string {
-			return fmt.Sprintf(`CREATE UNLOGGED TABLE %s (id BIGSERIAL PRIMARY KEY, v TEXT NOT NULL)`, q)
+			return fmt.Sprintf(`CREATE UNLOGGED TABLE %s (id BIGSERIAL PRIMARY KEY, v BYTEA NOT NULL)`, q)
 		},
 	},
 	{
 		name: "fillfactor_50",
 		createSQL: func(q string) string {
 			return fmt.Sprintf(
-				`CREATE TABLE %s (id BIGSERIAL PRIMARY KEY, v TEXT NOT NULL) WITH (fillfactor=50)`,
+				`CREATE TABLE %s (id BIGSERIAL PRIMARY KEY, v BYTEA NOT NULL) WITH (fillfactor=50)`,
 				q,
 			)
 		},
@@ -79,7 +81,7 @@ func newPostgresBenchTableName() string {
 	return "benchpg_" + strings.ReplaceAll(uuid.New().String(), "-", "_")
 }
 
-func insertPostgresBenchRows(ctx context.Context, db *sql.DB, quotedTable string, payload string) error {
+func insertPostgresBenchRows(ctx context.Context, db *sql.DB, quotedTable string) error {
 	const batchRows = 400
 	for off := 0; off < benchNumRowsFull; off += batchRows {
 		n := batchRows
@@ -90,7 +92,7 @@ func insertPostgresBenchRows(ctx context.Context, db *sql.DB, quotedTable string
 		args := make([]interface{}, n)
 		for i := 0; i < n; i++ {
 			parts[i] = fmt.Sprintf("($%d)", i+1)
-			args[i] = payload
+			args[i] = payload.RowBytes(off + i)
 		}
 		q := fmt.Sprintf(
 			`INSERT INTO %s (v) VALUES %s`,
@@ -106,7 +108,7 @@ func insertPostgresBenchRows(ctx context.Context, db *sql.DB, quotedTable string
 
 func readPostgresAllRowsByPK(ctx context.Context, db *sql.DB, quotedTable string) error {
 	q := `SELECT v FROM ` + quotedTable + ` WHERE id = $1`
-	var v string
+	var v []byte
 	for id := int64(1); id <= benchNumRowsFull; id++ {
 		if err := db.QueryRowContext(ctx, q, id).Scan(&v); err != nil {
 			return err
@@ -139,7 +141,7 @@ func BenchmarkPostgres_cold(b *testing.B) {
 				if _, err := db.ExecContext(ctx, sc.createSQL(qname)); err != nil {
 					b.Fatalf("create: %v", err)
 				}
-				if err := insertPostgresBenchRows(ctx, db, qname, benchPayloadFull); err != nil {
+				if err := insertPostgresBenchRows(ctx, db, qname); err != nil {
 					dropPostgresTable(ctx, db, qname)
 					b.Fatalf("insert: %v", err)
 				}
@@ -173,7 +175,7 @@ func BenchmarkPostgres_warm(b *testing.B) {
 			}
 			defer dropPostgresTable(ctx, db, qname)
 
-			if err := insertPostgresBenchRows(ctx, db, qname, benchPayloadFull); err != nil {
+			if err := insertPostgresBenchRows(ctx, db, qname); err != nil {
 				b.Fatalf("insert: %v", err)
 			}
 			if err := readPostgresAllRowsByPK(ctx, db, qname); err != nil {

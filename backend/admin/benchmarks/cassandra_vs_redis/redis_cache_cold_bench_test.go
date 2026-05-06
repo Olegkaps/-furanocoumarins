@@ -6,8 +6,11 @@ import (
 	"os"
 	"testing"
 
+	"admin/benchmarks/internal/payload"
+
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9/maintnotifications"
 )
 
 // BenchmarkRedis_cold mirrors BenchmarkCache_cold workload: same row count and
@@ -23,9 +26,18 @@ func redisBenchAddr() string {
 	return "127.0.0.1:6379"
 }
 
+func redisBenchOptions() *redis.Options {
+	return &redis.Options{
+		Addr: redisBenchAddr(),
+		MaintNotificationsConfig: &maintnotifications.Config{
+			Mode: maintnotifications.ModeDisabled,
+		},
+	}
+}
+
 func openRedisBenchClient(b *testing.B) *redis.Client {
 	b.Helper()
-	r := redis.NewClient(&redis.Options{Addr: redisBenchAddr()})
+	r := redis.NewClient(redisBenchOptions())
 	if err := r.Ping(context.Background()).Err(); err != nil {
 		b.Fatalf("redis ping: %v", err)
 	}
@@ -35,12 +47,12 @@ func openRedisBenchClient(b *testing.B) *redis.Client {
 func redisBenchKeys(prefix string) []string {
 	keys := make([]string, benchNumRowsFull)
 	for i := range keys {
-		keys[i] = fmt.Sprintf("%s%d", prefix, i)
+		keys[i] = payload.RedisKey(prefix, i)
 	}
 	return keys
 }
 
-func redisWriteAll(ctx context.Context, r *redis.Client, keys []string, payload string) error {
+func redisWriteAll(ctx context.Context, r *redis.Client, keys []string) error {
 	const pipeChunk = 500
 	for off := 0; off < len(keys); off += pipeChunk {
 		end := off + pipeChunk
@@ -48,8 +60,8 @@ func redisWriteAll(ctx context.Context, r *redis.Client, keys []string, payload 
 			end = len(keys)
 		}
 		p := r.Pipeline()
-		for _, k := range keys[off:end] {
-			p.Set(ctx, k, payload, 0)
+		for i := off; i < end; i++ {
+			p.Set(ctx, keys[i], payload.RowBytes(i), 0)
 		}
 		if _, err := p.Exec(ctx); err != nil {
 			return err
@@ -90,7 +102,7 @@ func BenchmarkRedis_cold(b *testing.B) {
 		b.StopTimer()
 		prefix := fmt.Sprintf("benchcache:cold:%s:", uuid.NewString())
 		keys := redisBenchKeys(prefix)
-		if err := redisWriteAll(ctx, rdb, keys, benchPayloadFull); err != nil {
+		if err := redisWriteAll(ctx, rdb, keys); err != nil {
 			b.Fatalf("redis set: %v", err)
 		}
 		b.StartTimer()
