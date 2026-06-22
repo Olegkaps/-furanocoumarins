@@ -39,7 +39,7 @@ podman exec cassandra-bench cqlsh -e 'DESCRIBE KEYSPACES'
 
 ## 2. Start Redis
 
-Same image family as the main stack (`redis:latest` in `docker-compose.local.yaml`). Port `6379` matches the default `REDIS_ADDR` `127.0.0.1:6379`:
+Same image family as the main stack (`redis:latest` in `docker-compose.yaml`). Port `6379` matches the default `REDIS_ADDR` `127.0.0.1:6379`:
 
 ```bash
 podman run -d --name redis-bench -p 6379:6379 redis:latest

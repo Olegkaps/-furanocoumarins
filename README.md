@@ -37,55 +37,29 @@ Which data will be displayed on the website is completely determined by the admi
 **The frontend**:
 - React + Vite + TypeScript.
 
-## Project launch
+## Project Launch
 
-### Local development
+### 1. Preparing the backend
 
-For local work use [docker-compose.local.yaml](docker-compose.local.yaml): go-auth, PostgreSQL, Redis, Cassandra, and **MinIO** (S3-compatible storage for editable pages). Monitoring services are disabled in this compose file by default.
+Set environment variables in `env/.env` (and related files under `env/` as needed). See [Environment variables](#environment-variables) below.
 
-1. Generate env files and `monitoring/grafana.ini`:
+**Compose files:**
+- **docker-compose.yaml** — main stack: go-auth, PostgreSQL, Redis, Cassandra; optionally monitoring (Prometheus, Grafana, Loki, Promtail).
+- **docker-compose.local.yaml** — same plus **MinIO** (S3-compatible storage) for editable pages (About, substance descriptions by SMILES). Use this localy.
 
-   ```bash
-   ./cli init_env
-   ```
-
-   Edit `env/.env` if needed. See [Environment variables](#environment-variables).
-
-2. Start the stack:
-
-   ```bash
-   docker compose -f docker-compose.local.yaml up -d
-   ```
-
-3. Initialize databases and create an admin — see [Database initialization](#database-initialization).
-
-4. Frontend (optional):
-
-   ```bash
-   docker build -t furanocoumarins-frontend ./frontend
-   docker run -p 5173:80 furanocoumarins-frontend
-   ```
-
-Backend API is available at `http://localhost:8081`. MinIO console — `http://localhost:9001`.
-
-### Production
-
-Production runs on a cloud VM via **Docker Swarm** ([deploy/swarm/](deploy/swarm/)): healthchecks, secrets, nginx with TLS, Prometheus/Grafana/Loki.
+Launch the services:
 
 ```bash
-docker swarm init
-./cli init_env
-# edit env/.env: cloud S3, DOMAIN_PREF, production secrets
-chmod +x deploy/swarm/scripts/*.sh
-./deploy/swarm/scripts/init-secrets.sh
-./deploy/swarm/scripts/deploy.sh
+docker compose up -d
 ```
 
-Configure `env/.env` for cloud S3 (not MinIO). TLS certificates are managed by Certbot on the host and mounted into the nginx container.
+Or, for the local variant with MinIO (editable pages):
 
-Full setup, certificate renewal, and secrets rotation: [deploy/swarm/README.md](deploy/swarm/README.md).
+```bash
+docker compose -f docker-compose.local.yaml up -d
+```
 
-## Database initialization
+### 2. Database initialization
 
 After the first launch of the backend, build the CLI and run init in this order (keyspace first, then tables):
 
@@ -118,14 +92,25 @@ After the first launch of the backend, build the CLI and run init in this order 
 - Cassandra vs Redis vs PostgreSQL cache benchmarks (Podman + `go test -bench`, not part of default `./...`): [backend/admin/benchmarks/cassandra_vs_redis/README.md](backend/admin/benchmarks/cassandra_vs_redis/README.md).
 - Cassandra sparse-read grid benchmark (large tables, Cassandra only): [backend/admin/benchmarks/cassandra_sample_grid/README.md](backend/admin/benchmarks/cassandra_sample_grid/README.md).
 
+### 3. Launching the frontend
+1. Build a Docker image:
+   ```bash
+   docker build -t furanocoumarins-frontend .
+   ```
+
+2. Run container
+   ```bash
+   docker run furanocoumarins-frontend
+   ```
+
 ## S3 / MinIO (object storage)
 
 Editable page content (About page, substance descriptions by SMILES at `/page/:smiles`) is stored in S3-compatible object storage. The backend serves content from S3 and writes to it when an admin saves changes.
 
-- **Local/dev:** MinIO via `docker-compose.local.yaml` (service `minio`). The bucket is created automatically on first save.
-- **Production:** cloud S3 — set `S3_ENDPOINT`, credentials, and bucket in `env/.env` before deploy.
+- **Local/dev:** use **MinIO** via `docker-compose.local.yaml` (service `minio`). The bucket is created automatically on first save.
+- **Production:** configure the backend to use your S3 endpoint and credentials.
 
-Without S3 (or with empty `S3_ENDPOINT`), editable pages will not work.
+Without S3 (or with empty `S3_ENDPOINT`), editable pages will not work. For full functionality use either `docker-compose.local.yaml` with MinIO or an external S3.
 
 Backend environment variables for go-auth (see `backend/admin/settings/settings.go`):
 
@@ -136,13 +121,13 @@ Backend environment variables for go-auth (see `backend/admin/settings/settings.
 
 ## Monitoring
 
-Configs live in [monitoring/](monitoring/):
+The stack can include optional monitoring services (defined in `docker-compose.yaml`):
 
-- **Prometheus** — metrics; [monitoring/prometheus.yml](monitoring/prometheus.yml)
-- **Grafana** — dashboards and datasources under [monitoring/dashboards/](monitoring/dashboards/)
-- **Loki** + **Promtail** — container log aggregation
+- **Prometheus** (port 9090) — metrics; config: [monitoring/prometheus.yml](monitoring/prometheus.yml)
+- **Grafana** (port 3000) — dashboards and datasources under [monitoring/](monitoring/)
+- **Loki** (port 3100), **Promtail** (port 9080) — log aggregation
 
-In **production**, monitoring is part of the Swarm stack (Grafana behind nginx at the sslip.io domain). In **local dev**, monitoring services are commented out in `docker-compose.local.yaml`; uncomment them to run Prometheus/Grafana locally at `http://localhost:3000`.
+Config files live in the [monitoring/](monitoring/) directory. Start the stack with the compose file that includes these services to use them; Grafana can be opened at `http://localhost:3000` with pre-provisioned Prometheus datasource.
 
 ## Environment variables
 
