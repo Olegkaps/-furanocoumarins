@@ -1,5 +1,11 @@
 version: "3.8"
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:17
@@ -15,6 +21,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - back
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$(cat /run/secrets/postgres_user) -d $$(cat /run/secrets/postgres_db)"]
       interval: 30s
@@ -40,6 +47,7 @@ services:
       - redis-data:/data
     networks:
       - back
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"$$(cat /run/secrets/redis_password)\" ping | grep -q PONG"]
       interval: 30s
@@ -61,6 +69,7 @@ services:
       - cassandra3_data:/var/lib/cassandra
     networks:
       - back
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "cqlsh -e 'describe cluster'"]
       interval: 60s
@@ -89,6 +98,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/ping"]
       interval: 90s
@@ -124,6 +134,7 @@ services:
         condition: service_healthy
       grafana:
         condition: service_healthy
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/nginx-health"]
       interval: 30s
@@ -149,6 +160,7 @@ services:
       - -nginx.scrape-uri=http://nginx:8080/stub_status
     networks:
       - metrics
+    logging: *default-logging
     depends_on:
       nginx:
         condition: service_started
@@ -167,6 +179,7 @@ services:
       - prometheusdata:/prometheus
     networks:
       - metrics
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
       interval: 30s
@@ -193,6 +206,7 @@ services:
     depends_on:
       prometheus:
         condition: service_healthy
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
       interval: 30s
@@ -214,6 +228,7 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
     networks:
       - metrics
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3100/ready"]
       interval: 30s
@@ -238,6 +253,7 @@ services:
     privileged: true
     networks:
       - metrics
+    logging: *default-logging
     depends_on:
       loki:
         condition: service_healthy
