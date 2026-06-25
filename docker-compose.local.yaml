@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # nginx:
   #   image: nginx:latest
@@ -31,6 +37,7 @@ services:
     networks:
       - back
       - metrics
+    logging: *default-logging
 
   redis:
     hostname: redis
@@ -46,6 +53,7 @@ services:
     networks:
       - appnet
       - back
+    logging: *default-logging
 
   postgres:
     restart: always
@@ -61,6 +69,7 @@ services:
     networks:
       - ps
       - back
+    logging: *default-logging
 
 #  adminer:
 #    image: adminer
@@ -88,6 +97,7 @@ services:
       - minio_data:/data
     networks:
       - back
+    logging: *default-logging
 
   cassandra:
     hostname: cassandra
@@ -101,6 +111,7 @@ services:
     networks:
       - appnet
       - back
+    logging: *default-logging
 
 #  neflix-explorer:
 #    hostname: netflix-explorer

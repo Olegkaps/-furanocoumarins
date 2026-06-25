@@ -1,13 +1,19 @@
-
 global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'prometheus'
+  - job_name: go-auth-fiber
     static_configs:
       - targets: ['go-auth:80']
 
-  - job_name: 'prometheus-runtime'
+  - job_name: go-auth-native
     static_configs:
       - targets: ['go-auth:5000']
-  
+
+  - job_name: nginx
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+
+  - job_name: prometheus-self
+    static_configs:
+      - targets: ['localhost:9090']
