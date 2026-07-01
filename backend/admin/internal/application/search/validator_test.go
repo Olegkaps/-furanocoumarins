@@ -57,6 +57,51 @@ func TestIsTypesEqualNegative(t *testing.T) {
 	assert.False(t, search.IsTypesEqual("text chemical", "text specie"))
 }
 
+func TestValidateRequestSQLInjectionNegative(t *testing.T) {
+	columns := columnsFixture()
+	payloads := []string{
+		"name = 'x' OR 1=1",
+		"name = 'x'; DROP TABLE users; --",
+		"1=1",
+		"name UNION SELECT password FROM users",
+		"name = 'a' AND surname CONTAINS 'b' OR true",
+		"name LIKE '%' AND second_name = 'x' --",
+		"'; DELETE FROM chemdb.tables; --",
+		"name = 'x' AND EXEC xp_cmdshell('dir')",
+		"name IN ('a') AND (SELECT COUNT(*) FROM users) > 0",
+	}
+	for _, payload := range payloads {
+		t.Run(payload, func(t *testing.T) {
+			err := search.ValidateRequest(payload, columns)
+			require.NotNil(t, err, "payload must be rejected: %q", payload)
+			_, ok := err.(*response.UserError)
+			require.True(t, ok, "expected UserError for payload: %q", payload)
+		})
+	}
+}
+
+func TestValidateRequestSQLInjectionPositiveSafeQueries(t *testing.T) {
+	columns := columnsFixture()
+	safe := []string{
+		"name = 'O''Brien'",
+		"name IN ('a', 'b') AND surname != 'x'",
+		"name LIKE 'prefix%' AND second_name CONTAINS 'token'",
+		"name = 'value' AND surname = 'ref'",
+	}
+	for _, query := range safe {
+		t.Run(query, func(t *testing.T) {
+			assert.NoError(t, search.ValidateRequest(query, columns))
+		})
+	}
+}
+
+func TestIsTypesEqualSQLInjectionNegative(t *testing.T) {
+	// Type strings with SQL fragments must not compare equal to legitimate types.
+	assert.False(t, search.IsTypesEqual("text", "text; DROP TABLE users"))
+	assert.False(t, search.IsTypesEqual("text search", "text' OR '1'='1"))
+	assert.False(t, search.IsTypesEqual("primary text", "text UNION SELECT"))
+}
+
 func requireUserError(t *testing.T, expected error, actual error) {
 	t.Helper()
 	require.NotNil(t, actual)

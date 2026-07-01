@@ -39,7 +39,7 @@ func postForm(t *testing.T, app *fiber.App, path string, form url.Values) *http.
 	t.Helper()
 	req := httptest.NewRequest(fiber.MethodPost, path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := app.Test(req)
+	resp, err := app.Test(req, 5000)
 	require.NoError(t, err)
 	return resp
 }

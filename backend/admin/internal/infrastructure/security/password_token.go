@@ -5,12 +5,21 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+
+	"admin/settings"
 )
 
 type PasswordHasher struct{}
 
+func bcryptCost() int {
+	if settings.ENV_TYPE == "TEST" || settings.ENV_TYPE == "AUTOTEST" {
+		return bcrypt.MinCost
+	}
+	return 14
+}
+
 func (PasswordHasher) Hash(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost())
 	return string(bytes), err
 }
 

@@ -25,12 +25,16 @@ type mockImporter struct {
 	sasiErr        error
 	articleIDs     map[string]string
 	getArticleErr  error
+	lastBatchCols  []string
+	lastBatchTable string
 }
 
 func (m *mockImporter) InsertTable(_ *cassandra.Table) error { return m.insertErr }
 
-func (m *mockImporter) CreateAndBatchInsert(string, []string, []string, [][]any) error {
+func (m *mockImporter) CreateAndBatchInsert(tableName string, columnDefs, primaryKeys []string, data [][]any) error {
 	m.batchCalls++
+	m.lastBatchTable = tableName
+	m.lastBatchCols = columnDefs
 	if m.batchErr != nil && m.batchCalls == m.batchErrOn {
 		return m.batchErr
 	}
@@ -458,4 +462,73 @@ func TestImportTablePositiveWithExternalJoin(t *testing.T) {
 	msg, err := appcreate.ImportTable(fiberCtx(t), store, f, "meta", "test-table")
 	require.NoError(t, err)
 	assert.Contains(t, msg, "reference check skipped")
+}
+
+func TestImportTableSQLInjectionMaliciousColumnTypeNegative(t *testing.T) {
+	store := &mockStore{imp: &mockImporter{}}
+	f := excelize.NewFile()
+	setMetaRows(t, f, [][]any{
+		{"sheet", "column", "type", "description", "show_name"},
+		{"__LIST__", "main", "main", "", ""},
+		{"__LIST__", "classification", "classification", "", ""},
+		{"main", "id", "primary", "", "ID"},
+		{"main", "evil", "text; DROP TABLE chemdb.tables", "", "Evil"},
+		{"classification", "cid", "primary", "", "CID"},
+	})
+	_, err := f.NewSheet("main")
+	require.NoError(t, err)
+	require.NoError(t, f.SetSheetRow("main", "A1", &[]any{"id", "evil"}))
+	require.NoError(t, f.SetSheetRow("main", "A2", &[]any{"1", "payload"}))
+	_, err = f.NewSheet("classification")
+	require.NoError(t, err)
+	require.NoError(t, f.SetSheetRow("classification", "A1", &[]any{"cid"}))
+	require.NoError(t, f.SetSheetRow("classification", "A2", &[]any{"1"}))
+
+	imp := store.imp.(*mockImporter)
+	_, err = appcreate.ImportTable(fiberCtx(t), store, f, "meta", "test-table")
+	require.NoError(t, err)
+	for _, colDef := range imp.lastBatchCols {
+		assert.NotContains(t, colDef, "DROP TABLE chemdb.tables")
+	}
+}
+
+func TestImportTableSQLInjectionMaliciousColumnNameNegative(t *testing.T) {
+	store := &mockStore{imp: &mockImporter{}}
+	f := excelize.NewFile()
+	maliciousCol := "name'; DROP TABLE users; --"
+	setMetaRows(t, f, [][]any{
+		{"sheet", "column", "type", "description", "show_name"},
+		{"__LIST__", "main", "main", "", ""},
+		{"__LIST__", "classification", "classification", "", ""},
+		{"main", "id", "primary", "", "ID"},
+		{"main", maliciousCol, "text", "", "Name"},
+		{"classification", "cid", "primary", "", "CID"},
+	})
+	_, err := f.NewSheet("main")
+	require.NoError(t, err)
+	require.NoError(t, f.SetSheetRow("main", "A1", &[]any{"id", maliciousCol}))
+	require.NoError(t, f.SetSheetRow("main", "A2", &[]any{"1", "safe"}))
+	_, err = f.NewSheet("classification")
+	require.NoError(t, err)
+	require.NoError(t, f.SetSheetRow("classification", "A1", &[]any{"cid"}))
+	require.NoError(t, f.SetSheetRow("classification", "A2", &[]any{"1"}))
+
+	imp := store.imp.(*mockImporter)
+	_, err = appcreate.ImportTable(fiberCtx(t), store, f, "meta", "test-table")
+	require.NoError(t, err)
+	found := false
+	for _, colDef := range imp.lastBatchCols {
+		if strings.Contains(colDef, maliciousCol) {
+			found = true
+		}
+	}
+	assert.True(t, found, "malicious column name should be passed as literal identifier")
+}
+
+func TestImportTableSQLInjectionMaliciousFileNameNegative(t *testing.T) {
+	store := &mockStore{imp: &mockImporter{}}
+	f := fullImportWorkbook(t)
+
+	_, err := appcreate.ImportTable(fiberCtx(t), store, f, "meta", "'; DELETE FROM chemdb.tables; --")
+	require.NoError(t, err)
 }

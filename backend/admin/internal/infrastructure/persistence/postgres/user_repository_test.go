@@ -11,10 +11,20 @@ import (
 	infrapostgres "admin/internal/infrastructure/persistence/postgres"
 )
 
+func closeDB(t *testing.T, db *sql.DB, mock sqlmock.Sqlmock) {
+	t.Helper()
+	t.Cleanup(func() {
+		mock.ExpectClose()
+		if err := db.Close(); err != nil {
+			t.Errorf("close db: %v", err)
+		}
+	})
+}
+
 func TestUserRepositoryFindByLoginOrEmail(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	closeDB(t, db, mock)
 
 	repo := infrapostgres.NewUserRepository(db)
 	rows := sqlmock.NewRows([]string{"username", "email", "role", "hashed_password"}).
@@ -33,7 +43,7 @@ func TestUserRepositoryFindByLoginOrEmail(t *testing.T) {
 func TestUserRepositoryFindByLoginOrEmailNotFound(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	closeDB(t, db, mock)
 
 	repo := infrapostgres.NewUserRepository(db)
 	mock.ExpectQuery("SELECT username, email, role, hashed_password FROM users").
@@ -48,7 +58,7 @@ func TestUserRepositoryFindByLoginOrEmailNotFound(t *testing.T) {
 func TestUserRepositoryFindByLoginOrEmailQueryError(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	closeDB(t, db, mock)
 
 	repo := infrapostgres.NewUserRepository(db)
 	mock.ExpectQuery("SELECT username, email, role, hashed_password FROM users").
@@ -62,7 +72,7 @@ func TestUserRepositoryFindByLoginOrEmailQueryError(t *testing.T) {
 func TestUserRepositoryUpdatePassword(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	closeDB(t, db, mock)
 
 	repo := infrapostgres.NewUserRepository(db)
 	mock.ExpectExec("UPDATE users SET hashed_password").
@@ -77,7 +87,7 @@ func TestUserRepositoryUpdatePassword(t *testing.T) {
 func TestUserRepositoryUpdatePasswordExecError(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	closeDB(t, db, mock)
 
 	repo := infrapostgres.NewUserRepository(db)
 	mock.ExpectExec("UPDATE users SET hashed_password").
@@ -91,7 +101,7 @@ func TestUserRepositoryUpdatePasswordExecError(t *testing.T) {
 func TestUserRepositoryExistsWithRole(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	closeDB(t, db, mock)
 
 	repo := infrapostgres.NewUserRepository(db)
 	rows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
@@ -107,7 +117,7 @@ func TestUserRepositoryExistsWithRole(t *testing.T) {
 func TestUserRepositoryExistsWithRoleFalse(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	closeDB(t, db, mock)
 
 	repo := infrapostgres.NewUserRepository(db)
 	rows := sqlmock.NewRows([]string{"exists"}).AddRow(false)
@@ -120,10 +130,30 @@ func TestUserRepositoryExistsWithRoleFalse(t *testing.T) {
 	require.False(t, exists)
 }
 
+func TestUserRepositoryFindByLoginOrEmailSQLInjectionNegative(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	closeDB(t, db, mock)
+
+	repo := infrapostgres.NewUserRepository(db)
+	payload := "alice' OR '1'='1"
+	rows := sqlmock.NewRows([]string{"username", "email", "role", "hashed_password"}).
+		AddRow("alice", "alice@example.com", "admin", "hash")
+
+	mock.ExpectQuery("SELECT username, email, role, hashed_password FROM users").
+		WithArgs(payload, payload).
+		WillReturnRows(rows)
+
+	user, err := repo.FindByLoginOrEmail(context.Background(), payload)
+	require.NoError(t, err)
+	require.Equal(t, "alice@example.com", user.Email)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUserRepositoryExistsWithRoleQueryError(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	closeDB(t, db, mock)
 
 	repo := infrapostgres.NewUserRepository(db)
 	mock.ExpectQuery("SELECT EXISTS").
