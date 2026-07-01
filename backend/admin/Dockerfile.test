@@ -10,6 +10,6 @@ COPY go.sum .
 RUN go mod download
 
 COPY . ./
-ENV ENV_TYPE=AUTOTEST
+ENV ENV_TYPE=TEST
 ARG VAR=1
-RUN go test -v ./...
+RUN chmod +x scripts/test.sh && ./scripts/test.sh
