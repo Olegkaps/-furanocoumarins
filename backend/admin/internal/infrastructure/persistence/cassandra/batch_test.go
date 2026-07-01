@@ -38,6 +38,7 @@ func TestCreateAndBatchInsertDataColumnDefsSQLInjectionNegative(t *testing.T) {
 	for _, col := range columnDefs {
 		columns = append(columns, strings.Split(col, " ")[0])
 	}
+	assert.Equal(t, []string{"id", "name"}, columns)
 
 	ddl := buildCreateTableDDL("chemdb.evil", columnDefs, primaryKeys)
 	// Column name is taken only from first token — injection suffix must not become a separate statement.
