@@ -85,11 +85,11 @@ Or create new secrets with versioned names and update `stack.yaml` accordingly.
 
 Monitoring configs live in [monitoring/](../../monitoring/) and are bind-mounted into the stack:
 
-- **Prometheus** — scrapes go-auth (Fiber + native metrics), nginx-exporter, itself
-- **Grafana** — dashboards and datasources from `monitoring/dashboards/`
-- **Loki + Promtail** — container log aggregation via Docker socket
+- **Prometheus** — go-auth, nginx, PostgreSQL, Redis, Cassandra, VM (node-exporter), itself
+- **Grafana** — dashboards in `monitoring/dashboards/` (Infrastructure overview, Nginx)
+- **Loki + Promtail** — container logs (with `service` label for DBs) and host syslog from `/var/log`
 
-Nginx metrics are collected via `nginx-exporter` scraping `stub_status` on the internal port 8080.
+Exporters: `postgres-exporter`, `redis-exporter`, `cassandra-exporter` (JMX), `node-exporter` (global, host mounts).
 
 ## Resource limits
 

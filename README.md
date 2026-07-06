@@ -138,9 +138,9 @@ Backend environment variables for go-auth (see `backend/admin/settings/settings.
 
 Configs live in [monitoring/](monitoring/):
 
-- **Prometheus** — metrics; [monitoring/prometheus.yml](monitoring/prometheus.yml)
-- **Grafana** — dashboards and datasources under [monitoring/dashboards/](monitoring/dashboards/)
-- **Loki** + **Promtail** — container log aggregation
+- **Prometheus** — app, nginx, PostgreSQL, Redis, Cassandra, VM metrics; [monitoring/prometheus.yml](monitoring/prometheus.yml)
+- **Grafana** — dashboards under [monitoring/dashboards/](monitoring/dashboards/) (Infrastructure overview, Nginx)
+- **Loki** + **Promtail** — container logs (DB services labeled) and VM syslog
 
 In **production**, monitoring is part of the Swarm stack (Grafana behind nginx at the sslip.io domain). In **local dev**, monitoring services are commented out in `docker-compose.local.yaml`; uncomment them to run Prometheus/Grafana locally at `http://localhost:3000`.
 
