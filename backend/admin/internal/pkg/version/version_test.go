@@ -25,7 +25,7 @@ func TestParseVersion(t *testing.T) {
 		assert.Equalf(t, test.expectedParsed, v, test.description)
 	}
 
-	version.ParseVersion(settings.BACK_VERSION)
+	version.ParseVersion(settings.BackVersion)
 }
 
 func TestIsVersionGreater(t *testing.T) {

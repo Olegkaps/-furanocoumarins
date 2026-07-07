@@ -32,8 +32,8 @@ func NewApp(container *app.Container) *fiber.App {
 	prometheus := fiberprometheus.New("fuco-backend")
 	prometheus.RegisterAt(app, "/metrics")
 	app.Use(prometheus.Middleware)
-	app.Use(cors.New(settings.CORS_SETTINGS))
-	if settings.ENV_TYPE != "TEST" && settings.ENV_TYPE != "AUTOTEST" {
+	app.Use(cors.New(settings.C.Cors()))
+	if settings.C.EnvType != "TEST" && settings.C.EnvType != "AUTOTEST" {
 		app.Use(swagger.New(swagger.Config{
 			BasePath: "/",
 			FilePath: "./docs/swagger.json",
@@ -63,7 +63,7 @@ func NewApp(container *app.Container) *fiber.App {
 	app.Post("/auth/confirm-password-change", auth.Confirm_password_change)
 
 	app.Use(jwtware.New(jwtware.Config{
-		SigningKey: jwtware.SigningKey{Key: settings.SECRET_KEY},
+		SigningKey: jwtware.SigningKey{Key: settings.C.SecretKeyBytes()},
 	}))
 	app.Post("/auth/renew-token", auth.Renew_token)
 

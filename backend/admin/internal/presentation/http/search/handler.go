@@ -1,16 +1,12 @@
 package search
 
 import (
-	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
-	appsearch "admin/internal/application/search"
+	domainsearch "admin/internal/domain/search"
 	"admin/internal/app"
-	"admin/internal/infrastructure/persistence/cassandra"
 	"admin/internal/presentation/http/deps"
 	"admin/internal/presentation/http/response"
 )
@@ -23,20 +19,15 @@ func NewHandler(container *app.Container) *Handler {
 	return &Handler{Handler: deps.New(container)}
 }
 
-type SearchResponse struct {
-	Metadata       []*cassandra.ColumnMeta `json:"metadata"`
-	Data           []map[string]any        `json:"data"`
-	TableTimestamp time.Time               `json:"timestamp"`
-}
-
-type GetMetadataResponse struct {
-	Metadata       []*cassandra.ColumnMeta `json:"metadata"`
-	TableTimestamp time.Time               `json:"timestamp"`
-}
-
 type AutocompleteResponse struct {
 	Values []string `json:"values"`
 }
+
+// Swagger aliases for generated docs.
+type (
+	MetadataResponse = domainsearch.MetadataResponse
+	SearchResponse   = domainsearch.SearchResponse
+)
 
 // Search_main_app godoc
 // @Summary      Search main app data
@@ -48,38 +39,11 @@ type AutocompleteResponse struct {
 // @Failure      400,500 {object} response.ErrorResponse
 // @Router       /search [get]
 func (h *Handler) Search_main_app(c *fiber.Ctx) error {
-	searchRequest := c.Query("q")
-
-	activeTable, err := h.Container.Cassandra.GetActiveTable(c)
+	result, err := h.Container.Search.Search(c, c.Query("q"))
 	if err != nil {
 		return response.RespErr(c, err)
 	}
-
-	columns, err1 := h.Container.Cassandra.GetColumnMeta(c, activeTable)
-	err2 := appsearch.ValidateRequest(searchRequest, columns)
-	if err := errors.Join(err1, err2); err != nil {
-		return response.RespErr(c, err)
-	}
-
-	selectedColumns := appsearch.VisibleColumns(columns)
-	if len(selectedColumns) == 0 {
-		return response.Resp400(c, fmt.Errorf("no visible columns found in table metadata"))
-	}
-
-	searchResults, err := h.Container.Cassandra.GetColumnWhere(
-		activeTable.TableData,
-		strings.Join(selectedColumns, ", "),
-		searchRequest,
-	)
-	if err != nil {
-		return response.RespErr(c, err)
-	}
-
-	return response.JSON(c, SearchResponse{
-		Metadata:       columns,
-		Data:           searchResults,
-		TableTimestamp: activeTable.Timestamp,
-	})
+	return response.JSON(c, result)
 }
 
 // Get_current_metadata godoc
@@ -87,24 +51,15 @@ func (h *Handler) Search_main_app(c *fiber.Ctx) error {
 // @Description  Returns metadata and timestamp of the active table
 // @Tags         search
 // @Produce      json
-// @Success      200 {object} GetMetadataResponse
+// @Success      200 {object} MetadataResponse
 // @Failure      500 {object} response.ErrorResponse
 // @Router       /metadata [get]
 func (h *Handler) Get_current_metadata(c *fiber.Ctx) error {
-	activeTable, err := h.Container.Cassandra.GetActiveTable(c)
+	result, err := h.Container.Search.GetMetadata(c)
 	if err != nil {
 		return response.RespErr(c, err)
 	}
-
-	columns, err := h.Container.Cassandra.GetColumnMeta(c, activeTable)
-	if err != nil {
-		return response.RespErr(c, err)
-	}
-
-	return response.JSON(c, GetMetadataResponse{
-		Metadata:       columns,
-		TableTimestamp: activeTable.Timestamp,
-	})
+	return response.JSON(c, result)
 }
 
 // Autocomletion godoc

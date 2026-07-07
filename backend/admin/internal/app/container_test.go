@@ -15,6 +15,7 @@ func TestNewTestContainer(t *testing.T) {
 	container, err := app.New(opts)
 	require.NoError(t, err)
 	require.NotNil(t, container.Auth)
+	require.NotNil(t, container.Search)
 	require.NotNil(t, container.Mail)
 	require.NoError(t, container.Closer())
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	appauth "admin/internal/application/auth"
+	appsearch "admin/internal/application/search"
 	domainauth "admin/internal/domain/auth"
 	domainmail "admin/internal/domain/mail"
 	domainuser "admin/internal/domain/user"
@@ -20,6 +21,7 @@ import (
 	infraredis "admin/internal/infrastructure/persistence/redis"
 	inframemory "admin/internal/infrastructure/persistence/memory"
 	"admin/internal/infrastructure/persistence/cassandra"
+	infracache "admin/internal/infrastructure/cache"
 	"admin/internal/infrastructure/security"
 	"admin/settings"
 )
@@ -27,6 +29,7 @@ import (
 // Container wires all application layers and infrastructure adapters.
 type Container struct {
 	Auth        *appauth.Service
+	Search      *appsearch.Service
 	Mail        domainmail.Sender
 	Users       domainuser.Repository
 	Cassandra   *cassandra.Store
@@ -49,12 +52,12 @@ type Options struct {
 
 func DefaultOptions() Options {
 	return Options{
-		PostgresDSN:   settings.POSTGRES_SOURCE,
-		RedisOpts:     settings.REDIS_SOURCE,
-		CassandraHost: settings.CASSANDRA_HOST,
-		SecretKey:     settings.SECRET_KEY,
-		DomainPref:    settings.DOMAIN_PREF,
-		EnvType:       settings.ENV_TYPE,
+		PostgresDSN:   settings.C.PostgresDSN(),
+		RedisOpts:     settings.C.RedisOptions(),
+		CassandraHost: settings.C.CassandraHost,
+		SecretKey:     settings.C.SecretKeyBytes(),
+		DomainPref:    settings.C.DomainPref,
+		EnvType:       settings.C.EnvType,
 	}
 }
 
@@ -117,7 +120,14 @@ func New(opts Options) (*Container, error) {
 	}
 
 	c.Users, c.Auth = buildAuth(opts, c)
+	c.Search = wireSearch(c.Cassandra)
 	return c, nil
+}
+
+func wireSearch(store *cassandra.Store) *appsearch.Service {
+	reader := cassandra.NewSearchReader(store)
+	proxy := infracache.NewSearchReaderProxy(reader, settings.C.SearchCacheTTL)
+	return appsearch.NewService(proxy, proxy)
 }
 
 func newTestContainer(opts Options) (*Container, error) {
@@ -136,6 +146,7 @@ func newTestContainer(opts Options) (*Container, error) {
 		c.Mail = opts.Mail
 	}
 	c.Users, c.Auth = buildAuth(opts, c)
+	c.Search = wireSearch(c.Cassandra)
 	c.Closer = func() error { return nil }
 	return c, nil
 }
