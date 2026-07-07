@@ -8,12 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"admin/internal/application/search"
-	"admin/internal/infrastructure/persistence/cassandra"
+	domainsearch "admin/internal/domain/search"
 	"admin/internal/presentation/http/response"
 )
 
-func columnsFixture() []*cassandra.ColumnMeta {
-	return []*cassandra.ColumnMeta{
+func columnsFixture() []domainsearch.ColumnMeta {
+	return []domainsearch.ColumnMeta{
 		{Column: "name", Type: "primary text"},
 		{Column: "surname", Type: "ref[]"},
 		{Column: "second_name", Type: "set text"},
@@ -43,7 +43,7 @@ func TestVisibleColumnsPositive(t *testing.T) {
 }
 
 func TestVisibleColumnsNegativeAllInvisible(t *testing.T) {
-	cols := []*cassandra.ColumnMeta{{Column: "x", Type: "invisible text"}}
+	cols := []domainsearch.ColumnMeta{{Column: "x", Type: "invisible text"}}
 	assert.Empty(t, search.VisibleColumns(cols))
 }
 

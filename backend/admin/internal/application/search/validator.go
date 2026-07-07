@@ -5,11 +5,11 @@ import (
 	"regexp"
 	"strings"
 
-	"admin/internal/infrastructure/persistence/cassandra"
+	domainsearch "admin/internal/domain/search"
 	"admin/internal/presentation/http/response"
 )
 
-func ValidateRequest(searchRequest string, columns []*cassandra.ColumnMeta) error {
+func ValidateRequest(searchRequest string, columns []domainsearch.ColumnMeta) error {
 	if searchRequest == "" {
 		return &response.UserError{E: fmt.Errorf("search request is required")}
 	}
@@ -40,7 +40,7 @@ func ValidateRequest(searchRequest string, columns []*cassandra.ColumnMeta) erro
 	return nil
 }
 
-func VisibleColumns(columns []*cassandra.ColumnMeta) []string {
+func VisibleColumns(columns []domainsearch.ColumnMeta) []string {
 	var selected []string
 	for _, col := range columns {
 		if !strings.Contains(strings.ToLower(col.Type), "invisible") {

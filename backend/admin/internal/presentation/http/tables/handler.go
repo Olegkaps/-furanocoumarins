@@ -52,6 +52,9 @@ func (h *Handler) Activate_table(c *fiber.Ctx) error {
 	if err := h.Container.Cassandra.ActivateTable(tableTime); err != nil {
 		return response.RespErr(c, err)
 	}
+	if err := h.Container.Search.RefreshActiveTableVersion(c); err != nil {
+		return response.RespErr(c, err)
+	}
 	return response.Resp200(c)
 }
 

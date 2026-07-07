@@ -53,7 +53,7 @@ func (h *Handler) Get_page(c *fiber.Ctx) error {
 	}
 
 	out, err := h.Container.Persistence.S3.GetObject(context.Background(), &s3.GetObjectInput{
-		Bucket: aws.String(settings.S3_BUCKET),
+		Bucket: aws.String(settings.C.S3Bucket),
 		Key:    aws.String(s3Key),
 	})
 	if err != nil {
@@ -108,7 +108,7 @@ func (h *Handler) Put_page(c *fiber.Ctx) error {
 	key := "pages/" + name + ".md"
 
 	_, err := h.Container.Persistence.S3.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(settings.S3_BUCKET),
+		Bucket:      aws.String(settings.C.S3Bucket),
 		Key:         aws.String(key),
 		Body:        bytes.NewReader(body),
 		ContentType: aws.String("text/markdown; charset=utf-8"),

@@ -41,7 +41,7 @@ func (v_sheet *VirtualSheet) ReadFile(file *excelize.File) error {
 }
 
 func split_set(r rune) bool {
-	return slices.Contains(settings.CASSANDRA_COLLECTION_SEPARATORS, r)
+	return slices.Contains(settings.CassandraCollectionSeparators, r)
 }
 
 func (v_sheet *VirtualSheet) Postprocess() error {

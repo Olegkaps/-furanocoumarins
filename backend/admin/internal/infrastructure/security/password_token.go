@@ -12,7 +12,7 @@ import (
 type PasswordHasher struct{}
 
 func bcryptCost() int {
-	if settings.ENV_TYPE == "TEST" || settings.ENV_TYPE == "AUTOTEST" {
+	if settings.C.EnvType == "TEST" || settings.C.EnvType == "AUTOTEST" {
 		return bcrypt.MinCost
 	}
 	return 14

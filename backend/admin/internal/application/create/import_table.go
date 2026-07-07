@@ -50,7 +50,7 @@ func importTable(
 ) (string, error) {
 	table := &cassandra.Table{
 		Name:     FileName,
-		Version:  settings.BACK_VERSION,
+		Version:  settings.BackVersion,
 		IsOk:     false,
 		IsActive: false,
 	}
