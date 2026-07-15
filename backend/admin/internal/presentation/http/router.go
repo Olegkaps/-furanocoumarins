@@ -33,7 +33,7 @@ func NewApp(container *app.Container) *fiber.App {
 	prometheus.RegisterAt(app, "/metrics")
 	app.Use(prometheus.Middleware)
 	app.Use(cors.New(settings.C.Cors()))
-	if settings.C.EnvType != "TEST" && settings.C.EnvType != "AUTOTEST" {
+	if container.EnvType != "TEST" && container.EnvType != "AUTOTEST" {
 		app.Use(swagger.New(swagger.Config{
 			BasePath: "/",
 			FilePath: "./docs/swagger.json",
@@ -49,32 +49,32 @@ func NewApp(container *app.Container) *fiber.App {
 	pages := pageshandler.NewHandler(container)
 	create := createhandler.NewHandler(container)
 
-	app.Get("/metadata", search.Get_current_metadata)
-	app.Get("/autocomplete/:column", search.Autocomletion)
-	app.Get("/search", search.Search_main_app)
-	app.Get("/article/:id", bibtex.Get_article)
-	app.Get("/pages/:name", pages.Get_page)
+	app.Get("/metadata", search.GetCurrentMetadata)
+	app.Get("/autocomplete/:column", search.Autocomplete)
+	app.Get("/search", search.SearchMainApp)
+	app.Get("/article/:id", bibtex.GetArticle)
+	app.Get("/pages/:name", pages.GetPage)
 
 	app.Get("/ping", response.Resp200)
 	app.Post("/auth/login", auth.Login)
-	app.Post("/auth/login-mail", auth.Login_mail)
-	app.Post("/auth/confirm-login-mail", auth.Confirm_login_mail)
-	app.Post("/auth/change-password", auth.Change_password)
-	app.Post("/auth/confirm-password-change", auth.Confirm_password_change)
+	app.Post("/auth/login-mail", auth.LoginMail)
+	app.Post("/auth/confirm-login-mail", auth.ConfirmLoginMail)
+	app.Post("/auth/change-password", auth.ChangePassword)
+	app.Post("/auth/confirm-password-change", auth.ConfirmPasswordChange)
 
 	app.Use(jwtware.New(jwtware.Config{
 		SigningKey: jwtware.SigningKey{Key: settings.C.SecretKeyBytes()},
 	}))
-	app.Post("/auth/renew-token", auth.Renew_token)
+	app.Post("/auth/renew-token", auth.RenewToken)
 
-	app.Post("/create-table", create.Create_table)
-	app.Post("/get-tables-list", tables.Get_tables_list)
-	app.Post("/make-table-active/:timestamp", tables.Activate_table)
-	app.Delete("/table/:timestamp", tables.Delete_table)
-	app.Delete("/tables", tables.Delete_all_bad_tables)
+	app.Post("/create-table", create.CreateTable)
+	app.Post("/get-tables-list", tables.GetTablesList)
+	app.Post("/make-table-active/:timestamp", tables.ActivateTable)
+	app.Delete("/table/:timestamp", tables.DeleteTable)
+	app.Delete("/tables", tables.DeleteAllBadTables)
 
-	app.Put("/bibtex", bibtex.Update_file)
-	app.Put("/pages/:name", pages.Put_page)
+	app.Put("/bibtex", bibtex.UpdateFile)
+	app.Put("/pages/:name", pages.PutPage)
 
 	return app
 }

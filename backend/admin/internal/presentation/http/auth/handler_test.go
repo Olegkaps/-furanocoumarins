@@ -100,7 +100,7 @@ func TestHandlerLoginSuccess(t *testing.T) {
 func TestHandlerLoginMailUnknownUserReturns401(t *testing.T) {
 	h := authhandler.NewHandler(testContainer(t))
 	fiberApp := fiber.New()
-	fiberApp.Post("/auth/login-mail", h.Login_mail)
+	fiberApp.Post("/auth/login-mail", h.LoginMail)
 
 	form := url.Values{}
 	form.Set("uname_or_email", "ghost@example.com")
@@ -114,7 +114,7 @@ func TestHandlerLoginMailSuccess(t *testing.T) {
 	})
 	h := authhandler.NewHandler(container)
 	fiberApp := fiber.New()
-	fiberApp.Post("/auth/login-mail", h.Login_mail)
+	fiberApp.Post("/auth/login-mail", h.LoginMail)
 
 	form := url.Values{}
 	form.Set("uname_or_email", "alice@example.com")
@@ -125,7 +125,7 @@ func TestHandlerLoginMailSuccess(t *testing.T) {
 func TestHandlerConfirmLoginInvalidTokenReturns401(t *testing.T) {
 	h := authhandler.NewHandler(testContainer(t))
 	fiberApp := fiber.New()
-	fiberApp.Post("/auth/confirm-login-mail", h.Confirm_login_mail)
+	fiberApp.Post("/auth/confirm-login-mail", h.ConfirmLoginMail)
 
 	form := url.Values{}
 	form.Set("word", "bad-token")
@@ -145,7 +145,7 @@ func TestHandlerConfirmLoginSuccess(t *testing.T) {
 
 	h := authhandler.NewHandler(container)
 	fiberApp := fiber.New()
-	fiberApp.Post("/auth/confirm-login-mail", h.Confirm_login_mail)
+	fiberApp.Post("/auth/confirm-login-mail", h.ConfirmLoginMail)
 
 	form := url.Values{}
 	form.Set("word", "lin123")
@@ -156,7 +156,7 @@ func TestHandlerConfirmLoginSuccess(t *testing.T) {
 func TestHandlerChangePasswordNotFoundReturns400(t *testing.T) {
 	h := authhandler.NewHandler(testContainer(t))
 	fiberApp := fiber.New()
-	fiberApp.Post("/auth/change-password", h.Change_password)
+	fiberApp.Post("/auth/change-password", h.ChangePassword)
 
 	form := url.Values{}
 	form.Set("uname_or_email", "missing")
@@ -167,7 +167,7 @@ func TestHandlerChangePasswordNotFoundReturns400(t *testing.T) {
 func TestHandlerConfirmPasswordInvalidTokenReturns401(t *testing.T) {
 	h := authhandler.NewHandler(testContainer(t))
 	fiberApp := fiber.New()
-	fiberApp.Post("/auth/confirm-password-change", h.Confirm_password_change)
+	fiberApp.Post("/auth/confirm-password-change", h.ConfirmPasswordChange)
 
 	form := url.Values{}
 	form.Set("word", "bad")
@@ -184,7 +184,7 @@ func TestHandlerRenewTokenUnauthorized(t *testing.T) {
 		c.Locals("user", jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"name": "ghost", "role": "admin",
 		}))
-		return h.Renew_token(c)
+		return h.RenewToken(c)
 	})
 
 	resp := postForm(t, fiberApp, "/auth/renew-token", url.Values{})
@@ -201,7 +201,7 @@ func TestHandlerRenewTokenSuccess(t *testing.T) {
 		c.Locals("user", jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"name": "alice", "role": "admin",
 		}))
-		return h.Renew_token(c)
+		return h.RenewToken(c)
 	})
 
 	resp := postForm(t, fiberApp, "/auth/renew-token", url.Values{})
@@ -226,7 +226,7 @@ func TestLoginMailSendsEmail(t *testing.T) {
 	require.NoError(t, err)
 	h := authhandler.NewHandler(container)
 	fiberApp := fiber.New()
-	fiberApp.Post("/auth/login-mail", h.Login_mail)
+	fiberApp.Post("/auth/login-mail", h.LoginMail)
 
 	form := url.Values{}
 	form.Set("uname_or_email", "u@example.com")

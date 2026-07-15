@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/smtp"
-	"os"
+	"strings"
 
 	domainmail "admin/internal/domain/mail"
+	"admin/settings"
 )
 
 type Config struct {
@@ -16,20 +17,13 @@ type Config struct {
 	Password    string
 }
 
-func ConfigFromEnv() Config {
+func ConfigFromSettings() Config {
 	return Config{
-		Host:        envOrDefault("SMTP_HOST", "smtp.yandex.ru"),
-		Port:        envOrDefault("SMTP_PORT", "587"),
-		SenderEmail: os.Getenv("MAIL"),
-		Password:    os.Getenv("MAIL_SECRET"),
+		Host:        settings.C.SmtpHost,
+		Port:        settings.C.SmtpPort,
+		SenderEmail: settings.C.Mail,
+		Password:    settings.C.MailSecret,
 	}
-}
-
-func envOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
 
 // Sender is the SMTP adapter implementing the mail outbound port.
@@ -43,22 +37,39 @@ func NewSender(cfg Config) *Sender {
 
 func (s *Sender) Send(_ context.Context, msg domainmail.Message) error {
 	auth := smtp.PlainAuth("", s.cfg.SenderEmail, s.cfg.Password, s.cfg.Host)
-	body := "From: " + s.cfg.SenderEmail + "\n" +
-		"To: " + msg.To + "\n" +
-		"Subject: " + msg.Subject + "\n\n" +
-		msg.Body
+	body := buildEmailBody(s.cfg.SenderEmail, msg)
 
 	err := smtp.SendMail(
 		s.cfg.Host+":"+s.cfg.Port,
 		auth,
 		s.cfg.SenderEmail,
 		[]string{msg.To},
-		[]byte(body),
+		body,
 	)
 	if err != nil {
 		return fmt.Errorf("send email: %w", err)
 	}
 	return nil
+}
+
+func buildEmailBody(senderEmail string, msg domainmail.Message) []byte {
+	contentType := "text/plain; charset=UTF-8"
+	if msg.HTML {
+		contentType = "text/html; charset=UTF-8"
+	}
+
+	var sb strings.Builder
+	sb.WriteString("From: ")
+	sb.WriteString(senderEmail)
+	sb.WriteString("\r\nTo: ")
+	sb.WriteString(msg.To)
+	sb.WriteString("\r\nSubject: ")
+	sb.WriteString(msg.Subject)
+	sb.WriteString("\r\nMIME-Version: 1.0\r\nContent-Type: ")
+	sb.WriteString(contentType)
+	sb.WriteString("\r\n\r\n")
+	sb.WriteString(msg.Body)
+	return []byte(sb.String())
 }
 
 var _ domainmail.Sender = (*Sender)(nil)

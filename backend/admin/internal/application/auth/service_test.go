@@ -278,42 +278,31 @@ func TestServiceConfirmPasswordChangeNegativeHashError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestServiceRequestLoginLinkNegativeHashError(t *testing.T) {
+func TestServiceGenerateTokenFormat(t *testing.T) {
 	users := inframemory.NewUserRepository(domainuser.User{
 		Username: "alice", Email: "alice@example.com", Role: "admin",
 	})
+	mailSender := inframailmemory.NewSender()
 	svc := appauth.NewService(
 		users,
 		inframemory.NewMagicLinkStore(),
-		inframailmemory.NewSender(),
-		hashErrorHasher{},
+		mailSender,
+		stubHasher{},
 		stubTokens{},
 		"https://example.com",
 	)
-	err := svc.RequestLoginLink(context.Background(), "alice")
-	require.Error(t, err)
+
+	err := svc.RequestLoginLink(context.Background(), "alice@example.com")
+	require.NoError(t, err)
+	require.Len(t, mailSender.Messages, 1)
+	assert.Contains(t, mailSender.Messages[0].Body, "https://example.com/admit/lin")
+	assert.NotContains(t, mailSender.Messages[0].Body, "/admit/linlin")
 }
 
 type hashErrorHasher struct{}
 
 func (hashErrorHasher) Hash(string) (string, error) { return "", assert.AnError }
 func (hashErrorHasher) Verify(string, string) bool  { return false }
-
-func TestServiceRequestPasswordChangeNegativeHashError(t *testing.T) {
-	users := inframemory.NewUserRepository(domainuser.User{
-		Username: "bob", Email: "bob@example.com", Role: "admin",
-	})
-	svc := appauth.NewService(
-		users,
-		inframemory.NewMagicLinkStore(),
-		inframailmemory.NewSender(),
-		hashErrorHasher{},
-		stubTokens{},
-		"https://example.com",
-	)
-	err := svc.RequestPasswordChange(context.Background(), "bob")
-	require.Error(t, err)
-}
 
 func TestServiceRenewTokenNegativeRepoError(t *testing.T) {
 	users := errorUserRepo{err: assert.AnError}

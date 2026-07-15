@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v5"
 
 	"admin/internal/app"
 	"admin/internal/infrastructure/logging"
@@ -29,16 +28,16 @@ func NewHandler(container *app.Container) *Handler {
 	return &Handler{Handler: deps.New(container)}
 }
 
-// Get_page godoc
+// GetPage godoc
 // @Summary      Get page content by name
 // @Description  Returns markdown content of a page from S3
 // @Tags         pages
-// @Param        name path string true "Page name"
+// @Param        name path string true "Page name" example(about)
 // @Produce      text/markdown
 // @Success      200 {string} string "Markdown content"
 // @Failure      400,404,500 {object} response.ErrorResponse
 // @Router       /pages/{name} [get]
-func (h *Handler) Get_page(c *fiber.Ctx) error {
+func (h *Handler) GetPage(c *fiber.Ctx) error {
 	name := c.Params("name")
 	if name == "" {
 		return response.Resp400(c, fmt.Errorf("name is required"))
@@ -74,22 +73,23 @@ func (h *Handler) Get_page(c *fiber.Ctx) error {
 	return c.Send(body)
 }
 
-// Put_page godoc
+// PutPage godoc
 // @Summary      Create or update page
 // @Description  Uploads markdown content for a page (admin only)
 // @Tags         pages
 // @Security     BearerAuth
-// @Param        name path string true "Page name"
-// @Param        body body string true "Markdown content"
+// @Param        name path string true "Page name" example(about)
+// @Param        body body string true "Markdown content" example(# About\n\nPlatform for furanocoumarins analysis.)
 // @Accept       application/octet-stream
 // @Produce      json
 // @Success      200
 // @Failure      400,401,500 {object} response.ErrorResponse
 // @Router       /pages/{name} [put]
-func (h *Handler) Put_page(c *fiber.Ctx) error {
-	user := c.Locals("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	role, _ := claims["role"].(string)
+func (h *Handler) PutPage(c *fiber.Ctx) error {
+	role, err := deps.JWTRole(c)
+	if err != nil {
+		return response.Resp401(c, err)
+	}
 	if role != "admin" {
 		return response.Resp401(c, nil)
 	}
@@ -107,7 +107,7 @@ func (h *Handler) Put_page(c *fiber.Ctx) error {
 	ctx := context.Background()
 	key := "pages/" + name + ".md"
 
-	_, err := h.Container.Persistence.S3.PutObject(ctx, &s3.PutObjectInput{
+	_, err = h.Container.Persistence.S3.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(settings.C.S3Bucket),
 		Key:         aws.String(key),
 		Body:        bytes.NewReader(body),

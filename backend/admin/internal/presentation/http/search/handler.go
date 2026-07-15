@@ -20,7 +20,7 @@ func NewHandler(container *app.Container) *Handler {
 }
 
 type AutocompleteResponse struct {
-	Values []string `json:"values"`
+	Values []string `json:"values" example:"Angelica archangelica,Angelica dahurica"`
 }
 
 // Swagger aliases for generated docs.
@@ -29,16 +29,16 @@ type (
 	SearchResponse   = domainsearch.SearchResponse
 )
 
-// Search_main_app godoc
+// SearchMainApp godoc
 // @Summary      Search main app data
 // @Description  Searches the active table by query string
 // @Tags         search
-// @Param        q query string true "Search query"
+// @Param        q query string true "Search query" example(species = 'Angelica')
 // @Produce      json
 // @Success      200 {object} SearchResponse
 // @Failure      400,500 {object} response.ErrorResponse
 // @Router       /search [get]
-func (h *Handler) Search_main_app(c *fiber.Ctx) error {
+func (h *Handler) SearchMainApp(c *fiber.Ctx) error {
 	result, err := h.Container.Search.Search(c, c.Query("q"))
 	if err != nil {
 		return response.RespErr(c, err)
@@ -46,7 +46,7 @@ func (h *Handler) Search_main_app(c *fiber.Ctx) error {
 	return response.JSON(c, result)
 }
 
-// Get_current_metadata godoc
+// GetCurrentMetadata godoc
 // @Summary      Get current table metadata
 // @Description  Returns metadata and timestamp of the active table
 // @Tags         search
@@ -54,7 +54,7 @@ func (h *Handler) Search_main_app(c *fiber.Ctx) error {
 // @Success      200 {object} MetadataResponse
 // @Failure      500 {object} response.ErrorResponse
 // @Router       /metadata [get]
-func (h *Handler) Get_current_metadata(c *fiber.Ctx) error {
+func (h *Handler) GetCurrentMetadata(c *fiber.Ctx) error {
 	result, err := h.Container.Search.GetMetadata(c)
 	if err != nil {
 		return response.RespErr(c, err)
@@ -62,17 +62,17 @@ func (h *Handler) Get_current_metadata(c *fiber.Ctx) error {
 	return response.JSON(c, result)
 }
 
-// Autocomletion godoc
+// Autocomplete godoc
 // @Summary      Autocomplete column values
 // @Description  Returns prefix-matched values for a column
 // @Tags         search
-// @Param        column path string true "Column name"
-// @Param        value query string true "Prefix to match"
+// @Param        column path string true "Column name" example(species)
+// @Param        value query string true "Prefix to match" example(Angel)
 // @Produce      json
 // @Success      200 {object} AutocompleteResponse
 // @Failure      400,500 {object} response.ErrorResponse
 // @Router       /autocomplete/{column} [get]
-func (h *Handler) Autocomletion(c *fiber.Ctx) error {
+func (h *Handler) Autocomplete(c *fiber.Ctx) error {
 	column := c.Params("column")
 	value := c.Query("value", "")
 	if value == "" {

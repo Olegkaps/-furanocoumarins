@@ -34,6 +34,7 @@ type Container struct {
 	Users       domainuser.Repository
 	Cassandra   *cassandra.Store
 	Persistence *persistence.Clients
+	EnvType     string
 	Closer      func() error
 }
 
@@ -64,6 +65,7 @@ func DefaultOptions() Options {
 func New(opts Options) (*Container, error) {
 	c := &Container{
 		Persistence: &persistence.Clients{},
+		EnvType:     opts.EnvType,
 	}
 
 	if opts.EnvType == "AUTOTEST" || opts.EnvType == "TEST" {
@@ -102,7 +104,7 @@ func New(opts Options) (*Container, error) {
 
 	mailSender := opts.Mail
 	if mailSender == nil {
-		mailSender = inframailsmtp.NewSender(inframailsmtp.ConfigFromEnv())
+		mailSender = inframailsmtp.NewSender(inframailsmtp.ConfigFromSettings())
 	}
 	c.Mail = mailSender
 
@@ -135,7 +137,8 @@ func newTestContainer(opts Options) (*Container, error) {
 		Persistence: &persistence.Clients{
 			CQL: gocql.NewCluster("127.0.0.1"),
 		},
-		Mail: inframailmemory.NewSender(),
+		Mail:    inframailmemory.NewSender(),
+		EnvType: opts.EnvType,
 	}
 	if opts.CassandraStore != nil {
 		c.Cassandra = opts.CassandraStore

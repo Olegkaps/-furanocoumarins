@@ -12,14 +12,14 @@ import (
 )
 
 type Table struct {
-	Timestamp    time.Time `json:"created_at"`
-	Name         string    `json:"name"`
-	TableMeta    string
-	TableData    string
-	TableSpecies string
-	Version      string `json:"version"`
-	IsOk         bool   `json:"is_ok"`
-	IsActive     bool   `json:"is_active"`
+	Timestamp    time.Time `json:"created_at" example:"2026-01-15T12:00:00Z"`
+	Name         string    `json:"name" example:"furanocoumarins_v2"`
+	TableMeta    string    `json:"tableMeta" example:"chemdb.meta_2026_01_15T12_00_00_000"`
+	TableData    string    `json:"tableData" example:"chemdb.data_2026_01_15T12_00_00_000"`
+	TableSpecies string    `json:"tableSpecies" example:"chemdb.species_2026_01_15T12_00_00_000"`
+	Version      string    `json:"version" example:"v2.0"`
+	IsOk         bool      `json:"is_ok" example:"true"`
+	IsActive     bool      `json:"is_active" example:"true"`
 }
 
 func InserTable(session *gocql.Session, t *Table) error {

@@ -2,9 +2,9 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
-	"strconv"
-	"strings"
 	"time"
 
 	domainauth "admin/internal/domain/auth"
@@ -146,11 +146,9 @@ func (s *Service) RenewToken(ctx context.Context, username, role string) (string
 }
 
 func (s *Service) generateToken(prefix string) (string, error) {
-	raw, err := s.hasher.Hash(strconv.Itoa(time.Time.Nanosecond(s.now())))
-	if err != nil {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	token := prefix + strings.ReplaceAll(raw, "/", "")
-	token = prefix + strings.ReplaceAll(token, ".", "")
-	return token, nil
+	return prefix + base64.RawURLEncoding.EncodeToString(b), nil
 }

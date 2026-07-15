@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/gofiber/fiber/v2"
 	"github.com/xuri/excelize/v2"
 
 	appbibtex "admin/internal/application/bibtex"
 	"admin/internal/application/create/excel"
 	"admin/internal/application/search"
+	"admin/internal/infrastructure/logging"
 	"admin/internal/infrastructure/persistence"
 	"admin/internal/infrastructure/persistence/cassandra"
 	"admin/settings"
@@ -22,31 +22,38 @@ type importerStore interface {
 }
 
 func ImportTable(
-	c *fiber.Ctx,
 	store importerStore,
 	tableFile *excelize.File,
 	metaListName, fileName string,
+	log logging.Logger,
 ) (string, error) {
 	defer func() {
 		if err := tableFile.Close(); err != nil {
-			_ = err
+			log.Warn("close excel file: %s", err)
 		}
 	}()
+
+	log.Info("import started: table=%s meta=%s", fileName, metaListName)
 
 	var message string
 	err := store.WithImporter(func(imp cassandra.TableImporter) error {
 		var runErr error
-		message, runErr = importTable(c, imp, tableFile, metaListName, fileName)
+		message, runErr = importTable(imp, tableFile, metaListName, fileName, log)
 		return runErr
 	})
+	if err != nil {
+		log.Error("import failed: table=%s err=%s", fileName, err)
+		return message, err
+	}
+	log.Info("import finished: table=%s result=%s", fileName, message)
 	return message, err
 }
 
 func importTable(
-	c *fiber.Ctx,
 	imp cassandra.TableImporter,
 	TableFile *excelize.File,
 	MetaListName, FileName string,
+	log logging.Logger,
 ) (string, error) {
 	table := &cassandra.Table{
 		Name:     FileName,
@@ -63,6 +70,9 @@ func importTable(
 	table.TableData = "chemdb." + "data_" + fixed_curr_time
 	table.TableSpecies = "chemdb." + "species_" + fixed_curr_time
 
+	log.Info("creating table records: meta=%s data=%s species=%s",
+		table.TableMeta, table.TableData, table.TableSpecies)
+
 	if err := imp.InsertTable(table); err != nil {
 		return "", err
 	}
@@ -73,6 +83,7 @@ func importTable(
 	if err != nil {
 		return "", err
 	}
+	log.Info("read meta sheet %q: %d rows", MetaListName, len(meta_result))
 
 	// insert meta in db
 
@@ -140,6 +151,7 @@ func importTable(
 	if err != nil {
 		return "", err
 	}
+	log.Info("inserted meta columns: count=%d", len(meta_data))
 
 	// normally parse meta
 	parsed_meta := make(map[string]*VirtualSheet)
@@ -182,7 +194,7 @@ func importTable(
 		}
 	}
 
-	for _, v_sheet := range parsed_meta {
+	for name, v_sheet := range parsed_meta {
 		err = v_sheet.ReadFile(TableFile)
 		if err != nil {
 			return "", err
@@ -191,6 +203,7 @@ func importTable(
 		if err != nil {
 			return "", err
 		}
+		log.Info("parsed virtual sheet %q: rows=%d", name, len(v_sheet.Rows))
 	}
 
 	// insert species
@@ -230,6 +243,7 @@ func importTable(
 	if err != nil {
 		return "", err
 	}
+	log.Info("inserted species rows: count=%d", len(sp_data))
 
 	// insert data
 	// parsed_meta[main]
@@ -368,6 +382,7 @@ func importTable(
 	if err != nil {
 		return "", err
 	}
+	log.Info("inserted data rows: count=%d columns=%d", len(joined_data), len(data_columns))
 
 	// LIKE Index
 	for _, row := range meta_result {
@@ -378,6 +393,7 @@ func importTable(
 			if err != nil {
 				return "", err
 			}
+			log.Info("created SASI index on column %q", row[1])
 		}
 	}
 
@@ -386,6 +402,7 @@ func importTable(
 	if err != nil {
 		return "", err
 	}
+	log.Info("marked table as ok: name=%s", FileName)
 
 	// check reference ids
 	ref_ind := -1
@@ -396,6 +413,7 @@ func importTable(
 	}
 
 	if ref_ind == -1 {
+		log.Warn("column with type ref[] not found, reference check skipped")
 		return "Column with type 'ref[]' not found, reference check skipped.", nil
 	}
 
@@ -418,6 +436,7 @@ func importTable(
 	} else {
 		message = "Failed reference checks: " + strings.Join(warnigs, "\n")
 	}
+	log.Info("reference check: warnings=%d", len(warnigs))
 
 	return message, nil
 }
