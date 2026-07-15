@@ -20,10 +20,17 @@ type Config struct {
 	PgUser         string        `env:"PG_USER"`
 	PgPassword     string        `env:"PG_PASSWORD"`
 	PgDb           string        `env:"PG_DB"`
+	PgHost         string        `env:"PG_HOST" env-default:"postgres"`
+	PgPort         string        `env:"PG_PORT" env-default:"5432"`
+	PgSSLMode      string        `env:"PG_SSLMODE" env-default:"disable"`
 	RedisAddr      string        `env:"REDIS_ADDR" env-default:"redis:6379"`
 	RedisPassword  string        `env:"REDIS_PASSWORD"`
 	CassandraHost  string        `env:"CASSANDRA_HOST"`
 	DomainPref     string        `env:"DOMAIN_PREF"`
+	SmtpHost       string        `env:"SMTP_HOST" env-default:"smtp.yandex.ru"`
+	SmtpPort       string        `env:"SMTP_PORT" env-default:"587"`
+	Mail           string        `env:"MAIL"`
+	MailSecret     string        `env:"MAIL_SECRET"`
 	S3Endpoint     string        `env:"S3_ENDPOINT"`
 	S3AccessKey    string        `env:"S3_ACCESS_KEY_ID"`
 	S3SecretKey    string        `env:"S3_SECRET_ACCESS_KEY"`
@@ -52,10 +59,13 @@ func (c Config) SecretKeyBytes() []byte {
 
 func (c Config) PostgresDSN() string {
 	return fmt.Sprintf(
-		"user=%s password=%s dbname=%s host=postgres port=5432 sslmode=disable",
+		"user=%s password=%s dbname=%s host=%s port=%s sslmode=%s",
 		c.PgUser,
 		c.PgPassword,
 		c.PgDb,
+		c.PgHost,
+		c.PgPort,
+		c.PgSSLMode,
 	)
 }
 

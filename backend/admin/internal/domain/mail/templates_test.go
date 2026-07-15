@@ -17,17 +17,21 @@ func TestLinkBodyPositive(t *testing.T) {
 func TestLinkBodyNegativeEmptyAction(t *testing.T) {
 	body := domainmail.LinkBody("", "https://x/y")
 	assert.Contains(t, body, "To , follow")
+	assert.Contains(t, body, "<!DOCTYPE html>")
 }
 
 func TestLoginLinkPositive(t *testing.T) {
 	msg := domainmail.LoginLink("https://site", "tok")
 	assert.Equal(t, "Login to site", msg.Subject)
+	assert.True(t, msg.HTML)
 	assert.Contains(t, msg.Body, "/admit/tok")
+	assert.Contains(t, msg.Body, "<!DOCTYPE html>")
 }
 
 func TestPasswordChangeLinkPositive(t *testing.T) {
 	msg := domainmail.PasswordChangeLink("https://site", "tok")
 	assert.Equal(t, "Change password", msg.Subject)
+	assert.True(t, msg.HTML)
 	assert.Contains(t, msg.Body, "/admit/tok")
 }
 

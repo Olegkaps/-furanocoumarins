@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v5"
 
 	appbibtex "admin/internal/application/bibtex"
 	"admin/internal/app"
@@ -23,16 +22,16 @@ func NewHandler(container *app.Container) *Handler {
 	return &Handler{Handler: deps.New(container)}
 }
 
-// Get_article godoc
+// GetArticle godoc
 // @Summary      Get article by ID
 // @Description  Returns bibtex text for the given article ID
 // @Tags         bibtex
-// @Param        id path string true "Article ID"
+// @Param        id path string true "Article ID" example(key2024)
 // @Produce      json
 // @Success      200 {object} response.ArticleValResponse
 // @Failure      404,500 {object} response.ErrorResponse
 // @Router       /article/{id} [get]
-func (h *Handler) Get_article(c *fiber.Ctx) error {
+func (h *Handler) GetArticle(c *fiber.Ctx) error {
 	id := c.Params("id")
 	logging.Info(c, "get article '%s'", id)
 
@@ -46,7 +45,7 @@ func (h *Handler) Get_article(c *fiber.Ctx) error {
 	return response.JSON(c, response.ArticleValResponse{Val: text})
 }
 
-// Update_file godoc
+// UpdateFile godoc
 // @Summary      Update bibtex file
 // @Description  Uploads bibtex file and updates Cassandra
 // @Tags         bibtex
@@ -56,10 +55,11 @@ func (h *Handler) Get_article(c *fiber.Ctx) error {
 // @Success      200
 // @Failure      400,500 {object} response.ErrorResponse
 // @Router       /bibtex [put]
-func (h *Handler) Update_file(c *fiber.Ctx) error {
-	user := c.Locals("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	name := claims["name"].(string)
+func (h *Handler) UpdateFile(c *fiber.Ctx) error {
+	name, err := deps.JWTUsername(c)
+	if err != nil {
+		return response.Resp401(c, err)
+	}
 
 	dbUser, err := h.Container.Users.FindByLoginOrEmail(c.Context(), name)
 	if err != nil {
@@ -113,7 +113,7 @@ func (h *Handler) Update_file(c *fiber.Ctx) error {
 			To:      dbUser.Email,
 			Subject: "Updated bibtex file",
 			Body: fmt.Sprintf(
-				"Bibtex file updated, but active table %s has no column with type `ref[]`, check skiped",
+				"Bibtex file updated, but active table %s has no column with type `ref[]`, check skipped",
 				timestamp,
 			),
 		})

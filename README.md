@@ -65,7 +65,7 @@ After the first launch of the backend, build the CLI and run init in this order 
 
 - Build CLI binary:
   ```bash
-  go build cli/main.go -o cli
+  go build -o cli ./cli
   ```
 
 - Database initialization (order matters: create keyspace, then tables):
@@ -80,13 +80,23 @@ After the first launch of the backend, build the CLI and run init in this order 
   ./cli create_admin <username> <email>
   ```
 
-- Run tests:
+- Run tests (recommended — unit + coverage ≥95% + Postgres integration):
+  ```bash
+  docker compose -f docker-compose.test.yaml run --rm --build test
+  ```
+  Locally without Docker (unit + coverage gate):
+  ```bash
+  cd backend/admin && ./scripts/test.sh
+  ```
+  Locally with an already running Postgres:
+  ```bash
+  cd backend/admin
+  export TEST_POSTGRES_DSN="user=postgres password=postgres dbname=postgres host=127.0.0.1 port=5432 sslmode=disable"
+  RUN_INTEGRATION=1 ./scripts/test.sh
+  ```
+  Quick unit-only run:
   ```bash
   cd backend/admin && go test -v ./...
-  ```
-  or inside container
-  ```bash
-  docker build backend/admin --file Dockerfile.test --build-arg VAR=$(date +%s)
   ```
 
 - Cassandra vs Redis vs PostgreSQL cache benchmarks (Podman + `go test -bench`, not part of default `./...`): [backend/admin/benchmarks/cassandra_vs_redis/README.md](backend/admin/benchmarks/cassandra_vs_redis/README.md).
@@ -134,14 +144,14 @@ Config files live in the [monitoring/](monitoring/) directory. Start the stack w
 Main backend (go-auth) variables are loaded from `env/.env` (and related files under `env/`). You need:
 
 **Backend (go-auth):**
-- PostgreSQL: `PG_USER`, `PG_PASSWORD`, `PG_DB`
+- PostgreSQL: `PG_USER`, `PG_PASSWORD`, `PG_DB`, `PG_HOST`, `PG_PORT`, `PG_SSLMODE`
 - Redis: `REDIS_ADDR`, `REDIS_PASSWORD`
 - Cassandra: `CASSANDRA_HOST`
 - JWT: `SECRET_KEY`
 - CORS: `ALLOW_ORIGIN`
 - Links in emails: `DOMAIN_PREF`
 - S3 (for editable pages): `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`; optionally `S3_REGION`, `S3_USE_PATH_STYLE`
-- SMTP and other app settings as used in the compose/env files
+- SMTP and other app settings as used in the compose/env files (`SMTP_HOST`, `SMTP_PORT`, `MAIL`, `MAIL_SECRET`)
 
 **Frontend:**
 - `VITE_REACT_APP_BACKEND_SOURCE` — backend API base URL (used as `BASE_URL` in [frontend/src/config.tsx](frontend/src/config.tsx)). Must be set at build/run time for the frontend to call the API.

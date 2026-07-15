@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/xuri/excelize/v2"
 
 	_ "github.com/lib/pq"
@@ -26,20 +25,23 @@ func NewHandler(container *app.Container) *Handler {
 	return &Handler{Handler: deps.New(container)}
 }
 
-// Create_table godoc
+// CreateTable godoc
 // @Summary      Create table from Excel file
 // @Description  Uploads Excel file and creates a new table
 // @Tags         tables
 // @Security     BearerAuth
 // @Accept       multipart/form-data
 // @Param        file formData file true "Excel file"
+// @Param        meta formData string false "Meta sheet name" example(meta)
+// @Param        name formData string false "Table name" example(furanocoumarins_v2)
 // @Success      200
 // @Failure      400,500 {object} response.ErrorResponse
 // @Router       /create-table [post]
-func (h *Handler) Create_table(c *fiber.Ctx) error {
-	user := c.Locals("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	name := claims["name"].(string)
+func (h *Handler) CreateTable(c *fiber.Ctx) error {
+	name, err := deps.JWTUsername(c)
+	if err != nil {
+		return response.Resp401(c, err)
+	}
 
 	dbUser, err := h.Container.Users.FindByLoginOrEmail(c.Context(), name)
 	if err != nil {
@@ -63,35 +65,48 @@ func (h *Handler) Create_table(c *fiber.Ctx) error {
 
 	meta := c.FormValue("meta")
 	tableName := c.FormValue("name")
+	displayPath := file.Filename
 
-	h.createTableAsync(c, xlsx, meta, dbUser.Email, tableName)
+	logging.Info(c, "accepted create-table request: file=%s table=%s meta=%s user=%s",
+		displayPath, tableName, meta, dbUser.Email)
+
+	reqLog := logging.CopyRequestFields(c)
+	go h.runCreateTable(reqLog, xlsx, meta, dbUser.Email, tableName, displayPath)
 
 	return response.Resp200(c)
 }
 
-func (h *Handler) createTableAsync(c *fiber.Ctx, tableFile *excelize.File, metaListName, authorMail, fileName string) {
+func (h *Handler) runCreateTable(
+	reqLog logging.RequestFields,
+	tableFile *excelize.File,
+	metaListName, authorMail, fileName, displayPath string,
+) {
+	reqLog.Info("starting async table import: file=%s table=%s meta=%s", displayPath, fileName, metaListName)
+
 	sendErrorMail := func(err error) {
-		logging.Warn(c, "%s", err.Error())
+		reqLog.Warn("create table %s failed: %s", displayPath, err.Error())
 		if mailErr := h.SendMail(context.Background(), domainmail.Message{
 			To:      authorMail,
-			Subject: fmt.Sprintf("Creating table %s failed.", tableFile.Path),
-			Body:    "Recieved following error: " + err.Error(),
+			Subject: fmt.Sprintf("Creating table %s failed.", displayPath),
+			Body:    "Received following error: " + err.Error(),
 		}); mailErr != nil {
-			logging.Error(c, "%s", mailErr)
+			reqLog.Error("send create-table error mail: %s", mailErr)
 		}
 	}
 
-	message, err := appcreate.ImportTable(c, h.Container.Cassandra, tableFile, metaListName, fileName)
+	message, err := appcreate.ImportTable(h.Container.Cassandra, tableFile, metaListName, fileName, reqLog)
 	if err != nil {
 		sendErrorMail(err)
 		return
 	}
 
+	reqLog.Info("table import finished: file=%s table=%s", displayPath, fileName)
+
 	if mailErr := h.SendMail(context.Background(), domainmail.Message{
 		To:      authorMail,
-		Subject: fmt.Sprintf("Table %s created successfully.", tableFile.Path),
-		Body:    "Table created, don`t forget to activate it.\n" + message,
+		Subject: fmt.Sprintf("Table %s created successfully.", displayPath),
+		Body:    "Table created, don't forget to activate it.\n" + message,
 	}); mailErr != nil {
-		logging.Error(c, "%s", mailErr)
+		reqLog.Error("send create-table success mail: %s", mailErr)
 	}
 }

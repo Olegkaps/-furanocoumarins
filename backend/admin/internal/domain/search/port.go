@@ -8,10 +8,10 @@ import (
 
 // ColumnMeta describes a table column exposed to clients.
 type ColumnMeta struct {
-	Column      string `json:"column"`
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Description string `json:"description"`
+	Column      string `json:"column" example:"species"`
+	Name        string `json:"name" example:"Species"`
+	Type        string `json:"type" example:"text search"`
+	Description string `json:"description" example:"Plant species name"`
 }
 
 // TableVersion identifies the currently active table for cache keys.
