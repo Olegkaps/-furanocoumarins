@@ -62,7 +62,6 @@ func RespErr(c *fiber.Ctx, err error) error {
 // @Success      200
 // @Router       /ping [get]
 func Resp200(c *fiber.Ctx) error {
-	logging.Info(c, "sending ok")
 	return c.SendStatus(fiber.StatusOK)
 }
 
