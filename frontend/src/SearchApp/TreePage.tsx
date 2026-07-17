@@ -14,17 +14,15 @@ export function AppPhilogeneticTree() {
   return (
     <>
       <FullNavigation />
-      <br />
-      <SearchLine setSearchResponse={setSearchResponse} />
-      {!isEmpty(searchResponse) && (
-        <div>
-          {searchResponse["data"]?.length === 0 ? (
+      <div className="page-toolbar">
+        <SearchLine setSearchResponse={setSearchResponse} />
+        {!isEmpty(searchResponse) &&
+          (searchResponse["data"]?.length === 0 ? (
             <EmptyResponse />
           ) : (
             <SearchLink path="/table" text="Result Table" />
-          )}
-        </div>
-      )}
+          ))}
+      </div>
       <PhilogeneticTreeOrNull
         response={filteredResponse}
         tag={classificationTag}

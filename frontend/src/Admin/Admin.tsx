@@ -1,47 +1,30 @@
-import { useParams, Navigate } from "react-router-dom";
+import { useParams, Navigate, Link } from "react-router-dom";
 import { ArrowRightFromSquare } from "@gravity-ui/icons";
 import { delToken, getName, isTokenExists } from "./utils";
 import LoginForm, { MailAdmit } from "./LoginForm";
 import ResetPasswordForm from "./ResetPasswordForm";
 import PasswordConfirmForm from "./AdmitPassword";
 import AdminPage from "./AdminUI";
+import FullNavigation from "../FullNavigation/FullNavigation";
+import "./Admin.css";
 
 export function AdminApp() {
   const username = getName();
   return (
     <div>
-      <div
-        style={{
-          position: "absolute",
-          top: "4%",
-          right: "3%",
-          backgroundColor: "#fffacdff",
-          border: "1px solid grey",
-          borderRadius: "8px",
-          padding: "10px 16px",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: "10px",
-        }}
-      >
-        <p style={{ margin: 0, fontWeight: "bold" }}>{username}</p>
-        <a
-          href="/logout"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "5px",
-            padding: "8px 16px",
-            backgroundColor: "#f9eccaff",
-            color: "black",
-            border: "1px solid grey",
-            borderRadius: "8px",
-            cursor: "pointer",
-          }}
-        >
-          Logout <ArrowRightFromSquare />
-        </a>
+      <FullNavigation />
+      <div className="admin-page" style={{ paddingTop: 8 }}>
+        <div className="admin-topbar" style={{ marginBottom: 8 }}>
+          <h1 className="admin-topbar__title" style={{ fontSize: "1.75rem" }}>
+            Administration
+          </h1>
+          <div className="admin-user">
+            <p className="admin-user__name">{username}</p>
+            <Link to="/logout" className="btn">
+              Logout <ArrowRightFromSquare width={16} height={16} />
+            </Link>
+          </div>
+        </div>
       </div>
       <AdminPage />
     </div>
@@ -52,7 +35,12 @@ export function AdminLogin() {
   if (isTokenExists()) {
     return <Navigate to="/admin" />;
   }
-  return <LoginForm />;
+  return (
+    <>
+      <FullNavigation />
+      <LoginForm />
+    </>
+  );
 }
 
 export function AdminLogout() {
@@ -61,16 +49,31 @@ export function AdminLogout() {
 }
 
 export function AdminReset() {
-  return <ResetPasswordForm />;
+  return (
+    <>
+      <FullNavigation />
+      <ResetPasswordForm />
+    </>
+  );
 }
 
 export function AdminAdmit() {
   const { code } = useParams<{ code: string }>();
   if (code?.startsWith("psw")) {
-    return <PasswordConfirmForm word={code} />;
+    return (
+      <>
+        <FullNavigation />
+        <PasswordConfirmForm word={code} />
+      </>
+    );
   }
   if (code?.startsWith("lin")) {
-    return <MailAdmit word={code} />;
+    return (
+      <>
+        <FullNavigation />
+        <MailAdmit word={code} />
+      </>
+    );
   }
-  return <p>wrong code</p>;
+  return <p className="empty-state">Wrong code</p>;
 }

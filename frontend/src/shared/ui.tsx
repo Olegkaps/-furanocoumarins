@@ -3,22 +3,25 @@ import { useEffect, useRef, useState } from "react";
 export function Container({
   children,
   maxHeight = "600px",
+  style,
 }: {
   children: React.ReactNode;
   maxHeight?: string;
+  style?: React.CSSProperties;
 }) {
   return (
     <div
       className="tree"
       style={{
-        backgroundColor: "white",
-        padding: "30px",
-        paddingTop: 0,
-        border: "1px solid #d4d4d4ff",
-        borderRadius: "20px",
+        backgroundColor: "var(--color-surface)",
+        padding: "20px",
+        paddingTop: 12,
+        border: "1px solid var(--color-border)",
+        borderRadius: "var(--radius)",
         maxHeight,
         maxWidth: "100%",
         position: "relative",
+        ...style,
       }}
     >
       {children}
@@ -29,23 +32,28 @@ export function Container({
 export function ScrollableContainer({
   children,
   maxHeight = "600px",
+  height,
 }: {
   children: React.ReactNode;
   maxHeight?: string;
+  /** Prefer fixed height so scrolling works reliably (table cells ignore max-height). */
+  height?: string;
 }) {
   return (
     <div
-      className="tree"
+      className="tree scrollable-container"
       style={{
-        backgroundColor: "white",
-        padding: "30px",
-        paddingTop: 0,
-        border: "1px solid #d4d4d4ff",
-        borderRadius: "20px",
-        maxHeight,
+        backgroundColor: "var(--color-surface)",
+        padding: "16px",
+        border: "1px solid var(--color-border)",
+        borderRadius: "var(--radius)",
+        height: height ?? undefined,
+        maxHeight: height ? undefined : maxHeight,
         maxWidth: "100%",
-        overflow: "scroll",
+        overflowX: "auto",
+        overflowY: "auto",
         position: "relative",
+        minHeight: 0,
       }}
     >
       {children}

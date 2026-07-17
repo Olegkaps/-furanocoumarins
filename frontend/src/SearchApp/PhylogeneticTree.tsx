@@ -140,11 +140,12 @@ function TreeCladeLine() {
 
 
 function _Button({children}: {children: React.ReactNode}) {
-  return <button style={{
-    backgroundColor: '#fae6b0',
+  return <button type="button" style={{
+    backgroundColor: 'var(--color-surface-alt)',
+    color: 'var(--color-accent)',
     padding: '4px 5px 6px 5px',
-    border: '0',
-    borderRadius: '40%',
+    border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius)',
     position: 'absolute',
     fontSize: config["FONT_SIZE"],
     fontWeight: 700,
@@ -368,42 +369,49 @@ function PhilogeneticTreeOrNull(
   Object.entries(counts).forEach(([joined_clades, count]) => {
     species.push(new Specie(count, joined_clades.split("@")))
   });
-  if (species.length <= 1) {
-    return <div></div>
-  }
 
-  return <div style={{marginTop: '20px'}}>
-    <div style={{marginLeft: '25px', marginRight: '25px', border: '1px dashed grey', borderRadius: '5px', padding: '4px', paddingLeft: '20px'}}>
-      <span>
+  const treeToolbar = (
+    <div className="panel panel-toolbar">
+      <span style={{ flex: "1 1 100%", textAlign: "left" }}>
         Taxonomy according to NCBI is given starting with subtribes.
         Taxonomy of genus and species is given according to original articles,
         POWO site and Pimenov (the expert in Apiaceae taxonomy) opinion
       </span>
-      <br></br>
-      <br></br>
-      <span style={{}}>Select classification: </span>
-      {Array(...all_tags).sort().map((item, _) => (
+      <span>Select classification: </span>
+      {Array(...all_tags).sort().map((item) => (
         <button
-          style={item !== tag
-            ? {padding: '7px', border: '1px solid blue', borderRadius: '4px', marginLeft: '10px', backgroundColor: '#e5e2ffff',}
-            : {padding: '7px', border: '1px solid yellow', borderRadius: '4px', marginLeft: '10px', backgroundColor: 'rgb(254, 255, 244)', fontWeight: 600}}
+          key={item}
+          type="button"
+          className={`btn-toggle${item === tag ? " is-active" : ""}`}
           onClick={() => {setTag(item)}}
         >{item}</button>
       ))}
-      &nbsp;&nbsp;&nbsp;
-      &nbsp;&nbsp;&nbsp;
-      <span style={{}}>Count by: </span>
+      <span>Count by: </span>
       {(["chemicals", "articles", "all"] as const).map((mode) => (
         <button
           key={mode}
-          style={mode !== countMode
-            ? {padding: '7px', border: '1px solid blue', borderRadius: '4px', marginLeft: '10px', backgroundColor: '#e5e2ffff',}
-            : {padding: '7px', border: '1px solid yellow', borderRadius: '4px', marginLeft: '10px', backgroundColor: 'rgb(254, 255, 244)', fontWeight: 600}}
+          type="button"
+          className={`btn-toggle${mode === countMode ? " is-active" : ""}`}
           onClick={() => {setCountMode(mode)}}
         >{mode}</button>
       ))}
-      <br></br>
-      </div>
+    </div>
+  )
+
+  if (species.length <= 1) {
+    return <div style={{marginTop: '20px'}}>
+      {treeToolbar}
+      <p className="empty-state">
+        Phylogenetic tree is shown when the result contains at least two taxa.
+        {species.length === 1
+          ? " The current selection has only one species — open the result table or broaden the search."
+          : " No taxa matched the current filters."}
+      </p>
+    </div>
+  }
+
+  return <div style={{marginTop: '20px'}}>
+    {treeToolbar}
     <PhilogeneticTree {...{
       species,
       meta: species_meta,

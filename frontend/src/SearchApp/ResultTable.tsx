@@ -1,11 +1,14 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import { FileArrowUp, ArrowUpRightFromSquare, Molecule, BranchesRight, BookOpen } from '@gravity-ui/icons';
 import { isEmpty } from "../shared/api";
 import { Container, ScrollableContainer } from "../shared/ui";
 import config from "../config";
 import DataMeta from "./DataMeta";
 import DataRows from "./RowsData";
-import {FileArrowUp, CircleInfo, ArrowUpRightFromSquare} from '@gravity-ui/icons';
 import { type CountMode } from "./PhylogeneticTree";
+import { InfoTip } from "../shared/ui/InfoTip";
+import { substancePagePath } from "../shared/substanceUrl";
 
 function collectUniqueTokensFromRow(row: Map<string, string>, columnNames: string[], into: Set<string>) {
   columnNames.forEach((col) => {
@@ -69,8 +72,23 @@ function ResultTableHead({meta}: {meta: Array<DataMeta>}) {
         if (curr_meta.is_grouping || curr_meta.is_ignore) {
           return <></>
         }
-        return <th scope='col' style={{backgroundColor: "#ccd8b7ff", padding: 0}}>
-          <p style={{fontSize: config["FONT_SIZE"], margin: '20px 0'}} title={curr_meta.description}>{curr_meta.show_name}&nbsp;<CircleInfo /></p>
+        const HeaderIcon =
+          curr_meta.type === "reference" ? BookOpen
+          : curr_meta.type === "smiles" ? Molecule
+          : null;
+        return <th scope='col' style={{backgroundColor: "var(--color-table-header)", padding: "0 8px"}}>
+          <p style={{
+            fontSize: "1.05rem",
+            fontWeight: 700,
+            fontFamily: "var(--font-serif)",
+            margin: "14px 0",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+          }}>
+            {HeaderIcon && <HeaderIcon width={18} height={18} aria-hidden />}
+            {curr_meta.show_name}&nbsp;<InfoTip text={curr_meta.description} />
+          </p>
         </th>
     })}
     </tr>
@@ -86,7 +104,13 @@ function ResultTableBody({ rows, meta }: {rows: Array<Map<string, string>>, meta
           if (meta_val.is_grouping || meta_val.is_ignore) {
             return <></>
           }
-          return <td style={{minWidth: '120px', maxWidth: '200px'}}>
+          const isRef = meta_val.type === "reference";
+          return <td style={{
+            minWidth: isRef ? "200px" : "120px",
+            maxWidth: isRef ? "360px" : "220px",
+            width: isRef ? "32%" : undefined,
+            textAlign: isRef ? "left" : undefined,
+          }}>
             {meta[ind].render(row.get(meta_val.name))}
           </td>
         })}
@@ -127,13 +151,7 @@ function GroupedResultTable(
   }
 ) {
   if (currentSpecie === "" && currentChemical === "") {
-    return <p style={{
-      width: '100%',
-      padding: 'auto',
-      textAlign: 'center',
-      fontSize: 'larger',
-      fontWeight: 600
-    }}>Select species or chemical</p>
+    return <p className="empty-state">Select species or chemical</p>
   }
 
   let filteredRows: DataRows[] = []
@@ -159,38 +177,52 @@ function GroupedResultTable(
   })
 
   return <>{filteredRows.map((dataRows, row_ind) => (
-    <div style={{maxHeight: '600px'}}>
+    <div key={row_ind} style={{ marginBottom: 16 }}>
       <br></br>
       {dataRows.chemical_row.size * dataRows.specie_row.size > 0 ?
-      <div>
-      <div style={{display: 'flex'}}>
-        <Container maxHeight="500px">
-          <p style={{ textAlign: "center", color: "red", marginTop: 0 }}>
-            Chemical{" "}
-            <button
-              type="button"
-              title="Open substance page in new tab"
-              onClick={() => {
-                const smiles = dataRows.chemical_row.get(meta[smiles_ind].name) ?? "";
-                window.open(
-                  "/page/" + encodeURIComponent(smiles),
-                  "_blank",
-                  "noopener,noreferrer",
-                );
-              }}
-              style={{
-                border: "none",
-                background: "transparent",
-                cursor: "pointer",
-                padding: 0,
-                verticalAlign: "middle",
-                color: "inherit",
-              }}
-            >
-              <ArrowUpRightFromSquare />
-            </button>
+      <div
+        className="grouped-result-row"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 16,
+          width: "100%",
+        }}
+      >
+        <Container
+          maxHeight="500px"
+          style={{
+            flex: "1 1 320px",
+            minWidth: 280,
+            maxWidth: 440,
+            overflowY: "auto",
+            boxSizing: "border-box",
+          }}
+        >
+          <p style={{ textAlign: "center", marginTop: 0 }}>
+            <span className="badge badge-chemical">
+              <Molecule width={16} height={16} aria-hidden />
+              Chemical
+            </span>
           </p>
-          <table>
+          {(() => {
+            const smiles = dataRows.chemical_row.get(meta[smiles_ind].name) ?? "";
+            return smiles ? (
+              <p style={{ textAlign: "center", marginTop: 8, marginBottom: 12 }}>
+                <Link
+                  to={substancePagePath(smiles)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="link-button"
+                >
+                  Open substance page
+                  <ArrowUpRightFromSquare />
+                </Link>
+              </p>
+            ) : null;
+          })()}
+          <table style={{ width: "100%", tableLayout: "fixed" }}>
             <tbody>
               {meta.map((meta_val, ind) => {
                 if (!meta_val.is_chemical || meta_val.type === "smiles") {
@@ -198,11 +230,11 @@ function GroupedResultTable(
                 }
                 return (
                   <tr key={meta_val.name}>
-                    <td title={meta_val.description} style={{ maxWidth: "180px" }}>
-                      <CircleInfo />
+                    <td style={{ width: "42%", wordBreak: "break-word" }}>
+                      <InfoTip text={meta_val.description} />
                       &nbsp;{meta_val.show_name}
                     </td>
-                    <td style={{ maxWidth: "130px" }}>
+                    <td style={{ width: "58%", wordBreak: "break-word" }}>
                       {meta[ind].render(dataRows.chemical_row.get(meta_val.name))}
                     </td>
                   </tr>
@@ -212,30 +244,44 @@ function GroupedResultTable(
           </table>
         </Container>
 
-        <table>
-          <tbody>
-            <tr style={{ backgroundColor: "transparent" }}>
-              <td style={{ verticalAlign: "top", border: "none" }}>
-                <Container>
-                  {meta[smiles_ind].render(
-                    dataRows.chemical_row.get(meta[smiles_ind].name),
-                  )}
-                </Container>
-              </td>
-            </tr>
-            <tr style={{ backgroundColor: "transparent" }}>
-              <td style={{ maxWidth: "300px", verticalAlign: "top", border: "none" }}>
-                <ScrollableContainer maxHeight="250px">
-                  <ResultTable {...{ rows: dataRows.value_rows, meta: meta }} />
-                </ScrollableContainer>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            flex: "0 1 420px",
+            minWidth: 320,
+            maxWidth: 480,
+            minHeight: 0,
+          }}
+        >
+          <Container>
+            {meta[smiles_ind].render(
+              dataRows.chemical_row.get(meta[smiles_ind].name),
+            )}
+          </Container>
+          <ScrollableContainer height="320px">
+            <ResultTable {...{ rows: dataRows.value_rows, meta: meta }} />
+          </ScrollableContainer>
+        </div>
 
-      <Container maxHeight="500px">
-        <p style={{ textAlign: "center", color: "blue", marginTop: 0 }}>Species</p>
-        <table>
+      <Container
+        maxHeight="500px"
+        style={{
+          flex: "1 1 320px",
+          minWidth: 280,
+          maxWidth: 440,
+          overflowY: "auto",
+          boxSizing: "border-box",
+        }}
+      >
+        <p style={{ textAlign: "center", marginTop: 0 }}>
+          <span className="badge badge-species">
+            <BranchesRight width={16} height={16} aria-hidden />
+            Species
+          </span>
+        </p>
+        <table style={{ width: "100%", tableLayout: "fixed" }}>
           <tbody>
             {meta.map((meta_val, ind) => {
               if (!meta_val.is_specie) {
@@ -243,11 +289,11 @@ function GroupedResultTable(
               }
               return (
                 <tr key={meta_val.name}>
-                  <td title={meta_val.description} style={{ maxWidth: "180px" }}>
-                    <CircleInfo />
+                  <td style={{ width: "42%", wordBreak: "break-word" }}>
+                    <InfoTip text={meta_val.description} />
                     &nbsp;{meta_val.show_name}
                   </td>
-                  <td style={{ maxWidth: "130px" }}>
+                  <td style={{ width: "58%", wordBreak: "break-word" }}>
                     {meta[ind].render(dataRows.specie_row.get(meta_val.name))}
                   </td>
                 </tr>
@@ -258,11 +304,10 @@ function GroupedResultTable(
       </Container>
 
       </div>
-      </div>
 
       :
 
-      <ScrollableContainer>
+      <ScrollableContainer height="400px">
         <ResultTable {...{rows: dataRows.value_rows, meta: meta}}/>
       </ScrollableContainer>
 
@@ -270,7 +315,7 @@ function GroupedResultTable(
         {row_ind < filteredRows.length &&
           <>
             <br></br>
-            <hr style={{border: '1px dashed black'}}></hr>
+            <hr style={{border: '1px solid var(--color-border)'}}></hr>
             <br></br>
           </>
         }
@@ -279,39 +324,46 @@ function GroupedResultTable(
 }
 
 
-function loadDataRowsAsCSV(rows: Array<DataRows>, meta: Array<DataMeta>) {
-  let csvContent = "data:text/csv;charset=utf-8,";
+function escapeTsvField(value: string): string {
+  if (/[\t\n\r"]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
 
-  let parsedRow: string[] = []
-  meta.forEach((curr_meta) => {parsedRow.push(curr_meta.name)})
-
-  let joinedRow = parsedRow.join(",");
-  csvContent += joinedRow + "\r\n";
+function loadDataRowsAsTSV(rows: Array<DataRows>, meta: Array<DataMeta>) {
+  const lines: string[] = [];
+  lines.push(meta.map((curr_meta) => escapeTsvField(curr_meta.name)).join("\t"));
 
   rows.forEach((dataRows) => {
     dataRows.value_rows.forEach((currRow) => {
-      parsedRow = []
-
-      meta.forEach((curr_meta) => {
-        let value
+      const parsedRow = meta.map((curr_meta) => {
+        let value: string | undefined;
         if (curr_meta.is_chemical) {
-          value = dataRows.chemical_row.get(curr_meta.name)
+          value = dataRows.chemical_row.get(curr_meta.name);
         } else if (curr_meta.is_specie) {
-          value = dataRows.specie_row.get(curr_meta.name)
+          value = dataRows.specie_row.get(curr_meta.name);
         } else {
-          value = currRow.get(curr_meta.name)
+          value = currRow.get(curr_meta.name);
         }
-
-        parsedRow.push(value === undefined ? "" : value)
-      })
-
-      joinedRow = parsedRow.join(",");
-      csvContent += joinedRow + "\r\n";
-    })
+        return escapeTsvField(value === undefined ? "" : String(value));
+      });
+      lines.push(parsedRow.join("\t"));
+    });
   });
 
-  var encodedUri = encodeURI(csvContent);
-  window.open(encodedUri);
+  const blob = new Blob(["\uFEFF" + lines.join("\n")], {
+    type: "text/tab-separated-values;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "results.tsv";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function filterCountMode(countMode: CountMode, from: CountMode, to: string) {
@@ -320,22 +372,6 @@ function filterCountMode(countMode: CountMode, from: CountMode, to: string) {
   }
   return countMode
 }
-
-const countModeButtonInactive = {
-  padding: '7px',
-  border: '1px solid blue',
-  borderRadius: '4px',
-  marginLeft: '10px',
-  backgroundColor: '#e5e2ffff',
-} as const
-const countModeButtonActive = {
-  padding: '7px',
-  border: '1px solid yellow',
-  borderRadius: '4px',
-  marginLeft: '10px',
-  backgroundColor: 'rgb(254, 255, 244)',
-  fontWeight: 600,
-} as const
 
 function TableStateBar(
   { rows, meta, currentSpecie, setCurrentSpecie, speciesOptions, currentChemical, setCurrentChemical, chemicalsOptions, countMode, setCountMode }:
@@ -365,46 +401,39 @@ function TableStateBar(
 
   let chemical_key = rows[0].chemical_key
   let specie_key = rows[0].specie_key
-  return <div
-    style={{
-      marginLeft: '25px',
-      marginRight: '25px',
-      border: '1px dashed grey',
-      borderRadius: '5px',
-      padding: '4px',
-      paddingLeft: '20px',
-    }}>
+  return <div className="panel panel-toolbar">
 
   <span>Count in lists: </span>
   {(["chemicals", "articles", "all"] as const).map((mode) => (
     <button
       key={mode}
       type="button"
-      style={mode !== countMode ? countModeButtonInactive : countModeButtonActive}
+      className={`btn-toggle${mode === countMode ? " is-active" : ""}`}
       onClick={() => { setCountMode(mode) }}
     >{filterCountMode(mode, "chemicals", "chemicals / species")}</button>
   ))}
 
-  <label>&nbsp;&nbsp;&nbsp;&nbsp;</label>
-
-  <label>Download results:&nbsp;&nbsp;
+  <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+    Download results:
     <button
-      onClick={() => loadDataRowsAsCSV(rows, meta)}
-      style={{border: 0, backgroundColor: "#dbd8ff", borderRadius: '15%'}} >
-        <FileArrowUp {...{style: {width: '25px', height: '25px', alignSelf: 'center', color: '#41b9ff'}}}/>
+      type="button"
+      className="btn"
+      onClick={() => loadDataRowsAsTSV(rows, meta)}
+      title="Download TSV"
+      aria-label="Download TSV"
+    >
+        <FileArrowUp style={{ width: 22, height: 22 }} />
       </button>
   </label>
 
-  <label>&nbsp;&nbsp;&nbsp;&nbsp;</label>
-
-  <label style={{color: 'green'}}>Rows in selection:&nbsp;&nbsp;<b>{total_rows}</b>
+  <label style={{color: 'var(--color-success)'}}>Rows in selection:&nbsp;&nbsp;<b>{total_rows}</b>
   </label>
 
+  <span className="panel-toolbar__break" aria-hidden />
 
-  <br />
-  <br />
-
-  <label>Species ({specie_key}):&nbsp;&nbsp;
+  <label style={{display: 'inline-flex', alignItems: 'center', gap: 6}}>
+    <BranchesRight width={16} height={16} aria-hidden />
+    Species ({specie_key}):&nbsp;
     {
       speciesOptions.length > 1 ?
       <select
@@ -425,9 +454,9 @@ function TableStateBar(
     }
   </label>
 
-  <label>&nbsp;&nbsp;&nbsp;&nbsp;</label>
-
-  <label>Chemical ({chemical_key}):&nbsp;&nbsp;
+  <label style={{display: 'inline-flex', alignItems: 'center', gap: 6}}>
+    <Molecule width={16} height={16} aria-hidden />
+    Chemical ({chemical_key}):&nbsp;
     {
       chemicalsOptions.length > 1 ?
       <select

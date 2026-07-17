@@ -12,18 +12,15 @@ export function AppResultTable() {
   return (
     <>
       <FullNavigation />
-      <br />
-      <SearchLine setSearchResponse={setSearchResponse} />
-      <br />
-      {!isEmpty(searchResponse) && (
-        <div>
-          {searchResponse["data"]?.length === 0 ? (
+      <div className="page-toolbar">
+        <SearchLine setSearchResponse={setSearchResponse} />
+        {!isEmpty(searchResponse) &&
+          (searchResponse["data"]?.length === 0 ? (
             <EmptyResponse />
           ) : (
             <SearchLink path="/tree" text="Phylogenetic Tree" />
-          )}
-        </div>
-      )}
+          ))}
+      </div>
       <br />
       <ResultTableOrNull {...filteredResponse} />
       <br />

@@ -21,6 +21,8 @@ function App() {
           <Route path="/" element={<Navigate to="/about" />}/>
           <Route path="/search" element={<SearchApp />}/>
           <Route path="/about" element={<AboutPage />}/>
+          <Route path="/page" element={<SubstancePage />}/>
+          {/* Legacy path form; redirects via SubstancePage query parsing */}
           <Route path="/page/:smiles" element={<SubstancePage />}/>
           <Route path="/table" element={<AppResultTable />}/>
           <Route path="/tree" element={<AppPhilogeneticTree />}/>

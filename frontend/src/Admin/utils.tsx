@@ -4,6 +4,7 @@ export {
   getToken,
   setToken,
   delToken,
+  forceLogout,
   getName,
   isTokenExists,
 } from "../shared/api";

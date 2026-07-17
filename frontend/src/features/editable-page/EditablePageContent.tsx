@@ -35,16 +35,11 @@ export function EditablePageContent({
         <button
           type="button"
           onClick={() => setEditMode(true)}
+          className="btn btn-primary"
           style={{
             position: "absolute",
             top: "16px",
             right: "16px",
-            marginBottom: "16px",
-            padding: "8px 16px",
-            cursor: "pointer",
-            borderRadius: "8px",
-            border: "1px solid grey",
-            backgroundColor: "#e1c8ff",
           }}
         >
           Edit
@@ -55,7 +50,7 @@ export function EditablePageContent({
           <div
             style={{
               marginBottom: "8px",
-              color: overLimit ? "red" : undefined,
+              color: overLimit ? "var(--color-danger)" : undefined,
             }}
           >
             Characters: {charCount} / {MAX_PAGE_CHARS}
@@ -69,7 +64,7 @@ export function EditablePageContent({
             }}
           >
             <div style={{ minWidth: 0 }}>
-              <div style={{ marginBottom: "6px", fontWeight: 600, color: "#444" }}>
+              <div style={{ marginBottom: "6px", fontWeight: 600, color: "var(--color-muted)" }}>
                 Markdown input
               </div>
               <textarea
@@ -82,16 +77,13 @@ export function EditablePageContent({
                   padding: "12px",
                   fontFamily: "inherit",
                   fontSize: "14px",
-                  border: "1px solid #ccc",
-                  borderRadius: "8px",
-                  boxSizing: "border-box",
                   resize: "vertical",
                 }}
                 placeholder="Text in Markdown format…"
               />
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ marginBottom: "6px", fontWeight: 600, color: "#444" }}>
+              <div style={{ marginBottom: "6px", fontWeight: 600, color: "var(--color-muted)" }}>
                 Preview
               </div>
               <div
@@ -102,9 +94,9 @@ export function EditablePageContent({
                   height: "68vh",
                   maxHeight: "68vh",
                   padding: "12px",
-                  border: "1px solid #ccc",
-                  borderRadius: "8px",
-                  backgroundColor: "#fff",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "var(--radius)",
+                  backgroundColor: "var(--color-surface)",
                   overflowX: "auto",
                   overflowY: "auto",
                   lineHeight: 1.6,
@@ -118,28 +110,20 @@ export function EditablePageContent({
             <button
               type="submit"
               disabled={saving || overLimit}
+              className="btn btn-primary"
               style={{
-                padding: "8px 20px",
+                opacity: overLimit || saving ? 0.6 : 1,
                 cursor: overLimit || saving ? "not-allowed" : "pointer",
-                borderRadius: "8px",
-                border: "1px solid #333",
-                background: overLimit || saving ? "#ccc" : "#e0e0e0",
               }}
             >
               {saving ? "Saving…" : "Save"}
             </button>
             <button
               type="button"
+              className="btn"
               onClick={() => {
                 setEditMode(false);
                 setEditText(content);
-              }}
-              style={{
-                padding: "8px 20px",
-                cursor: "pointer",
-                borderRadius: "8px",
-                border: "1px solid #666",
-                background: "#f5f5f5",
               }}
             >
               Cancel
@@ -148,9 +132,9 @@ export function EditablePageContent({
         </form>
       ) : (
         <>
-          {error && <p style={{ color: "red" }}>{error}</p>}
+          {error && <p style={{ color: "var(--color-danger)" }}>{error}</p>}
           {!error && content === "" && (
-            <p style={{ color: "#666" }}>
+            <p style={{ color: "var(--color-muted)" }}>
               Page content has not been added yet.
             </p>
           )}

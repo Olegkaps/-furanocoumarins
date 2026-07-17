@@ -6,17 +6,12 @@ function HomeLink() {
     <Link
       to="/search"
       target="_blank"
-      style={{
-        position: 'absolute',
-        left: '10px',
-        top: '10px',
-        backgroundColor: '#e1c8ff',
-        border: '1px solid grey',
-        borderRadius: '10px',
-        padding: '10px 10px 5px 10px',
-      }}
+      className="nav-icon-link"
+      style={{ left: '12px' }}
+      title="Search"
+      aria-label="Search"
     >
-      <Magnifier width={'30px'} height={'30px'} />
+      <Magnifier width={28} height={28} />
     </Link>
   );
 }
@@ -26,17 +21,12 @@ function AboutLink() {
     <Link
       to="/about"
       target="_blank"
-      style={{
-        position: 'absolute',
-        left: '70px',
-        top: '10px',
-        backgroundColor: '#e1c8ff',
-        border: '1px solid grey',
-        borderRadius: '10px',
-        padding: '10px 10px 5px 10px',
-      }}
+      className="nav-icon-link"
+      style={{ left: '64px' }}
+      title="About"
+      aria-label="About"
     >
-      <CircleInfo width={'30px'} height={'30px'} />
+      <CircleInfo width={28} height={28} />
     </Link>
   );
 }

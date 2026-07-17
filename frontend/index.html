@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Furanocumarins</title>
   </head>
-  <body style="background: linear-gradient( rgb(243, 248, 249), rgb(255, 243, 255)); width: 100%;">
+  <body style="background: #f0f3f7; width: 100%;">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 
@@ -21,8 +21,12 @@
       const drawSMILES = function() {
         let elements = document.getElementsByClassName("smiles");
 
-        for (let i = 0; i < elements.length; i++)
-          SmilesDrawer.parse(elements[i].id.split("_")[0], (tree) => smilesDrawer.draw(tree, elements[i].id, "light", false));
+        for (let i = 0; i < elements.length; i++) {
+          const el = elements[i];
+          const smiles = el.getAttribute("data-smiles") || el.id.split("_")[0];
+          if (!smiles) continue;
+          SmilesDrawer.parse(smiles, (tree) => smilesDrawer.draw(tree, el.id, "light", false));
+        }
 
         setTimeout(drawSMILES, 300)
       }

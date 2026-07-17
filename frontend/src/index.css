@@ -1,50 +1,89 @@
+@import url("https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap");
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --color-ink: #1c2333;
+  --color-muted: #5a6577;
+  --color-accent: #0b3d5c;
+  --color-accent-hover: #062a40;
+  --color-link: #0b3d5c;
+  --color-link-hover: #062a40;
+  --color-surface: #ffffff;
+  --color-surface-alt: #eef1f5;
+  --color-page: #f0f3f7;
+  --color-border: #b8c0cc;
+  --color-border-strong: #7a8494;
+  --color-primary: #0b3d5c;
+  --color-primary-text: #ffffff;
+  --color-species: #1e5a3a;
+  --color-species-bg: #e8f2ec;
+  --color-chemical: #7a3e12;
+  --color-chemical-bg: #f5ebe3;
+  --color-table-header: #d5dde8;
+  --color-table-stripe: #f5f7fa;
+  --color-danger: #8b1e1e;
+  --color-success: #1e5a3a;
+  --radius: 3px;
+  --shadow: 0 2px 8px rgba(28, 35, 51, 0.12);
+  --font-serif: "Libre Baskerville", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-sans: "Source Sans 3", "Segoe UI", Candara, sans-serif;
+
+  font-family: var(--font-sans);
   line-height: 1.5;
   font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
+  color: var(--color-ink);
+  background-color: var(--color-page);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  background-color: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  color: var(--color-ink);
+  line-height: 1.25;
 }
 
+a {
+  color: var(--color-link);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+a:hover {
+  color: var(--color-link-hover);
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+button {
+  cursor: pointer;
 }

@@ -60,6 +60,10 @@ export function useEditablePage(pageName: string | null) {
       setSaving(true);
       try {
         const token = getToken();
+        if (!token) {
+          alert("Session expired. Please log in again.");
+          return;
+        }
         await api.put(`/pages/${encodeURIComponent(pageName)}`, text, {
           headers: {
             "Content-Type": "text/plain; charset=utf-8",
@@ -70,8 +74,14 @@ export function useEditablePage(pageName: string | null) {
         setEditMode(false);
         setEditText(text);
         setTimeout(() => fetchPage(), 1000);
-      } catch {
-        alert("Save failed");
+      } catch (e: unknown) {
+        const status =
+          e && typeof e === "object" && "response" in e
+            ? (e as { response?: { status?: number } }).response?.status
+            : undefined;
+        if (status !== 401) {
+          alert("Save failed");
+        }
       } finally {
         setSaving(false);
       }

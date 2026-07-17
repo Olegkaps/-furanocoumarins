@@ -29,35 +29,12 @@ export function SearchLine({
           type="text"
           className="search-teaxtarea"
           onChange={(e) => setRequest(e.target.value)}
-          style={{ fontSize: "large" }}
           value={request}
+          aria-label="Search query"
         />
-        <div
-          style={{
-            width: "5%",
-            backgroundColor: "#fcdbf4",
-            border: "1px solid grey",
-            borderRadius: "10%",
-          }}
-        >
-          <div style={{ position: "relative", right: "-30%", top: "10%" }}>
-            <div style={{ position: "absolute" }}>
-              <ChevronRight style={{ color: "grey" }} />
-            </div>
-          </div>
-          <div style={{ width: "100%", height: "100%", position: "relative" }}>
-            <input
-              type="submit"
-              value=""
-              id="search-button"
-              style={{
-                width: "100%",
-                height: "100%",
-                position: "absolute",
-                opacity: 0,
-              }}
-            />
-          </div>
+        <div className="search-submit" title="Search">
+          <ChevronRight width={22} height={22} style={{ color: "white" }} />
+          <input type="submit" value="" id="search-button" aria-label="Submit search" />
         </div>
       </form>
     </div>
@@ -65,38 +42,14 @@ export function SearchLine({
 }
 
 export function EmptyResponse() {
-  return (
-    <p
-      style={{
-        width: "100%",
-        padding: "auto",
-        textAlign: "center",
-        fontSize: "larger",
-        fontWeight: 600,
-      }}
-    >
-      No data for given request
-    </p>
-  );
+  return <p className="empty-state">No data for given request</p>;
 }
 
 export function SearchLink({ path, text }: { path: string; text: string }) {
   const [searchParams] = useSearchParams();
   return (
-    <label
-      style={{
-        position: "absolute",
-        top: "15%",
-        left: "0.5%",
-        padding: "8px",
-        backgroundColor: "#ffbe85",
-        whiteSpace: "break-spaces",
-        maxWidth: "120px",
-        border: "3px solid grey",
-        borderRadius: "10px",
-      }}
-    >
-      <p>Go&nbsp;to:</p>
+    <div className="goto-chip">
+      <p>Go to:</p>
       <Link
         to={{
           pathname: path,
@@ -107,6 +60,6 @@ export function SearchLink({ path, text }: { path: string; text: string }) {
         {text}
         <ArrowUpRightFromSquare />
       </Link>
-    </label>
+    </div>
   );
 }
