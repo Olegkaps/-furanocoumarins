@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ChevronRight, ArrowUpRightFromSquare } from "@gravity-ui/icons";
-import { fetchSearchResult, isDataFetched } from "./searchApi";
+import { fetchSearchResult } from "./searchApi";
 
 export function SearchLine({
   setSearchResponse,
@@ -9,20 +9,44 @@ export function SearchLine({
   setSearchResponse: React.Dispatch<React.SetStateAction<{ [index: string]: any }>>;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  let query = searchParams.get("query");
-  if (query === null) query = "";
-  if (query !== "" && !isDataFetched) {
-    fetchSearchResult(null, query, setSearchResponse).then(() => {});
-  }
+  const query = searchParams.get("query") ?? "";
   const [request, setRequest] = useState(query);
+
+  useEffect(() => {
+    setRequest(query);
+  }, [query]);
+
+  useEffect(() => {
+    if (query === "") {
+      setSearchResponse({});
+      return;
+    }
+    let cancelled = false;
+    fetchSearchResult(null, query, (data) => {
+      if (!cancelled) {
+        setSearchResponse(data);
+      }
+    }).then(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [query, setSearchResponse]);
 
   return (
     <div className="card">
       <form
         className="main_form"
         onSubmit={async (e) => {
-          await fetchSearchResult(e, request, setSearchResponse);
-          setSearchParams({ query: request });
+          e.preventDefault();
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            if (request.trim() === "") {
+              next.delete("query");
+            } else {
+              next.set("query", request);
+            }
+            return next;
+          });
         }}
       >
         <input

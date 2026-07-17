@@ -61,37 +61,105 @@ export function ScrollableContainer({
   );
 }
 
+/** Pan/zoom viewport: wheel zooms toward cursor, drag pans. No native scrollbars. */
 export function ZoomableContainer({ children }: { children: React.ReactNode }) {
-  const [zoomLevel, setZoomLevel] = useState(0.7);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.85);
+  const [pan, setPan] = useState({ x: 24, y: 24 });
+  const scaleRef = useRef(scale);
+  const panRef = useRef(pan);
+  scaleRef.current = scale;
+  panRef.current = pan;
+
+  const dragging = useRef(false);
+  const lastPointer = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const handleWheel = (e: WheelEvent) => {
+    const el = viewportRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const delta = e.deltaY;
-      const newZoom = zoomLevel + (delta > 0 ? -0.1 : 0.1);
-      setZoomLevel(Math.max(0.5, Math.min(newZoom, 1.1)));
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const oldScale = scaleRef.current;
+      const factor = e.deltaY > 0 ? 1 / 1.08 : 1.08;
+      const newScale = Math.min(2.8, Math.max(0.2, oldScale * factor));
+      if (newScale === oldScale) return;
+
+      const { x: panX, y: panY } = panRef.current;
+      const contentX = (mx - panX) / oldScale;
+      const contentY = (my - panY) / oldScale;
+      const newPan = {
+        x: mx - contentX * newScale,
+        y: my - contentY * newScale,
+      };
+      scaleRef.current = newScale;
+      panRef.current = newPan;
+      setScale(newScale);
+      setPan(newPan);
     };
-    container.addEventListener("wheel", handleWheel, { passive: false });
-    return () => container.removeEventListener("wheel", handleWheel);
-  }, [zoomLevel]);
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("a, button, input, select, textarea, label")) return;
+      dragging.current = true;
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+      el.setPointerCapture(e.pointerId);
+      el.classList.add("is-panning");
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragging.current) return;
+      const dx = e.clientX - lastPointer.current.x;
+      const dy = e.clientY - lastPointer.current.y;
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+      const next = {
+        x: panRef.current.x + dx,
+        y: panRef.current.y + dy,
+      };
+      panRef.current = next;
+      setPan(next);
+    };
+
+    const endPan = (e: PointerEvent) => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      el.classList.remove("is-panning");
+      try {
+        el.releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released */
+      }
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", endPan);
+    el.addEventListener("pointercancel", endPan);
+
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", endPan);
+      el.removeEventListener("pointercancel", endPan);
+    };
+  }, []);
 
   return (
-    <ScrollableContainer>
+    <div ref={viewportRef} className="tree-viewport" title="Drag to pan, scroll to zoom">
       <div
-        ref={containerRef}
-        className="smart-zoom-container"
+        className="tree-viewport__canvas"
         style={{
-          zoom: zoomLevel,
-          display: "block",
-          width: "100%",
-          backgroundColor: "#f9f9f9",
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
         }}
       >
         {children}
       </div>
-    </ScrollableContainer>
+    </div>
   );
 }

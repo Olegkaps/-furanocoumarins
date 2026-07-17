@@ -527,3 +527,173 @@ tfoot td {
   color: var(--color-muted);
   white-space: nowrap;
 }
+
+.tree-page {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.tree-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 16px 28px;
+  margin: 0 auto 12px;
+  max-width: 920px;
+  padding: 12px 16px;
+}
+
+.tree-toolbar__group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.tree-toolbar__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.tree-toolbar__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.tree-toolbar__buttons .btn-toggle {
+  margin-left: 0;
+}
+
+.tree-toolbar__divider {
+  width: 1px;
+  align-self: stretch;
+  min-height: 48px;
+  background: var(--color-border);
+}
+
+.tree-toolbar__depth {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 14px;
+}
+
+.tree-toolbar__depth label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.tree-toolbar__depth select {
+  max-width: 200px;
+}
+
+/* Labels must stay out of flow: adapters are height:50% around the hr. */
+.tree-branch-label-wrap {
+  position: relative;
+  top: -35px;
+  right: -28px;
+  height: 0;
+  pointer-events: none;
+}
+
+.tree-branch-label {
+  position: absolute;
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.tree-branch-label.is-plain {
+  white-space: normal;
+  overflow: visible;
+  word-break: break-word;
+}
+
+.tree-branch-label.is-collapsed {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
+.tree-branch-label.is-collapsed .tree-branch-label__text {
+  direction: ltr;
+  unicode-bidi: bidi-override;
+}
+
+.tree-branch-count {
+  position: relative;
+  top: -15px;
+  right: 28px;
+  height: 0;
+}
+
+.tree-count-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  position: absolute;
+  white-space: nowrap;
+  width: auto;
+  min-width: 44px;
+  padding: 3px 8px;
+  background: var(--color-surface-alt);
+  color: var(--color-accent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-weight: 700;
+  font-size: inherit;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.tree-count-chip--link {
+  color: var(--color-accent);
+}
+
+.tree-count-chip--link:hover {
+  border-color: var(--color-accent);
+  background: var(--color-surface);
+}
+
+.tree-count-chip__num {
+  font-variant-numeric: tabular-nums;
+}
+
+.tree-viewport {
+  width: calc(100vw - 16px);
+  margin-left: calc(50% - 50vw + 8px);
+  height: calc(100vh - 200px);
+  min-height: 420px;
+  overflow: hidden;
+  position: relative;
+  cursor: grab;
+  touch-action: none;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.tree-viewport.is-panning {
+  cursor: grabbing;
+}
+
+.tree-viewport__canvas {
+  transform-origin: 0 0;
+  width: max-content;
+  will-change: transform;
+  background: var(--color-surface);
+}

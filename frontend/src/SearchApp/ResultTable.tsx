@@ -258,22 +258,30 @@ function RankedSelectList({
   options,
   countModeLabel,
   onSelect,
+  onHover,
 }: {
   options: SelectOption[];
   countModeLabel: string;
   onSelect: (value: string) => void;
+  onHover?: (value: string | null) => void;
 }) {
   if (options.length === 0) {
     return <p className="empty-state" style={{ padding: 12 }}>No items</p>;
   }
   return (
-    <ol className="ranked-select-list">
+    <ol
+      className="ranked-select-list"
+      onMouseLeave={() => onHover?.(null)}
+    >
       {options.map((opt, i) => (
         <li key={opt.value}>
           <button
             type="button"
             className="ranked-select-list__item"
             onClick={() => onSelect(opt.value)}
+            onMouseEnter={() => onHover?.(opt.value)}
+            onFocus={() => onHover?.(opt.value)}
+            onBlur={() => onHover?.(null)}
           >
             <span className="ranked-select-list__index">{i + 1}.</span>
             <span className="ranked-select-list__value">{opt.value}</span>
@@ -331,6 +339,7 @@ function SidePanel({
   options,
   countModeLabel,
   onSelect,
+  onHover,
   detailRow,
   meta,
   smilesLink,
@@ -343,6 +352,7 @@ function SidePanel({
   options: SelectOption[];
   countModeLabel: string;
   onSelect: (value: string) => void;
+  onHover?: (value: string | null) => void;
   detailRow: Map<string, string> | null;
   meta: DataMeta[];
   smilesLink?: string;
@@ -385,6 +395,7 @@ function SidePanel({
           options={options}
           countModeLabel={countModeLabel}
           onSelect={onSelect}
+          onHover={onHover}
         />
       ) : detailRow ? (
         <>
@@ -408,6 +419,19 @@ function SidePanel({
   );
 }
 
+function smilesLookup(
+  rows: DataRows[],
+  smilesKey: string,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!smilesKey) return map;
+  rows.forEach((dr) => {
+    if (map.has(dr.chemical_val)) return;
+    map.set(dr.chemical_val, dr.chemical_row.get(smilesKey) ?? "");
+  });
+  return map;
+}
+
 function ResultsWorkspace({
   rows,
   meta,
@@ -429,70 +453,123 @@ function ResultsWorkspace({
 }) {
   const smilesMeta = meta.find((m) => m.type === "smiles");
   const smilesKey = smilesMeta?.name ?? "";
+  const [hoveredChemical, setHoveredChemical] = useState("");
+  const [hoveredSpecie, setHoveredSpecie] = useState("");
 
+  const previewChemical =
+    currentChemical !== "" ? currentChemical : hoveredChemical;
+  const previewSpecie =
+    currentSpecie !== "" ? currentSpecie : hoveredSpecie;
+
+  // Neighbor lists follow preview (selection or hover), like a soft selection.
   const rowsForSpeciesList =
-    currentChemical === ""
+    previewChemical === ""
       ? rows
-      : rows.filter((dr) => dr.chemical_val === currentChemical);
+      : rows.filter((dr) => dr.chemical_val === previewChemical);
   const rowsForChemicalList =
-    currentSpecie === ""
+    previewSpecie === ""
       ? rows
-      : rows.filter((dr) => dr.specie_val === currentSpecie);
+      : rows.filter((dr) => dr.specie_val === previewSpecie);
+
+  const speciesCountMode: CountMode =
+    hoveredChemical !== "" ? "articles" : countMode;
+  const chemicalsCountMode: CountMode =
+    hoveredSpecie !== "" ? "articles" : countMode;
 
   const speciesOptions = buildOptions(
     rowsForSpeciesList,
     "specie",
-    countMode,
+    speciesCountMode,
     refColumns,
   );
   const chemicalsOptions = buildOptions(
     rowsForChemicalList,
     "chemical",
-    countMode,
+    chemicalsCountMode,
     refColumns,
   );
+  const chemicalSmiles = smilesLookup(
+    previewSpecie === ""
+      ? rows
+      : rows.filter((dr) => dr.specie_val === previewSpecie),
+    smilesKey,
+  );
 
-  const speciesValuesKey = speciesOptions.map((o) => o.value).join("\0");
-  const chemicalsValuesKey = chemicalsOptions.map((o) => o.value).join("\0");
+  // Selection validity uses committed filters only — hover must not clear picks.
+  const selectedSpeciesValuesKey = buildOptions(
+    currentChemical === ""
+      ? rows
+      : rows.filter((dr) => dr.chemical_val === currentChemical),
+    "specie",
+    countMode,
+    refColumns,
+  )
+    .map((o) => o.value)
+    .join("\0");
+  const selectedChemicalsValuesKey = buildOptions(
+    currentSpecie === ""
+      ? rows
+      : rows.filter((dr) => dr.specie_val === currentSpecie),
+    "chemical",
+    countMode,
+    refColumns,
+  )
+    .map((o) => o.value)
+    .join("\0");
 
-  // Drop selection if it disappeared after the other side changed
   useEffect(() => {
-    if (currentSpecie !== "" && !speciesValuesKey.split("\0").includes(currentSpecie)) {
+    if (
+      currentSpecie !== "" &&
+      !selectedSpeciesValuesKey.split("\0").includes(currentSpecie)
+    ) {
       setCurrentSpecie("");
     }
-  }, [currentSpecie, speciesValuesKey, setCurrentSpecie]);
+  }, [currentSpecie, selectedSpeciesValuesKey, setCurrentSpecie]);
 
   useEffect(() => {
     if (
       currentChemical !== "" &&
-      !chemicalsValuesKey.split("\0").includes(currentChemical)
+      !selectedChemicalsValuesKey.split("\0").includes(currentChemical)
     ) {
       setCurrentChemical("");
     }
-  }, [currentChemical, chemicalsValuesKey, setCurrentChemical]);
+  }, [currentChemical, selectedChemicalsValuesKey, setCurrentChemical]);
 
-  const filtered = filterRows(rows, currentSpecie, currentChemical);
-  const valueRows = filtered.flatMap((dr) => dr.value_rows);
-  const referenceCount = uniqueArticleCountInRows(filtered, refColumns);
+  const selectedFiltered = filterRows(rows, currentSpecie, currentChemical);
+  const previewFiltered = filterRows(rows, previewSpecie, previewChemical);
+  const valueRows = previewFiltered.flatMap((dr) => dr.value_rows);
+  const referenceCount = uniqueArticleCountInRows(previewFiltered, refColumns);
 
   const chemicalDetail =
-    filtered.find((dr) => dr.chemical_val === currentChemical)?.chemical_row ??
+    selectedFiltered.find((dr) => dr.chemical_val === currentChemical)
+      ?.chemical_row ??
     rows.find((dr) => dr.chemical_val === currentChemical)?.chemical_row ??
     null;
   const specieDetail =
-    filtered.find((dr) => dr.specie_val === currentSpecie)?.specie_row ??
+    selectedFiltered.find((dr) => dr.specie_val === currentSpecie)
+      ?.specie_row ??
     rows.find((dr) => dr.specie_val === currentSpecie)?.specie_row ??
     null;
 
-  const smilesValue =
+  const selectedSmiles =
     currentChemical !== "" && chemicalDetail && smilesKey
       ? (chemicalDetail.get(smilesKey) ?? "")
       : "";
+  const displaySmiles =
+    selectedSmiles !== ""
+      ? selectedSmiles
+      : chemicalSmiles.get(hoveredChemical) ?? "";
 
   const speciesCountLabel =
-    countMode === "chemicals" ? "chemicals" : countMode;
+    speciesCountMode === "chemicals" ? "chemicals" : speciesCountMode;
   const chemicalCountLabel =
-    countMode === "chemicals" ? "species" : countMode;
+    chemicalsCountMode === "chemicals" ? "species" : chemicalsCountMode;
+
+  const showPublications =
+    currentSpecie !== "" ||
+    currentChemical !== "" ||
+    hoveredChemical !== "" ||
+    hoveredSpecie !== "";
 
   return (
     <div
@@ -514,10 +591,16 @@ function ResultsWorkspace({
         onClear={() => setCurrentChemical("")}
         options={chemicalsOptions}
         countModeLabel={chemicalCountLabel}
-        onSelect={setCurrentChemical}
+        onSelect={(value) => {
+          setHoveredChemical("");
+          setCurrentChemical(value);
+        }}
+        onHover={(value) => {
+          setHoveredChemical(value ?? "");
+        }}
         detailRow={chemicalDetail}
         meta={meta}
-        smilesLink={smilesValue}
+        smilesLink={selectedSmiles}
       />
 
       <div
@@ -531,19 +614,21 @@ function ResultsWorkspace({
           minHeight: 0,
         }}
       >
-        {currentChemical !== "" && smilesMeta && smilesValue !== "" ? (
-          <Container>{smilesMeta.render(smilesValue)}</Container>
+        {smilesMeta && displaySmiles !== "" ? (
+          <Container key={displaySmiles}>
+            {smilesMeta.render(displaySmiles)}
+          </Container>
         ) : (
           <Container>
             <p className="empty-state" style={{ padding: 24, margin: 0 }}>
               {currentChemical === ""
-                ? "Select a chemical to show its structure"
+                ? "Hover or select a chemical to show its structure"
                 : "No SMILES for this chemical"}
             </p>
           </Container>
         )}
 
-        {currentSpecie === "" && currentChemical === "" ? (
+        {!showPublications ? (
           <Container>
             <p className="empty-state" style={{ padding: 24, margin: 0 }}>
               Select species or chemical
@@ -568,7 +653,13 @@ function ResultsWorkspace({
         onClear={() => setCurrentSpecie("")}
         options={speciesOptions}
         countModeLabel={speciesCountLabel}
-        onSelect={setCurrentSpecie}
+        onSelect={(value) => {
+          setHoveredSpecie("");
+          setCurrentSpecie(value);
+        }}
+        onHover={(value) => {
+          setHoveredSpecie(value ?? "");
+        }}
         detailRow={specieDetail}
         meta={meta}
       />

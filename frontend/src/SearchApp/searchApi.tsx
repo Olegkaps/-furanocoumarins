@@ -1,7 +1,5 @@
 import { api, isEmpty } from "../shared/api";
 
-export let isDataFetched = false;
-
 export async function fetchSearchResult(
   e: React.FormEvent | null,
   searchReq: string,
@@ -12,7 +10,6 @@ export async function fetchSearchResult(
 
   if (response && response.status === 200) {
     setSearchResponse(response.data);
-    isDataFetched = true;
   } else {
     alert("Error: " + response?.status + " - " + response?.data?.error);
   }
@@ -20,7 +17,6 @@ export async function fetchSearchResult(
 
 export function filterResponse(searchResponse: { [index: string]: any }) {
   if (isEmpty(searchResponse)) {
-    isDataFetched = false;
     return searchResponse;
   }
 
