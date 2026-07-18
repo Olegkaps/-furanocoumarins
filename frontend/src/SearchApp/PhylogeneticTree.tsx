@@ -42,6 +42,8 @@ class PhilogeneticTreeNode {
   childs: { [key: string]: PhilogeneticTreeNode };
   childs_num: number;
   clades_num: number;
+  /** Pixel height for layout, including gaps between sibling branches. */
+  layout_height: number;
   is_visible: boolean;
   /** Column key for count-link query (optional for synthetic stems). */
   link_key: string;
@@ -55,6 +57,7 @@ class PhilogeneticTreeNode {
     this.childs = {};
     this.childs_num = 0;
     this.clades_num = 0;
+    this.layout_height = 0;
     this.is_visible = true;
     this.link_key = "";
     this.link_val = clade_name;
@@ -152,7 +155,11 @@ class PhilogeneticTreeNode {
           style={{
             display: "table-cell",
             verticalAlign: "middle",
-            height: Math.max(30, 30 * this.clades_num),
+            height: Math.max(
+              config["TREE_LEAF_ROW_PX"],
+              this.layout_height ||
+                config["TREE_LEAF_ROW_PX"] * this.clades_num,
+            ),
             borderColor: "white",
             width: branchWidth,
             minWidth: branchWidth,
@@ -236,17 +243,29 @@ class PhilogeneticTreeNode {
             <div>
               {childNames.map((name, ind) => {
                 const childPath = `${pathId}${PATH_SEP}${name}`;
+                const isLast = ind === childNames.length - 1;
+                const useBranchGap =
+                  childCount > 1 && !isLastDisplayFork(this);
                 return (
                   <div key={name}>
-                    {this.childs[name].render(
-                      meta,
-                      meta_names,
-                      meta_ind + 1,
-                      ind,
-                      childNames.length,
-                      undefined,
-                      ctx,
-                      childPath,
+                    <div className="tree-sibling">
+                      {this.childs[name].render(
+                        meta,
+                        meta_names,
+                        meta_ind + 1,
+                        ind,
+                        childNames.length,
+                        undefined,
+                        ctx,
+                        childPath,
+                      )}
+                    </div>
+                    {useBranchGap && !isLast && (
+                      <div
+                        className="tree-sibling-gap"
+                        style={{ height: config["TREE_BRANCH_GAP_PX"] }}
+                        aria-hidden
+                      />
                     )}
                   </div>
                 );
@@ -286,6 +305,37 @@ function recomputeCladesNum(node: PhilogeneticTreeNode): number {
     sum += recomputeCladesNum(node.childs[name]);
   });
   node.clades_num = sum;
+  return sum;
+}
+
+/** Pixel heights including extra gaps between sibling subtrees (not at last fork). */
+function isLastDisplayFork(node: PhilogeneticTreeNode): boolean {
+  const names = Object.keys(node.childs);
+  if (names.length <= 1) return false;
+  return names.every(
+    (n) => Object.keys(node.childs[n].childs).length === 0,
+  );
+}
+
+function recomputeLayoutHeight(
+  node: PhilogeneticTreeNode,
+  leafPx: number,
+  gapPx: number,
+): number {
+  const names = Object.keys(node.childs);
+  if (names.length === 0) {
+    node.layout_height = leafPx;
+    return leafPx;
+  }
+  let sum = 0;
+  names.forEach((name) => {
+    sum += recomputeLayoutHeight(node.childs[name], leafPx, gapPx);
+  });
+  // Gaps only between deeper sibling groups — not at the final fork to leaves.
+  if (names.length > 1 && !isLastDisplayFork(node)) {
+    sum += (names.length - 1) * gapPx;
+  }
+  node.layout_height = sum;
   return sum;
 }
 
@@ -377,6 +427,11 @@ function projectTreeForDisplay(
   });
   displayRoot.childs_num = sourceRoot.childs_num;
   recomputeCladesNum(displayRoot);
+  recomputeLayoutHeight(
+    displayRoot,
+    config["TREE_LEAF_ROW_PX"],
+    config["TREE_BRANCH_GAP_PX"],
+  );
   return displayRoot;
 }
 
@@ -407,6 +462,47 @@ function collapseUnaryFromRoot(root: PhilogeneticTreeNode): {
   }
 
   return { pathLabels, tip, metaOffset };
+}
+
+/**
+ * Deepest `to` in [from, maxLevel] such that the projected tree has at most
+ * `maxClades` leaf tips. Monotonic in `to`, so binary search is safe.
+ */
+function chooseAutoDisplayTo(
+  species: Array<Specie>,
+  meta: Array<string>,
+  from: number,
+  maxLevel: number,
+  maxClades: number,
+): number {
+  if (species.length === 0 || maxClades < 1) {
+    return from;
+  }
+  const root = new PhilogeneticTreeNode("");
+  for (const specie of species) {
+    root.add_child(specie.clades, 1, false);
+  }
+
+  const leafCountAt = (to: number) =>
+    projectTreeForDisplay(root, meta, from, to).clades_num;
+
+  if (leafCountAt(maxLevel) <= maxClades) {
+    return maxLevel;
+  }
+
+  let lo = from;
+  let hi = maxLevel;
+  let best = from;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (leafCountAt(mid) <= maxClades) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return best;
 }
 
 function TreeCladesAdapter({ drawLeftBorder }: { drawLeftBorder: boolean }) {
@@ -976,7 +1072,7 @@ const TAXONOMY_INFO =
   "Taxonomy according to NCBI is given starting with subtribes. Taxonomy of genus and species is given according to original articles, POWO site and Pimenov (the expert in Apiaceae taxonomy) opinion.";
 
 const DEPTH_INFO =
-  "Limits which taxonomic ranks are drawn. Levels before “from” are folded into one path stem; levels after “to” are hidden. Counts are unchanged.";
+  "Limits which taxonomic ranks are drawn. Levels before “from” are folded into one path stem; levels after “to” are hidden. Counts are unchanged. If “to” is not set, it is chosen automatically so at most a configured number of leaf tips are drawn.";
 
 function PhilogeneticTreeOrNull({
   response,
@@ -1077,10 +1173,6 @@ function PhilogeneticTreeOrNull({
 
   const maxLevel = Math.max(0, cladeLevels.length - 1);
   const effectiveFrom = Math.min(displayFrom, maxLevel);
-  const effectiveTo =
-    displayTo == null
-      ? maxLevel
-      : Math.max(effectiveFrom, Math.min(displayTo, maxLevel));
 
   const smilesColumns = (
     response["metadata"] as Array<{ [index: string]: string }>
@@ -1131,6 +1223,17 @@ function PhilogeneticTreeOrNull({
   Object.entries(counts).forEach(([joined_clades, count]) => {
     species.push(new Specie(count, joined_clades.split("@")));
   });
+
+  const effectiveTo =
+    displayTo == null
+      ? chooseAutoDisplayTo(
+          species,
+          species_meta,
+          effectiveFrom,
+          maxLevel,
+          config["TREE_MAX_VISIBLE_CLADES"],
+        )
+      : Math.max(effectiveFrom, Math.min(displayTo, maxLevel));
 
   const treeToolbar = (
     <div className="panel tree-toolbar">
@@ -1199,10 +1302,7 @@ function PhilogeneticTreeOrNull({
                   displayTo == null ? null : Math.max(displayTo, v);
                 patchParams({
                   from: v === 0 ? null : String(v),
-                  to:
-                    nextTo == null || nextTo >= maxLevel
-                      ? null
-                      : String(nextTo),
+                  to: nextTo == null ? null : String(nextTo),
                 });
               }}
             >
@@ -1224,7 +1324,8 @@ function PhilogeneticTreeOrNull({
                 const nextFrom = Math.min(displayFrom, v);
                 patchParams({
                   from: nextFrom === 0 ? null : String(nextFrom),
-                  to: v >= maxLevel ? null : String(v),
+                  // Persist explicit choice (including maxLevel) so auto does not override.
+                  to: String(v),
                 });
               }}
             >

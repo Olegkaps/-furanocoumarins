@@ -674,12 +674,9 @@ tfoot td {
   color: var(--color-accent);
 }
 
-.tree-subtree-hidden-hint {
-  display: inline-block;
-  margin: 8px 12px;
-  font-size: 0.8rem;
-  color: var(--color-muted);
-  font-style: italic;
+.tree-sibling-gap {
+  border-left: 2px solid var(--color-ink);
+  box-sizing: border-box;
 }
 
 .tree-branch-cell.is-search-match {
