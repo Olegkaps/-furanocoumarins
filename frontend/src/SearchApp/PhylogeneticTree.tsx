@@ -159,7 +159,11 @@ class PhilogeneticTreeNode {
       (isBlankClade(this.clade_name) ? "__root__" : this.clade_name);
     const childCount = childNames.length;
     const subtreeHidden = ctx?.collapsedIds.has(pathId) ?? false;
-    const canToggleSubtree = childCount > 1;
+    const canToggleSubtree =
+      childCount > 1 &&
+      pathId !== "__root__" &&
+      !isCollapsedPath &&
+      displayName == null;
 
     const wouldHideCount =
       (childCount <= 1 && total_bros === 1) ||
@@ -651,37 +655,44 @@ function CountButton({
 
   const visibleSeries = (seriesCounts ?? []).filter((s) => s.n > 0);
   const multi = (seriesCounts?.length ?? 0) > 1;
+  const layoutN = visibleSeries.length;
 
-  if (multi && visibleSeries.length === 0) {
+  if (multi && layoutN === 0) {
     return null;
   }
 
-  const chips = multi ? (
-    <span className="tree-count-chip__series">
-      {visibleSeries.map((s, i) => (
-        <span
-          key={i}
-          className="tree-count-chip__num tree-count-chip__num--series"
-          style={{
-            color: s.color,
-            borderColor: s.color,
-            background: `color-mix(in srgb, ${s.color} 12%, var(--color-surface))`,
-          }}
-          title={String(s.n)}
-        >
-          {formatCompactCount(s.n)}
-        </span>
-      ))}
-    </span>
-  ) : (
-    <span className="tree-count-chip__num" title={String(number)}>
-      {formatCompactCount(number)}
-    </span>
-  );
+  const chips =
+    multi && layoutN > 0 ? (
+      <span
+        className={`tree-count-chip__series tree-count-chip__series--n${Math.min(layoutN, config["MAX_COMPARE_QUERIES"])}`}
+      >
+        {visibleSeries.map((s, i) => (
+          <span
+            key={i}
+            className="tree-count-chip__num tree-count-chip__num--series"
+            style={{
+              color: s.color,
+              borderColor: s.color,
+              background: `color-mix(in srgb, ${s.color} 12%, var(--color-surface))`,
+            }}
+            title={String(s.n)}
+          >
+            {formatCompactCount(s.n)}
+          </span>
+        ))}
+      </span>
+    ) : (
+      <span className="tree-count-chip__num" title={String(number)}>
+        {formatCompactCount(number)}
+      </span>
+    );
 
+  const cluster = multi && layoutN > 1;
   const blockClass =
     `tree-count-block` +
-    (multi ? " tree-count-block--multi" : " tree-count-block--single") +
+    (cluster
+      ? ` tree-count-block--multi tree-count-block--n${Math.min(layoutN, config["MAX_COMPARE_QUERIES"])}`
+      : " tree-count-block--single") +
     (showLink ? " tree-count-block--link" : "");
 
   if (!showLink) {

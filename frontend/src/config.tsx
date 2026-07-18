@@ -26,6 +26,8 @@ let config = {
     ],
     /** Client-side TTL for cached GET /search, /metadata, /article (ms). */
     "API_CACHE_TTL_MS": 30 * 60 * 1000,
+    /** Developer initials shown in the site footer (replace the placeholder). */
+    "DEVELOPER_INITIALS": "🍩 Oleg Kapshayi",
 }
 
 

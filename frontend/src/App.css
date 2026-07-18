@@ -5,7 +5,43 @@ html {
 #root {
   width: min(1280px, 96%);
   margin: 0 auto;
-  padding: 48px 0 64px;
+  padding: 48px 0 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.app-shell__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.site-footer {
+  flex-shrink: 0;
+  margin-top: 24px;
+  padding: 12px 0 16px;
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.site-footer__line {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+.site-footer__initials {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--color-ink);
 }
 
 p,
@@ -709,7 +745,7 @@ tfoot td {
 
 .tree-subtree-toggle:hover .tree-subtree-toggle__icon,
 .tree-subtree-toggle:focus-visible .tree-subtree-toggle__icon {
-  transform: scale(1);
+  transform: scale(1.4);
   border-color: var(--color-accent);
   color: var(--color-accent);
   background: var(--color-surface-alt);
@@ -831,9 +867,19 @@ tfoot td {
   min-width: 2.75em;
 }
 
-/* 2×2 (or wider) grids: keep vertical center; shift left so the cluster
+/* Multi layouts: keep vertical center; shift left so the cluster
    sits on the branch tip instead of hanging past it to the right. */
 .tree-count-block--multi {
+  transform: translate(-36px, -50%);
+  padding: 2px 3px;
+}
+
+.tree-count-block--n2 {
+  transform: translate(-28px, -50%);
+}
+
+.tree-count-block--n3,
+.tree-count-block--n4 {
   transform: translate(-36px, -50%);
 }
 
@@ -881,10 +927,89 @@ tfoot td {
 
 .tree-count-chip__series {
   display: grid;
-  grid-template-columns: repeat(2, minmax(2.75em, auto));
-  gap: 3px;
-  align-items: center;
+  gap: 2px 4px;
+  align-items: start;
   justify-items: stretch;
+}
+
+/* 1 visible: plain single chip (no grid). */
+.tree-count-chip__series--n1 {
+  display: block;
+}
+
+/* 2 visible: diagonal — ① top-left, ② bottom-right; overlap borders. */
+.tree-count-chip__series--n2 {
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  gap: 0;
+}
+
+.tree-count-chip__series--n2 > :nth-child(1) {
+  grid-column: 1;
+  grid-row: 1;
+  z-index: 1;
+}
+
+.tree-count-chip__series--n2 > :nth-child(2) {
+  grid-column: 2;
+  grid-row: 2;
+  margin-top: -6px;
+  margin-left: -6px;
+  z-index: 2;
+}
+
+/* 3 visible: triangle — ①② on top (② lower), ③ centered below. */
+.tree-count-chip__series--n3 {
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+}
+
+.tree-count-chip__series--n3 > :nth-child(1) {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.tree-count-chip__series--n3 > :nth-child(2) {
+  grid-column: 2;
+  grid-row: 1;
+  margin-top: 5px;
+}
+
+.tree-count-chip__series--n3 > :nth-child(3) {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: center;
+  margin-top: 1px;
+}
+
+/* 4 visible: square — right cells lower; bottom row nudged right. */
+.tree-count-chip__series--n4 {
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+}
+
+.tree-count-chip__series--n4 > :nth-child(1) {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.tree-count-chip__series--n4 > :nth-child(2) {
+  grid-column: 2;
+  grid-row: 1;
+  margin-top: 5px;
+}
+
+.tree-count-chip__series--n4 > :nth-child(3) {
+  grid-column: 1;
+  grid-row: 2;
+  margin-left: 6px;
+}
+
+.tree-count-chip__series--n4 > :nth-child(4) {
+  grid-column: 2;
+  grid-row: 2;
+  margin-top: 5px;
+  margin-left: 6px;
 }
 
 .tree-count-chip__num--series {
@@ -923,14 +1048,14 @@ tfoot td {
 }
 
 .tree-toolbar__group--compare {
-  flex: 1 1 280px;
-  max-width: 420px;
+  flex: 1 1 360px;
+  max-width: 560px;
 }
 
 .panel-toolbar__compare {
-  flex: 1 1 280px;
-  max-width: 420px;
-  min-width: 220px;
+  flex: 1 1 360px;
+  max-width: 560px;
+  min-width: 280px;
 }
 
 .query-compare-bar {
@@ -952,17 +1077,16 @@ tfoot td {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 4px;
-  max-height: 160px;
-  overflow: auto;
 }
 
 .query-compare-bar__item {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   padding: 4px 6px;
   background: var(--color-surface-alt);
   border-radius: var(--radius);

@@ -226,6 +226,37 @@ export function QueryCompareBar({
     >
       <div className="query-compare-bar">
         <p className="query-compare-bar__title">Compare queries</p>
+        <p className="query-compare-bar__hint">
+          Up to {config["MAX_COMPARE_QUERIES"]} queries.
+        </p>
+        {extras.length < maxExtra && (
+          <div className="query-compare-bar__add">
+            <input
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  add();
+                }
+              }}
+              placeholder="Add query to compare"
+              aria-label="Add query to compare"
+              disabled={primary === ""}
+            />
+            <button
+              type="button"
+              className="btn"
+              disabled={!canAdd}
+              onClick={add}
+              title="Add query"
+            >
+              <Plus width={16} height={16} />
+              Add
+            </button>
+          </div>
+        )}
         <ul className="query-compare-bar__list">
           {primary !== "" && (
             <li className="query-compare-bar__item">
@@ -260,37 +291,6 @@ export function QueryCompareBar({
             </li>
           ))}
         </ul>
-        {extras.length < maxExtra && (
-          <div className="query-compare-bar__add">
-            <input
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  add();
-                }
-              }}
-              placeholder="Add query to compare"
-              aria-label="Add query to compare"
-              disabled={primary === ""}
-            />
-            <button
-              type="button"
-              className="btn"
-              disabled={!canAdd}
-              onClick={add}
-              title="Add query"
-            >
-              <Plus width={16} height={16} />
-              Add
-            </button>
-          </div>
-        )}
-        <p className="query-compare-bar__hint">
-          Up to {config["MAX_COMPARE_QUERIES"]} queries.
-        </p>
       </div>
     </NewFeatureHint>
   );
