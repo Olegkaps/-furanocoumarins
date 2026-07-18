@@ -1,62 +1,93 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { CircleInfo, ClockArrowRotateLeft, Magnifier } from "@gravity-ui/icons";
+import {
+  CircleInfo,
+  ClockArrowRotateLeft,
+  Database,
+  Magnifier,
+} from "@gravity-ui/icons";
 
-function HomeLink() {
+function NavIcon({
+  to,
+  left,
+  title,
+  current,
+  children,
+}: {
+  to: string;
+  left: string;
+  title: string;
+  current?: boolean;
+  children: ReactNode;
+}) {
+  const style = { left };
+  if (current) {
+    return (
+      <span
+        className="nav-icon-link is-current"
+        style={style}
+        title={title}
+        aria-label={title}
+        aria-current="page"
+      >
+        {children}
+      </span>
+    );
+  }
   return (
     <Link
-      to="/search"
+      to={to}
       target="_blank"
       className="nav-icon-link"
-      style={{ left: "12px" }}
-      title="Search"
-      aria-label="Search"
+      style={style}
+      title={title}
+      aria-label={title}
     >
-      <Magnifier width={28} height={28} />
-    </Link>
-  );
-}
-
-function AboutLink() {
-  return (
-    <Link
-      to="/about"
-      target="_blank"
-      className="nav-icon-link"
-      style={{ left: "64px" }}
-      title="About"
-      aria-label="About"
-    >
-      <CircleInfo width={28} height={28} />
-    </Link>
-  );
-}
-
-function HistoryLink() {
-  return (
-    <Link
-      to="/history"
-      target="_blank"
-      className="nav-icon-link"
-      style={{ left: "116px" }}
-      title="Query history"
-      aria-label="Query history"
-    >
-      <ClockArrowRotateLeft width={28} height={28} />
+      {children}
     </Link>
   );
 }
 
 export interface FullNavigationProps {
-  /** Hide the navigation element for this page (e.g. "about" hides the About link on the About page) */
-  pageName?: "home" | "about" | "history";
+  /** Mark this page’s icon as selected and non-clickable */
+  pageName?: "home" | "about" | "history" | "cache";
 }
 
 export default function FullNavigation({ pageName }: FullNavigationProps) {
   return (
     <>
-      {pageName !== "home" && <HomeLink />}
-      {pageName !== "about" && <AboutLink />}
-      {pageName !== "history" && <HistoryLink />}
+      <NavIcon
+        to="/search"
+        left="12px"
+        title="Search"
+        current={pageName === "home"}
+      >
+        <Magnifier width={28} height={28} />
+      </NavIcon>
+      <NavIcon
+        to="/about"
+        left="64px"
+        title="About"
+        current={pageName === "about"}
+      >
+        <CircleInfo width={28} height={28} />
+      </NavIcon>
+      <NavIcon
+        to="/history"
+        left="116px"
+        title="Query history"
+        current={pageName === "history"}
+      >
+        <ClockArrowRotateLeft width={28} height={28} />
+      </NavIcon>
+      <NavIcon
+        to="/cache"
+        left="168px"
+        title="API cache"
+        current={pageName === "cache"}
+      >
+        <Database width={28} height={28} />
+      </NavIcon>
     </>
   );
 }

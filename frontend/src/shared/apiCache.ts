@@ -183,6 +183,175 @@ async function writeEntry(
   lsSetSmall(id, entry);
 }
 
+async function idbDelete(id: string): Promise<void> {
+  try {
+    const db = await openIdb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.objectStore(IDB_STORE).delete(id);
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+async function idbClear(): Promise<void> {
+  try {
+    const db = await openIdb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.objectStore(IDB_STORE).clear();
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+async function idbList(): Promise<Array<{ id: string; entry: CacheEntry }>> {
+  try {
+    const db = await openIdb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const req = tx.objectStore(IDB_STORE).openCursor();
+      const out: Array<{ id: string; entry: CacheEntry }> = [];
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (cursor) {
+          out.push({ id: String(cursor.key), entry: cursor.value as CacheEntry });
+          cursor.continue();
+        } else {
+          resolve(out);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return [];
+  }
+}
+
+function lsRemove(id: string): void {
+  try {
+    localStorage.removeItem(LS_PREFIX + id);
+  } catch {
+    /* ignore */
+  }
+}
+
+function kindFromId(id: string): ApiCacheKind {
+  if (id.startsWith("s:")) return "search";
+  if (id.startsWith("metadata:")) return "metadata";
+  if (id.startsWith("article:")) return "article";
+  return "other";
+}
+
+export type ApiCacheKind = "search" | "metadata" | "article" | "other";
+
+export type ApiCacheInfo = {
+  id: string;
+  kind: ApiCacheKind;
+  /** Logical key (search query, metadata, article path). */
+  key: string;
+  writtenAt: number;
+  expiresAt: number;
+  expired: boolean;
+  sources: Array<"memory" | "idb" | "localStorage">;
+};
+
+/** List all API cache entries (memory + IndexedDB + small localStorage mirrors). */
+export async function listApiCache(): Promise<ApiCacheInfo[]> {
+  const now = Date.now();
+  const byId = new Map<
+    string,
+    {
+      entry: CacheEntry;
+      sources: Set<"memory" | "idb" | "localStorage">;
+    }
+  >();
+
+  const add = (
+    id: string,
+    entry: CacheEntry,
+    source: "memory" | "idb" | "localStorage",
+  ) => {
+    if (!entry || typeof entry.key !== "string") return;
+    const cur = byId.get(id);
+    if (!cur) {
+      byId.set(id, { entry, sources: new Set([source]) });
+      return;
+    }
+    cur.sources.add(source);
+    // Prefer the freshest write.
+    if ((entry.writtenAt ?? 0) >= (cur.entry.writtenAt ?? 0)) {
+      cur.entry = entry;
+    }
+  };
+
+  memory.forEach((entry, id) => add(id, entry, "memory"));
+
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const full = localStorage.key(i);
+      if (!full?.startsWith(LS_PREFIX)) continue;
+      const id = full.slice(LS_PREFIX.length);
+      const entry = lsGet(id);
+      if (entry) add(id, entry, "localStorage");
+    }
+  } catch {
+    /* ignore */
+  }
+
+  for (const { id, entry } of await idbList()) {
+    add(id, entry, "idb");
+  }
+
+  const list: ApiCacheInfo[] = [];
+  byId.forEach(({ entry, sources }, id) => {
+    list.push({
+      id,
+      kind: kindFromId(id),
+      key: entry.key,
+      writtenAt: entry.writtenAt,
+      expiresAt: entry.expiresAt,
+      expired: !(entry.expiresAt > now),
+      sources: [...sources],
+    });
+  });
+
+  list.sort((a, b) => b.writtenAt - a.writtenAt);
+  return list;
+}
+
+/** Remove one cache entry from memory, localStorage, and IndexedDB. */
+export async function deleteApiCacheEntry(id: string): Promise<void> {
+  memory.delete(id);
+  lsRemove(id);
+  await idbDelete(id);
+}
+
+/** Wipe the entire API response cache. */
+export async function clearApiCache(): Promise<void> {
+  memory.clear();
+  inflight.clear();
+  try {
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(LS_PREFIX) || key?.startsWith("fuco-api-cache:")) {
+        toRemove.push(key);
+      }
+    }
+    for (const key of toRemove) localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+  await idbClear();
+}
+
 function asAxiosOk(
   url: string,
   data: unknown,

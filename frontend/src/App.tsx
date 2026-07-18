@@ -14,6 +14,7 @@ import { Reference } from "./Reference/Reference";
 import SubstancePage from "./SubstancePage/SubstancePage";
 import { SiteFooter } from "./shared/SiteFooter";
 import HistoryPage from "./SearchApp/HistoryPage";
+import CachePage from "./SearchApp/CachePage";
 
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
               <Route path="/search" element={<SearchApp />}/>
               <Route path="/about" element={<AboutPage />}/>
               <Route path="/history" element={<HistoryPage />}/>
+              <Route path="/cache" element={<CachePage />}/>
               <Route path="/page" element={<SubstancePage />}/>
               {/* Legacy path form; redirects via SubstancePage query parsing */}
               <Route path="/page/:smiles" element={<SubstancePage />}/>
