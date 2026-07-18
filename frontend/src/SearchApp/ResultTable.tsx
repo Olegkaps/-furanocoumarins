@@ -709,19 +709,6 @@ function SidePanel({
   );
 }
 
-function smilesLookup(
-  rows: DataRows[],
-  smilesKey: string,
-): Map<string, string> {
-  const map = new Map<string, string>();
-  if (!smilesKey) return map;
-  rows.forEach((dr) => {
-    if (map.has(dr.chemical_val)) return;
-    map.set(dr.chemical_val, dr.chemical_row.get(smilesKey) ?? "");
-  });
-  return map;
-}
-
 function ResultsWorkspace({
   rows,
   meta,
