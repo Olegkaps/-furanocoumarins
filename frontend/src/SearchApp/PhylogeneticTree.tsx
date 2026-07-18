@@ -1,18 +1,23 @@
 import { useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { isEmpty } from "../shared/api";
 import { ZoomableContainer, type ZoomableHandle } from "../shared/ui";
 import config from "../config";
 import {
   ArrowUpRightFromSquare,
-  ChevronDown,
-  ChevronRight,
   FontCase,
   Magnifier,
+  Plus,
   Xmark,
 } from "@gravity-ui/icons";
 import { InfoTip } from "../shared/ui/InfoTip";
+import { QueryCompareBar, type CompareSeries } from "./QueryCompareBar";
+import {
+  appendCladeClause,
+  readCompareQueriesFromParams,
+  writeCompareQueriesToParams,
+} from "./compareQueries";
 
 class Specie {
   values_count: number;
@@ -28,10 +33,42 @@ const PATH_SEP = "›";
 
 type TreeViewCtx = {
   collapsedIds: Set<string>;
-  toggleCollapsed: (id: string) => void;
+  toggleCollapsed: (
+    id: string,
+    pin?: { clientX: number; clientY: number },
+  ) => void;
   matchIds: Set<string>;
   activeMatchId: string | null;
+  spacing: TreeSpacing;
 };
+
+type TreeSpacing = {
+  leafPx: number;
+  gapPx: number;
+  /** Gap between leaf siblings when count chips are tall (0 = pack tightly). */
+  leafGapPx: number;
+};
+
+function treeSpacingForSeries(seriesCount: number): TreeSpacing {
+  const leafPx = config["TREE_LEAF_ROW_PX"];
+  const gapPx = config["TREE_BRANCH_GAP_PX"];
+  if (seriesCount <= 1) {
+    return { leafPx, gapPx, leafGapPx: 0 };
+  }
+  if (seriesCount === 2) {
+    return {
+      leafPx: Math.max(leafPx, 40),
+      gapPx: gapPx + 6,
+      leafGapPx: 8,
+    };
+  }
+  // 3–4 queries → 2×2 chips need extra vertical room between leaves.
+  return {
+    leafPx: Math.max(leafPx, 54),
+    gapPx: gapPx + 14,
+    leafGapPx: 16,
+  };
+}
 
 function isBlankClade(name: string): boolean {
   return name.replaceAll(" ", "") === "";
@@ -44,6 +81,8 @@ class PhilogeneticTreeNode {
   clades_num: number;
   /** Pixel height for layout, including gaps between sibling branches. */
   layout_height: number;
+  /** Per-query counts for compare mode (color + value). */
+  series_counts: Array<{ color: string; n: number }>;
   is_visible: boolean;
   /** Column key for count-link query (optional for synthetic stems). */
   link_key: string;
@@ -58,6 +97,7 @@ class PhilogeneticTreeNode {
     this.childs_num = 0;
     this.clades_num = 0;
     this.layout_height = 0;
+    this.series_counts = [];
     this.is_visible = true;
     this.link_key = "";
     this.link_val = clade_name;
@@ -109,8 +149,8 @@ class PhilogeneticTreeNode {
       : rawLabel;
     const branchWidth = estimateBranchWidth(segmentCount);
     const childNames = Object.keys(this.childs).sort((a, b) => {
-      const ca = this.childs[a].childs_num;
-      const cb = this.childs[b].childs_num;
+      const ca = seriesCountSum(this.childs[a]);
+      const cb = seriesCountSum(this.childs[b]);
       return cb - ca || a.localeCompare(b);
     });
 
@@ -155,11 +195,7 @@ class PhilogeneticTreeNode {
           style={{
             display: "table-cell",
             verticalAlign: "middle",
-            height: Math.max(
-              config["TREE_LEAF_ROW_PX"],
-              this.layout_height ||
-                config["TREE_LEAF_ROW_PX"] * this.clades_num,
-            ),
+            height: effectiveLayoutHeight(this, pathId, ctx),
             borderColor: "white",
             width: branchWidth,
             minWidth: branchWidth,
@@ -169,7 +205,42 @@ class PhilogeneticTreeNode {
           <TreeCladesAdapter
             drawLeftBorder={meta_ind === 0 || child_ind === 0}
           />
-          <TreeCladeLine />
+          <div className="tree-branch-line">
+            <TreeCladeLine />
+            {canToggleSubtree && ctx && (
+              <button
+                type="button"
+                className="tree-subtree-toggle"
+                title={subtreeHidden ? "Expand subtree" : "Collapse subtree"}
+                aria-label={
+                  subtreeHidden ? "Expand subtree" : "Collapse subtree"
+                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const cell = (e.currentTarget as HTMLElement).closest(
+                    ".tree-branch-cell",
+                  ) as HTMLElement | null;
+                  if (cell) {
+                    const r = cell.getBoundingClientRect();
+                    ctx.toggleCollapsed(pathId, {
+                      clientX: r.left + r.width / 2,
+                      clientY: r.top + r.height / 2,
+                    });
+                  } else {
+                    ctx.toggleCollapsed(pathId);
+                  }
+                }}
+              >
+                <span className="tree-subtree-toggle__icon" aria-hidden>
+                  {subtreeHidden ? (
+                    <Plus width={12} height={12} />
+                  ) : (
+                    <Xmark width={12} height={12} />
+                  )}
+                </span>
+              </button>
+            )}
+          </div>
           <div
             className={
               isCollapsedPath
@@ -185,7 +256,8 @@ class PhilogeneticTreeNode {
               }
               style={{
                 fontSize: config["FONT_SIZE"],
-                maxWidth: Math.max(80, branchWidth - 48),
+                maxWidth: Math.max(80, branchWidth - 140),
+                left: 48,
               }}
               title={fullTitle}
             >
@@ -196,36 +268,19 @@ class PhilogeneticTreeNode {
               )}
             </p>
           </div>
-          <div className="tree-branch-actions">
-            {canToggleSubtree && ctx && (
-              <button
-                type="button"
-                className="tree-subtree-toggle"
-                title={subtreeHidden ? "Expand subtree" : "Collapse subtree"}
-                aria-label={subtreeHidden ? "Expand subtree" : "Collapse subtree"}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  ctx.toggleCollapsed(pathId);
-                }}
-              >
-                {subtreeHidden ? (
-                  <ChevronRight width={14} height={14} />
-                ) : (
-                  <ChevronDown width={14} height={14} />
-                )}
-              </button>
-            )}
-            {showCount && (
+          {showCount && (
+            <div className="tree-branch-actions">
               <div className="tree-branch-count">
                 <CountButton
                   number={this.childs_num}
+                  seriesCounts={this.series_counts}
                   clade_key={this.link_key || meta[meta_ind] || ""}
                   clade_val={this.link_val || this.clade_name}
                   plain={this.is_path_stem}
                 />
               </div>
-            )}
-          </div>
+            </div>
+          )}
           <TreeCladesAdapter
             drawLeftBorder={meta_ind === 0 || child_ind === total_bros - 1}
           />
@@ -244,8 +299,11 @@ class PhilogeneticTreeNode {
               {childNames.map((name, ind) => {
                 const childPath = `${pathId}${PATH_SEP}${name}`;
                 const isLast = ind === childNames.length - 1;
-                const useBranchGap =
-                  childCount > 1 && !isLastDisplayFork(this);
+                const isLastFork = isLastDisplayFork(this);
+                const gapH = isLastFork
+                  ? (ctx?.spacing.leafGapPx ?? 0)
+                  : (ctx?.spacing.gapPx ?? config["TREE_BRANCH_GAP_PX"]);
+                const useBranchGap = childCount > 1 && gapH > 0;
                 return (
                   <div key={name}>
                     <div className="tree-sibling">
@@ -263,7 +321,7 @@ class PhilogeneticTreeNode {
                     {useBranchGap && !isLast && (
                       <div
                         className="tree-sibling-gap"
-                        style={{ height: config["TREE_BRANCH_GAP_PX"] }}
+                        style={{ height: gapH }}
                         aria-hidden
                       />
                     )}
@@ -286,12 +344,12 @@ function countCollapsedSegments(label: string): number {
   return Math.max(1, parts.length);
 }
 
-/** Width from how many clades are folded into the label, not from string length. */
+/** Horizontal length of a tree branch segment (px). */
 function estimateBranchWidth(segmentCount: number): number {
   const n = Math.max(1, segmentCount);
-  // Plain names wrap in-column; collapsed paths need room for multi-segment ellipsis.
-  if (n === 1) return 180;
-  return Math.max(200, Math.min(640, 160 + (n - 1) * 52));
+  // Longer segments push clade names further from the fork / previous column.
+  if (n === 1) return 290;
+  return Math.max(310, Math.min(760, 250 + (n - 1) * 60));
 }
 
 function recomputeCladesNum(node: PhilogeneticTreeNode): number {
@@ -321,6 +379,7 @@ function recomputeLayoutHeight(
   node: PhilogeneticTreeNode,
   leafPx: number,
   gapPx: number,
+  leafGapPx: number = 0,
 ): number {
   const names = Object.keys(node.childs);
   if (names.length === 0) {
@@ -329,13 +388,44 @@ function recomputeLayoutHeight(
   }
   let sum = 0;
   names.forEach((name) => {
-    sum += recomputeLayoutHeight(node.childs[name], leafPx, gapPx);
+    sum += recomputeLayoutHeight(node.childs[name], leafPx, gapPx, leafGapPx);
   });
-  // Gaps only between deeper sibling groups — not at the final fork to leaves.
-  if (names.length > 1 && !isLastDisplayFork(node)) {
-    sum += (names.length - 1) * gapPx;
+  if (names.length > 1) {
+    if (!isLastDisplayFork(node)) {
+      sum += (names.length - 1) * gapPx;
+    } else if (leafGapPx > 0) {
+      sum += (names.length - 1) * leafGapPx;
+    }
   }
   node.layout_height = sum;
+  return sum;
+}
+
+/** Height taking collapsed subtrees as a single leaf row. */
+function effectiveLayoutHeight(
+  node: PhilogeneticTreeNode,
+  pathId: string,
+  ctx?: TreeViewCtx,
+): number {
+  const leafPx = ctx?.spacing.leafPx ?? config["TREE_LEAF_ROW_PX"];
+  const gapPx = ctx?.spacing.gapPx ?? config["TREE_BRANCH_GAP_PX"];
+  const leafGapPx = ctx?.spacing.leafGapPx ?? 0;
+  const names = Object.keys(node.childs);
+  if (names.length === 0) return leafPx;
+  if (ctx?.collapsedIds.has(pathId)) return leafPx;
+
+  let sum = 0;
+  names.forEach((name) => {
+    const childPath = `${pathId}${PATH_SEP}${name}`;
+    sum += effectiveLayoutHeight(node.childs[name], childPath, ctx);
+  });
+  if (names.length > 1) {
+    if (!isLastDisplayFork(node)) {
+      sum += (names.length - 1) * gapPx;
+    } else if (leafGapPx > 0) {
+      sum += (names.length - 1) * leafGapPx;
+    }
+  }
   return sum;
 }
 
@@ -358,6 +448,7 @@ function projectTreeForDisplay(
   meta: string[],
   fromLevel: number,
   toLevel: number,
+  spacing: TreeSpacing = treeSpacingForSeries(1),
 ): PhilogeneticTreeNode {
   const displayRoot = new PhilogeneticTreeNode("");
 
@@ -396,6 +487,9 @@ function projectTreeForDisplay(
         stem.is_path_stem = true;
         // Stem represents the folded ancestors — use the parent's count.
         stem.childs_num = Math.max(stem.childs_num, sourceParent.childs_num);
+        if (sourceParent.series_counts.length > 0) {
+          stem.series_counts = sourceParent.series_counts.map((s) => ({ ...s }));
+        }
         stem.link_key = "";
         stem.link_val = stemName;
         attach = stem;
@@ -404,6 +498,7 @@ function projectTreeForDisplay(
 
     const dNode = ensureChild(attach, orig.clade_name);
     dNode.childs_num = orig.childs_num;
+    dNode.series_counts = orig.series_counts.map((s) => ({ ...s }));
     dNode.link_key = meta[depth + 1] ?? "";
     dNode.link_val = orig.clade_name;
     dNode.is_path_stem = false;
@@ -429,8 +524,9 @@ function projectTreeForDisplay(
   recomputeCladesNum(displayRoot);
   recomputeLayoutHeight(
     displayRoot,
-    config["TREE_LEAF_ROW_PX"],
-    config["TREE_BRANCH_GAP_PX"],
+    spacing.leafPx,
+    spacing.gapPx,
+    spacing.leafGapPx,
   );
   return displayRoot;
 }
@@ -522,22 +618,25 @@ function TreeCladesAdapter({ drawLeftBorder }: { drawLeftBorder: boolean }) {
 function TreeCladeLine() {
   return (
     <hr
+      className="tree-branch-hr"
       style={{
         borderColor: "var(--color-ink)",
         width: "100%",
         margin: 0,
       }}
-    ></hr>
+    />
   );
 }
 
 function CountButton({
   number,
+  seriesCounts,
   clade_key,
   clade_val,
   plain,
 }: {
   number: number;
+  seriesCounts?: Array<{ color: string; n: number }>;
   clade_key: string;
   clade_val: string;
   plain?: boolean;
@@ -550,43 +649,104 @@ function CountButton({
     clade_key !== "" &&
     clade_val.replaceAll(" ", "") !== "";
 
-  const inner = (
-    <>
-      <span className="tree-count-chip__num">{number}</span>
-      {showLink && (
-        <ArrowUpRightFromSquare
-          style={{ width: 12, height: 12, flexShrink: 0 }}
-          aria-hidden
-        />
-      )}
-    </>
+  const visibleSeries = (seriesCounts ?? []).filter((s) => s.n > 0);
+  const multi = (seriesCounts?.length ?? 0) > 1;
+
+  if (multi && visibleSeries.length === 0) {
+    return null;
+  }
+
+  const chips = multi ? (
+    <span className="tree-count-chip__series">
+      {visibleSeries.map((s, i) => (
+        <span
+          key={i}
+          className="tree-count-chip__num tree-count-chip__num--series"
+          style={{
+            color: s.color,
+            borderColor: s.color,
+            background: `color-mix(in srgb, ${s.color} 12%, var(--color-surface))`,
+          }}
+          title={String(s.n)}
+        >
+          {formatCompactCount(s.n)}
+        </span>
+      ))}
+    </span>
+  ) : (
+    <span className="tree-count-chip__num" title={String(number)}>
+      {formatCompactCount(number)}
+    </span>
   );
 
+  const blockClass =
+    `tree-count-block` +
+    (multi ? " tree-count-block--multi" : " tree-count-block--single") +
+    (showLink ? " tree-count-block--link" : "");
+
   if (!showLink) {
-    return <span className="tree-count-chip">{inner}</span>;
+    return <span className={blockClass}>{chips}</span>;
   }
 
-  const next = new URLSearchParams(searchParams);
-  let query = next.get("query") ?? "";
-  const clause = `${clade_key} = '${clade_val}'`;
-  if (!query.includes(clause) && !query.includes(`${clade_key} =`)) {
-    query = query.trim() === "" ? clause : `${query} AND ${clause}`;
+  let next = new URLSearchParams(searchParams);
+  next.set(
+    "query",
+    appendCladeClause(next.get("query") ?? "", clade_key, clade_val),
+  );
+  const extras = readCompareQueriesFromParams(searchParams);
+  if (extras.length > 0) {
+    next = writeCompareQueriesToParams(
+      next,
+      extras.map((q) => appendCladeClause(q, clade_key, clade_val)),
+    );
   }
-  next.set("query", query);
+  const linkSearch = next.toString();
 
   return (
     <Link
-      className="tree-count-chip tree-count-chip--link"
-      to={{
-        pathname: "/tree",
-        search: next.toString(),
-      }}
+      className={blockClass}
+      to={{ pathname: "/tree", search: linkSearch }}
       title="Open subtree"
-      style={{ fontSize: config["FONT_SIZE"] }}
+      aria-label="Open subtree"
     >
-      {inner}
+      <span className="tree-count-block__frame" aria-hidden>
+        <ArrowUpRightFromSquare
+          className="tree-count-block__frame-icon"
+          width={10}
+          height={10}
+        />
+      </span>
+      {chips}
     </Link>
   );
+}
+
+/** Fit counts into ~3 characters: 999, 3.1k, 13k, 1.2M, … */
+function formatCompactCount(n: number): string {
+  if (!Number.isFinite(n)) return "0";
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  if (abs < 1000) return sign + String(Math.round(abs));
+  if (abs < 10000) {
+    const v = abs / 1000;
+    const rounded = Math.round(v * 10) / 10;
+    const body =
+      Math.abs(rounded - Math.round(rounded)) < 1e-9
+        ? String(Math.round(rounded))
+        : rounded.toFixed(1);
+    return sign + body + "k";
+  }
+  if (abs < 1_000_000) return sign + String(Math.round(abs / 1000)) + "k";
+  if (abs < 10_000_000) {
+    const v = abs / 1_000_000;
+    const rounded = Math.round(v * 10) / 10;
+    const body =
+      Math.abs(rounded - Math.round(rounded)) < 1e-9
+        ? String(Math.round(rounded))
+        : rounded.toFixed(1);
+    return sign + body + "M";
+  }
+  return sign + String(Math.round(abs / 1_000_000)) + "M";
 }
 
 export type CountMode = "chemicals" | "articles" | "all";
@@ -619,15 +779,21 @@ type UniquesByClades = {
   };
 };
 
-function assignUniqueCountsToTree(
-  node: PhilogeneticTreeNode,
-  pathParts: Array<string>,
+function countAtPrefix(
   uniquesByClades: UniquesByClades,
+  pathParts: Array<string>,
+  countMode: CountMode,
   smilesColumns: Array<string>,
   refColumns: Array<string>,
-  countMode: "chemicals" | "articles",
-) {
+): number {
   const prefix = pathParts.join("@");
+  if (countMode === "all") {
+    let total = 0;
+    Object.entries(uniquesByClades).forEach(([joined, u]) => {
+      if (joinedCladeMatchesPrefix(joined, prefix)) total += u.total;
+    });
+    return total;
+  }
   const mergedSmiles = new Set<string>();
   const mergedRefs = new Set<string>();
   Object.entries(uniquesByClades).forEach(([joined, u]) => {
@@ -636,9 +802,77 @@ function assignUniqueCountsToTree(
       u.refs.forEach((r) => mergedRefs.add(r));
     }
   });
-  const nSmiles = smilesColumns.length ? mergedSmiles.size : 1;
-  const nRefs = refColumns.length ? mergedRefs.size : 1;
-  node.childs_num = countMode === "chemicals" ? nSmiles : nRefs;
+  if (countMode === "chemicals") {
+    return smilesColumns.length ? mergedSmiles.size : 0;
+  }
+  return refColumns.length ? mergedRefs.size : 0;
+}
+
+function seriesCountSum(node: PhilogeneticTreeNode): number {
+  if (node.series_counts.length > 0) {
+    return node.series_counts.reduce((acc, s) => acc + s.n, 0);
+  }
+  return node.childs_num;
+}
+
+function leafCountFromUniques(
+  u: { smiles: Set<string>; refs: Set<string>; total: number } | undefined,
+  countMode: CountMode,
+): number {
+  if (!u) return 0;
+  if (countMode === "chemicals") return u.smiles.size;
+  if (countMode === "articles") return u.refs.size;
+  return u.total;
+}
+
+function assignSeriesCountsToTree(
+  node: PhilogeneticTreeNode,
+  pathParts: Array<string>,
+  series: Array<{ color: string; uniques: UniquesByClades }>,
+  countMode: CountMode,
+  smilesColumns: Array<string>,
+  refColumns: Array<string>,
+) {
+  node.series_counts = series.map(({ color, uniques }) => ({
+    color,
+    n: countAtPrefix(
+      uniques,
+      pathParts,
+      countMode,
+      smilesColumns,
+      refColumns,
+    ),
+  }));
+  if (node.series_counts.length > 0) {
+    node.childs_num = seriesCountSum(node);
+  }
+  Object.values(node.childs).forEach((child) => {
+    assignSeriesCountsToTree(
+      child,
+      [...pathParts, child.clade_name],
+      series,
+      countMode,
+      smilesColumns,
+      refColumns,
+    );
+  });
+}
+
+function assignUniqueCountsToTree(
+  node: PhilogeneticTreeNode,
+  pathParts: Array<string>,
+  uniquesByClades: UniquesByClades,
+  smilesColumns: Array<string>,
+  refColumns: Array<string>,
+  countMode: "chemicals" | "articles",
+) {
+  node.childs_num = countAtPrefix(
+    uniquesByClades,
+    pathParts,
+    countMode,
+    smilesColumns,
+    refColumns,
+  );
 
   Object.values(node.childs).forEach((child) => {
     assignUniqueCountsToTree(
@@ -650,6 +884,39 @@ function assignUniqueCountsToTree(
       countMode,
     );
   });
+}
+
+function buildUniquesByClades(
+  rows: Array<{ [index: string]: string }> | undefined,
+  species_meta: Array<string>,
+  smilesColumns: Array<string>,
+  refColumns: Array<string>,
+): UniquesByClades {
+  const uniquesByClades: UniquesByClades = {};
+  rows?.forEach((row) => {
+    const clades: Array<string> = [];
+    species_meta.forEach((clade_name: string, ind: number) => {
+      if (ind === 0) return;
+      clades.push(row[clade_name] ?? "");
+    });
+    const joined_clades = clades.join("@");
+    if (!(joined_clades in uniquesByClades)) {
+      uniquesByClades[joined_clades] = {
+        smiles: new Set(),
+        refs: new Set(),
+        total: 0,
+      };
+    }
+    const u = uniquesByClades[joined_clades];
+    u.total += 1;
+    if (smilesColumns[0] && row[smilesColumns[0]] != null) {
+      u.smiles.add(row[smilesColumns[0]]);
+    }
+    if (refColumns[0] && row[refColumns[0]] != null) {
+      u.refs.add(row[refColumns[0]]);
+    }
+  });
+  return uniquesByClades;
 }
 
 function escapeRegExp(s: string): string {
@@ -840,6 +1107,7 @@ function PhilogeneticTree({
   meta_names,
   countMode,
   uniquesByClades,
+  compareSeriesUniques,
   smilesColumns,
   refColumns,
   displayFrom,
@@ -850,6 +1118,7 @@ function PhilogeneticTree({
   meta_names: Array<string>;
   countMode: CountMode;
   uniquesByClades: UniquesByClades;
+  compareSeriesUniques: Array<{ color: string; uniques: UniquesByClades }>;
   smilesColumns: Array<string>;
   refColumns: Array<string>;
   displayFrom: number;
@@ -857,6 +1126,11 @@ function PhilogeneticTree({
 }) {
   const zoomRef = useRef<ZoomableHandle>(null);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
+  const pendingPinRef = useRef<{
+    id: string;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
   const [matchCase, setMatchCase] = useState(false);
@@ -881,17 +1155,29 @@ function PhilogeneticTree({
         countMode,
       );
     }
+    if (compareSeriesUniques.length > 1) {
+      assignSeriesCountsToTree(
+        root,
+        [],
+        compareSeriesUniques,
+        countMode,
+        smilesColumns,
+        refColumns,
+      );
+    }
     const maxLevel = Math.max(0, meta.length - 2);
     const from = Math.max(0, Math.min(displayFrom, maxLevel));
     const to = Math.max(from, Math.min(displayTo, maxLevel));
-    const projected = projectTreeForDisplay(root, meta, from, to);
+    const spacing = treeSpacingForSeries(compareSeriesUniques.length);
+    const projected = projectTreeForDisplay(root, meta, from, to, spacing);
     const collapsed = collapseUnaryFromRoot(projected);
-    return { projected, ...collapsed, from, to };
+    return { projected, ...collapsed, from, to, spacing };
   }, [
     species,
     meta,
     countMode,
     uniquesByClades,
+    compareSeriesUniques,
     smilesColumns,
     refColumns,
     displayFrom,
@@ -902,14 +1188,36 @@ function PhilogeneticTree({
     setCollapsedIds(new Set());
   }, [displayFrom, displayTo, countMode]);
 
-  const toggleCollapsed = useCallback((id: string) => {
-    setCollapsedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const toggleCollapsed = useCallback(
+    (id: string, pin?: { clientX: number; clientY: number }) => {
+      if (pin) {
+        pendingPinRef.current = { id, clientX: pin.clientX, clientY: pin.clientY };
+      }
+      setCollapsedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    },
+    [],
+  );
+
+  useLayoutEffect(() => {
+    const pin = pendingPinRef.current;
+    if (!pin) return;
+    pendingPinRef.current = null;
+    const el = document.querySelector(
+      `[data-tree-node-id="${CSS.escape(pin.id)}"]`,
+    ) as HTMLElement | null;
+    if (el) {
+      zoomRef.current?.keepElementAtClientPoint(
+        el,
+        pin.clientX,
+        pin.clientY,
+      );
+    }
+  }, [collapsedIds]);
 
   const searchable = useMemo(() => {
     if (!treeModel) return [] as SearchableNode[];
@@ -1010,7 +1318,7 @@ function PhilogeneticTree({
     return <div></div>;
   }
 
-  const { pathLabels, tip, metaOffset, projected } = treeModel;
+  const { pathLabels, tip, metaOffset, projected, spacing } = treeModel;
   const collapsedLabel = pathLabels.join(" / ");
   const tipId =
     pathLabels.filter((p) => !isBlankClade(p)).join(PATH_SEP) ||
@@ -1021,6 +1329,7 @@ function PhilogeneticTree({
     toggleCollapsed,
     matchIds: new Set(matchIdsList),
     activeMatchId,
+    spacing,
   };
 
   return (
@@ -1076,8 +1385,14 @@ const DEPTH_INFO =
 
 function PhilogeneticTreeOrNull({
   response,
+  compareSeries = [],
+  colorsByQuery = {},
+  primaryQuery = "",
 }: {
   response: { [index: string]: any };
+  compareSeries?: CompareSeries[];
+  colorsByQuery?: Record<string, string>;
+  primaryQuery?: string;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -1185,39 +1500,44 @@ function PhilogeneticTreeOrNull({
     .filter((m) => m["type"]?.includes("ref[]"))
     .map((m) => m["column"]);
 
-  const uniquesByClades: UniquesByClades = {};
+  const uniquesByClades = buildUniquesByClades(
+    response["data"],
+    species_meta,
+    smilesColumns,
+    refColumns,
+  );
 
-  response["data"]?.forEach((row: { [index: string]: string }) => {
-    const clades: Array<string> = [];
-    species_meta.forEach((clade_name: string, ind: number) => {
-      if (ind === 0) return;
-      clades.push(row[clade_name]);
-    });
-    const joined_clades = clades.join("@");
-    if (!(joined_clades in uniquesByClades)) {
-      uniquesByClades[joined_clades] = {
-        smiles: new Set(),
-        refs: new Set(),
-        total: 0,
-      };
-    }
-    const u = uniquesByClades[joined_clades];
-    u.total += 1;
-    u.smiles.add(row[smilesColumns[0]]);
-    u.refs.add(row[refColumns[0]]);
-  });
+  const seriesForTree =
+    compareSeries.length > 1
+      ? compareSeries.map((s) => ({
+          color: s.color,
+          uniques: buildUniquesByClades(
+            s.response["data"],
+            species_meta,
+            smilesColumns,
+            refColumns,
+          ),
+        }))
+      : [];
 
   const counts: { [index: string]: number } = {};
-  Object.entries(uniquesByClades).forEach(([joined_clades, u]) => {
-    const nSmiles = u.smiles.size;
-    const nRefs = u.refs.size;
-    counts[joined_clades] =
-      countMode === "chemicals"
-        ? nSmiles
-        : countMode === "articles"
-          ? nRefs
-          : u.total;
-  });
+  if (seriesForTree.length > 1) {
+    const pathSet = new Set<string>();
+    seriesForTree.forEach((s) => {
+      Object.keys(s.uniques).forEach((p) => pathSet.add(p));
+    });
+    pathSet.forEach((joined_clades) => {
+      counts[joined_clades] = seriesForTree.reduce(
+        (acc, s) =>
+          acc + leafCountFromUniques(s.uniques[joined_clades], countMode),
+        0,
+      );
+    });
+  } else {
+    Object.entries(uniquesByClades).forEach(([joined_clades, u]) => {
+      counts[joined_clades] = leafCountFromUniques(u, countMode);
+    });
+  }
 
   const species = [] as Array<Specie>;
   Object.entries(counts).forEach(([joined_clades, count]) => {
@@ -1340,6 +1660,15 @@ function PhilogeneticTreeOrNull({
           </label>
         </div>
       </div>
+
+      <div className="tree-toolbar__divider" aria-hidden />
+
+      <div className="tree-toolbar__group tree-toolbar__group--compare">
+        <QueryCompareBar
+          primaryQuery={primaryQuery}
+          colorsByQuery={colorsByQuery}
+        />
+      </div>
     </div>
   );
 
@@ -1366,6 +1695,7 @@ function PhilogeneticTreeOrNull({
         meta_names={meta_names}
         countMode={countMode}
         uniquesByClades={uniquesByClades}
+        compareSeriesUniques={seriesForTree}
         smilesColumns={smilesColumns}
         refColumns={refColumns}
         displayFrom={effectiveFrom}

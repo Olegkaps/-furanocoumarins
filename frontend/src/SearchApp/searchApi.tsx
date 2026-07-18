@@ -6,13 +6,25 @@ export async function fetchSearchResult(
   setSearchResponse: React.Dispatch<React.SetStateAction<{ [index: string]: any }>>
 ) {
   e?.preventDefault();
-  const response = await api.get("/search?q=" + searchReq).catch((err: { response?: {status: number, data: any} }) => err?.response);
+  const data = await fetchSearchData(searchReq);
+  if (data != null) {
+    setSearchResponse(data);
+  }
+}
+
+/** Fetch search JSON or null on error (alert already shown). */
+export async function fetchSearchData(
+  searchReq: string,
+): Promise<{ [index: string]: any } | null> {
+  const response = await api
+    .get("/search?q=" + searchReq)
+    .catch((err: { response?: { status: number; data: any } }) => err?.response);
 
   if (response && response.status === 200) {
-    setSearchResponse(response.data);
-  } else {
-    alert("Error: " + response?.status + " - " + response?.data?.error);
+    return response.data;
   }
+  alert("Error: " + response?.status + " - " + response?.data?.error);
+  return null;
 }
 
 export function filterResponse(searchResponse: { [index: string]: any }) {

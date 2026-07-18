@@ -63,6 +63,12 @@ export function ScrollableContainer({
 
 export type ZoomableHandle = {
   centerOnElement: (el: HTMLElement) => void;
+  /** After layout change, shift pan so `el`'s center stays at the given client point. */
+  keepElementAtClientPoint: (
+    el: HTMLElement,
+    clientX: number,
+    clientY: number,
+  ) => void;
 };
 
 /** Pan/zoom viewport: wheel zooms toward cursor, drag pans. No native scrollbars. */
@@ -97,6 +103,17 @@ export const ZoomableContainer = forwardRef<
       const newPan = {
         x: vRect.width / 2 - elCenterX * s,
         y: vRect.height / 2 - elCenterY * s,
+      };
+      panRef.current = newPan;
+      setPan(newPan);
+    },
+    keepElementAtClientPoint: (el, clientX, clientY) => {
+      const eRect = el.getBoundingClientRect();
+      const elClientX = eRect.left + eRect.width / 2;
+      const elClientY = eRect.top + eRect.height / 2;
+      const newPan = {
+        x: panRef.current.x + (clientX - elClientX),
+        y: panRef.current.y + (clientY - elClientY),
       };
       panRef.current = newPan;
       setPan(newPan);

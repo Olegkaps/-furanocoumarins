@@ -8,6 +8,22 @@ let config = {
     "TREE_LEAF_ROW_PX": 34,
     /** Extra vertical gap between sibling subtrees (px); leaves in different branches get this separation. */
     "TREE_BRANCH_GAP_PX": 18,
+    /** Max number of queries to compare at once (including the primary). */
+    "MAX_COMPARE_QUERIES": 4,
+    /**
+     * 8 high-contrast colors for compare-query chips. Assigned randomly without
+     * reuse inside the active set (see allocateCompareColor).
+     */
+    "COMPARE_QUERY_COLORS": [
+        "#D97706",
+        "#2563EB",
+        "#16A34A",
+        "#DC2626",
+        "#0891B2",
+        "#CA8A04",
+        "#9A3412",
+        "#1E3A8A",
+    ],
 }
 
 

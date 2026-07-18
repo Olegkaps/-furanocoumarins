@@ -1,13 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ChevronRight, ArrowUpRightFromSquare } from "@gravity-ui/icons";
-import { fetchSearchResult } from "./searchApi";
 
-export function SearchLine({
-  setSearchResponse,
-}: {
-  setSearchResponse: React.Dispatch<React.SetStateAction<{ [index: string]: any }>>;
-}) {
+/** Search form that only updates the URL; data loading is owned by useCompareSeries. */
+export function SearchLine() {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("query") ?? "";
   const [request, setRequest] = useState(query);
@@ -16,27 +12,11 @@ export function SearchLine({
     setRequest(query);
   }, [query]);
 
-  useEffect(() => {
-    if (query === "") {
-      setSearchResponse({});
-      return;
-    }
-    let cancelled = false;
-    fetchSearchResult(null, query, (data) => {
-      if (!cancelled) {
-        setSearchResponse(data);
-      }
-    }).then(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [query, setSearchResponse]);
-
   return (
     <div className="card">
       <form
         className="main_form"
-        onSubmit={async (e) => {
+        onSubmit={(e) => {
           e.preventDefault();
           setSearchParams((prev) => {
             const next = new URLSearchParams(prev);
@@ -58,7 +38,12 @@ export function SearchLine({
         />
         <div className="search-submit" title="Search">
           <ChevronRight width={22} height={22} style={{ color: "white" }} />
-          <input type="submit" value="" id="search-button" aria-label="Submit search" />
+          <input
+            type="submit"
+            value=""
+            id="search-button"
+            aria-label="Submit search"
+          />
         </div>
       </form>
     </div>
@@ -77,7 +62,7 @@ export function SearchLink({ path, text }: { path: string; text: string }) {
       <Link
         to={{
           pathname: path,
-          search: "?query=" + searchParams.get("query"),
+          search: searchParams.toString() ? `?${searchParams.toString()}` : "",
         }}
         target="_blank"
       >

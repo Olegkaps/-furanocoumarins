@@ -1,28 +1,36 @@
-import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { isEmpty } from "../shared/api";
 import FullNavigation from "../FullNavigation/FullNavigation";
 import { SearchLine, EmptyResponse, SearchLink } from "./SearchLine";
 import { filterResponse } from "./searchApi";
 import ResultTableOrNull from "./ResultTable";
+import { useCompareSeries } from "./QueryCompareBar";
 
 export function AppResultTable() {
-  const [searchResponse, setSearchResponse] = useState<{ [index: string]: any }>({});
-  const filteredResponse = filterResponse(searchResponse);
+  const [searchParams] = useSearchParams();
+  const primaryQuery = searchParams.get("query") ?? "";
+  const { series, colorsByQuery, primaryRaw } = useCompareSeries(primaryQuery);
+  const filteredResponse = filterResponse(primaryRaw);
 
   return (
     <>
       <FullNavigation />
       <div className="page-toolbar">
-        <SearchLine setSearchResponse={setSearchResponse} />
-        {!isEmpty(searchResponse) &&
-          (searchResponse["data"]?.length === 0 ? (
+        <SearchLine />
+        {!isEmpty(primaryRaw) &&
+          (primaryRaw["data"]?.length === 0 ? (
             <EmptyResponse />
           ) : (
             <SearchLink path="/tree" text="Phylogenetic Tree" />
           ))}
       </div>
       <br />
-      <ResultTableOrNull {...filteredResponse} />
+      <ResultTableOrNull
+        {...filteredResponse}
+        compareSeries={series}
+        colorsByQuery={colorsByQuery}
+        primaryQuery={primaryQuery}
+      />
       <br />
     </>
   );

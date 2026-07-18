@@ -540,7 +540,7 @@ tfoot td {
   justify-content: center;
   gap: 16px 28px;
   margin: 0 auto 12px;
-  max-width: 920px;
+  max-width: 1100px;
   padding: 12px 16px;
 }
 
@@ -601,13 +601,14 @@ tfoot td {
 .tree-branch-label-wrap {
   position: relative;
   top: -35px;
-  right: -28px;
+  left: 44px;
   height: 0;
   pointer-events: none;
 }
 
 .tree-branch-label {
   position: absolute;
+  left: 0;
   font-weight: 600;
   line-height: 1.25;
   margin: 0;
@@ -632,6 +633,16 @@ tfoot td {
   unicode-bidi: bidi-override;
 }
 
+.tree-branch-line {
+  position: relative;
+  height: 0;
+  z-index: 0;
+}
+
+.tree-branch-hr {
+  display: block;
+}
+
 .tree-branch-count {
   position: relative;
   height: 0;
@@ -640,38 +651,72 @@ tfoot td {
 
 .tree-branch-actions {
   position: relative;
-  top: -15px;
-  right: 28px;
+  /* Sit on the hr (branch line); counts self-center with translateY(-50%). */
+  top: 0;
+  right: 4px;
   height: 0;
   display: flex;
   align-items: center;
   gap: 4px;
   justify-content: flex-end;
   pointer-events: none;
+  z-index: 4;
 }
 
 .tree-branch-actions > * {
   pointer-events: auto;
 }
 
+/* Compact on the branch; expands on hover. Hit target stays full-size. */
 .tree-subtree-toggle {
+  position: absolute;
+  left: 38%;
+  top: 0;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
   padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-surface-alt);
+  margin: 0;
+  border: none;
+  background: transparent;
   color: var(--color-ink);
   cursor: pointer;
-  flex-shrink: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
 }
 
-.tree-subtree-toggle:hover {
+.tree-subtree-toggle__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  background: var(--color-surface);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-surface) 80%, transparent);
+  transform: scale(0.65);
+  transform-origin: center;
+  transition:
+    transform 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease,
+    background 0.14s ease;
+}
+
+.tree-subtree-toggle:hover .tree-subtree-toggle__icon,
+.tree-subtree-toggle:focus-visible .tree-subtree-toggle__icon {
+  transform: scale(1);
   border-color: var(--color-accent);
   color: var(--color-accent);
+  background: var(--color-surface-alt);
+}
+
+.tree-subtree-toggle:focus-visible {
+  outline: none;
 }
 
 .tree-sibling-gap {
@@ -760,37 +805,234 @@ tfoot td {
   font-size: 0.75rem;
 }
 
-.tree-count-chip {
+.tree-count-block {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
   position: absolute;
-  white-space: nowrap;
-  width: auto;
-  min-width: 44px;
-  padding: 3px 8px;
-  background: var(--color-surface-alt);
-  color: var(--color-accent);
+  top: 0;
+  left: 0;
+  z-index: 5;
+  /* Vertically center the block on the branch line. */
+  transform: translateY(-50%);
+  padding: 3px 5px;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
+  text-decoration: none;
+  color: var(--color-accent);
   font-weight: 700;
   font-size: inherit;
   line-height: 1.2;
-  text-decoration: none;
+  white-space: nowrap;
 }
 
-.tree-count-chip--link {
-  color: var(--color-accent);
+.tree-count-block--single {
+  min-width: 2.75em;
 }
 
-.tree-count-chip--link:hover {
+/* 2×2 (or wider) grids: keep vertical center; shift left so the cluster
+   sits on the branch tip instead of hanging past it to the right. */
+.tree-count-block--multi {
+  transform: translate(-36px, -50%);
+}
+
+.tree-count-block--link {
+  border-style: dashed;
+  cursor: pointer;
+}
+
+.tree-count-block--link:hover {
+  border-style: solid;
   border-color: var(--color-accent);
   background: var(--color-surface);
 }
 
+.tree-count-block__frame {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.tree-count-block__frame-icon {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  padding: 1px;
+  color: var(--color-accent);
+  background: var(--color-surface);
+  border-radius: 2px;
+  opacity: 0.35;
+}
+
+.tree-count-block--link:hover .tree-count-block__frame-icon {
+  opacity: 0.9;
+}
+
 .tree-count-chip__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75em;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.tree-count-chip__series {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(2.75em, auto));
+  gap: 3px;
+  align-items: center;
+  justify-items: stretch;
+}
+
+.tree-count-chip__num--series {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75em;
+  padding: 2px 4px;
+  border: 1px solid;
+  border-radius: 3px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  background: var(--color-surface);
+}
+
+.ranked-select-list__series {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.ranked-select-list__series-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  padding: 1px 6px;
+  border: 1px solid;
+  border-radius: 3px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.85em;
+}
+
+.tree-toolbar__group--compare {
+  flex: 1 1 280px;
+  max-width: 420px;
+}
+
+.panel-toolbar__compare {
+  flex: 1 1 280px;
+  max-width: 420px;
+  min-width: 220px;
+}
+
+.query-compare-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.query-compare-bar__title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.query-compare-bar__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.query-compare-bar__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  background: var(--color-surface-alt);
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+}
+
+.query-compare-bar__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--color-ink) 20%, transparent);
+}
+
+.query-compare-bar__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  font-family: ui-monospace, monospace;
+}
+
+.query-compare-bar__tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.query-compare-bar__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.query-compare-bar__remove:hover {
+  color: var(--color-danger);
+  background: var(--color-surface);
+}
+
+.query-compare-bar__add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.query-compare-bar__add input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  background: var(--color-surface);
+}
+
+.query-compare-bar__hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-muted);
 }
 
 .tree-viewport {
