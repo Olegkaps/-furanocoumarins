@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Magnifier, Molecule, BranchesRight } from "@gravity-ui/icons";
 import { api } from "../shared/api";
+import { cachedGet } from "../shared/apiCache";
 import { useNavigate } from "react-router-dom";
 import Autocomplete from "./Autocomplete";
 import FullNavigation from "../FullNavigation/FullNavigation";
@@ -53,11 +54,13 @@ function SearchApp() {
   const navigate = useNavigate();
 
   const fetchMetadata = async () => {
-    const response = await api.get('/metadata').catch((err) => {return err.response});
-    setMetadata(response.data["metadata"]);
+    const response = await cachedGet("/metadata").catch(
+      (err) => err.response,
+    );
+    setMetadata(response?.data?.["metadata"] ?? []);
 
     if (response?.status >= 400) {
-      alert('Error request')
+      alert("Error request");
     }
   };
 

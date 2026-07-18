@@ -1,4 +1,5 @@
-import { api, isEmpty } from "../shared/api";
+import { isEmpty } from "../shared/api";
+import { cachedSearch } from "../shared/apiCache";
 
 export async function fetchSearchResult(
   e: React.FormEvent | null,
@@ -16,9 +17,9 @@ export async function fetchSearchResult(
 export async function fetchSearchData(
   searchReq: string,
 ): Promise<{ [index: string]: any } | null> {
-  const response = await api
-    .get("/search?q=" + searchReq)
-    .catch((err: { response?: { status: number; data: any } }) => err?.response);
+  const response = await cachedSearch(searchReq).catch(
+    (err: { response?: { status: number; data: any } }) => err?.response,
+  );
 
   if (response && response.status === 200) {
     return response.data;

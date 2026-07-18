@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUpRightFromSquare, Check, Copy } from "@gravity-ui/icons";
-import { api } from "../api";
+import { cachedGet } from "../apiCache";
 import {
   doiHref,
   fetchArticleBibtex,
@@ -14,7 +14,9 @@ import "./CitationPopover.css";
 
 async function loadBibtex(articleId: string): Promise<string> {
   return fetchArticleBibtex(articleId, async (id) => {
-    const res = await api.get(`/article/${encodeURIComponent(id)}`).catch((err) => err.response);
+    const res = await cachedGet(`/article/${encodeURIComponent(id)}`).catch(
+      (err) => err.response,
+    );
     if (!res || res.status >= 400) {
       throw new Error(res?.data?.error ?? `Failed to load ${id}`);
     }

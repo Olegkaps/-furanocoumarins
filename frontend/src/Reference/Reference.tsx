@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { ArrowUpRightFromSquare, Check, Copy } from "@gravity-ui/icons";
-import { api } from "../shared/api";
+import { cachedGet } from "../shared/apiCache";
 import FullNavigation from "../FullNavigation/FullNavigation";
 import {
   doiHref,
@@ -19,8 +19,7 @@ export function Reference() {
   useEffect(() => {
     if (!article_id) return;
     let cancelled = false;
-    api
-      .get("/article/" + encodeURIComponent(article_id))
+    cachedGet("/article/" + encodeURIComponent(article_id))
       .catch((err) => err.response)
       .then((res) => {
         if (cancelled) return;

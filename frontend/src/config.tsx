@@ -24,6 +24,8 @@ let config = {
         "#9A3412",
         "#1E3A8A",
     ],
+    /** Client-side TTL for cached GET /search, /metadata, /article (ms). */
+    "API_CACHE_TTL_MS": 30 * 60 * 1000,
 }
 
 

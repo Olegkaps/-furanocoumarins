@@ -19,6 +19,83 @@ export type CompareSeries = {
   fetchedAt: string;
 };
 
+type CompareLoadSnapshot = {
+  raw: Record<string, { [index: string]: any }>;
+  at: Record<string, string>;
+};
+
+type CompareLoadListener = (snap: CompareLoadSnapshot, done: boolean) => void;
+
+type CompareLoadEntry = {
+  listeners: Set<CompareLoadListener>;
+  partial: CompareLoadSnapshot;
+  done: boolean;
+  promise: Promise<CompareLoadSnapshot>;
+};
+
+/**
+ * Shared sequential loader keyed by the query list. Survives React Strict Mode
+ * remounts so we do not abort after the first request and re-hit the network
+ * for the rest (cache stays authoritative for warm reloads).
+ */
+const compareLoads = new Map<string, CompareLoadEntry>();
+
+function subscribeCompareLoad(
+  queries: string[],
+  onUpdate: CompareLoadListener,
+): () => void {
+  const key = queries.join("\u0001");
+  let entry = compareLoads.get(key);
+
+  if (!entry) {
+    const listeners = new Set<CompareLoadListener>();
+    const partial: CompareLoadSnapshot = { raw: {}, at: {} };
+    const entryRef: CompareLoadEntry = {
+      listeners,
+      partial,
+      done: false,
+      promise: Promise.resolve(partial),
+    };
+
+    entryRef.promise = (async () => {
+      for (const q of queries) {
+        const data = await fetchSearchData(q);
+        if (data != null) {
+          partial.raw[q] = data;
+          partial.at[q] = new Date().toISOString();
+          const snap = {
+            raw: { ...partial.raw },
+            at: { ...partial.at },
+          };
+          listeners.forEach((l) => l(snap, false));
+        }
+      }
+      entryRef.done = true;
+      const finalSnap = {
+        raw: { ...partial.raw },
+        at: { ...partial.at },
+      };
+      listeners.forEach((l) => l(finalSnap, true));
+      return finalSnap;
+    })();
+    // Keep finished loads in the map for the tab lifetime so Strict Mode
+    // remounts reuse results without touching the network again.
+
+    compareLoads.set(key, entryRef);
+    entry = entryRef;
+  }
+
+  entry.listeners.add(onUpdate);
+  onUpdate(
+    { raw: { ...entry.partial.raw }, at: { ...entry.partial.at } },
+    entry.done,
+  );
+
+  return () => {
+    entry?.listeners.delete(onUpdate);
+  };
+}
+
 export function useCompareSeries(primaryQuery: string): {
   series: CompareSeries[];
   colorsByQuery: Record<string, string>;
@@ -66,44 +143,19 @@ export function useCompareSeries(primaryQuery: string): {
   }, [queriesKey]);
 
   useEffect(() => {
-    let cancelled = false;
+    if (allQueries.length === 0) {
+      setRawByQuery({});
+      setFetchedAtByQuery({});
+      setLoading(false);
+      return;
+    }
 
-    (async () => {
-      if (allQueries.length === 0) {
-        setRawByQuery({});
-        setFetchedAtByQuery({});
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      const nextRaw: Record<string, { [index: string]: any }> = {};
-      const nextAt: Record<string, string> = {};
-
-      // Sequential fetches to avoid stampeding the backend on reload / compare.
-      for (const q of allQueries) {
-        if (cancelled) return;
-        const data = await fetchSearchData(q);
-        if (cancelled) return;
-        if (data != null) {
-          nextRaw[q] = data;
-          nextAt[q] = new Date().toISOString();
-          // Publish incrementally so the primary result can render before extras finish.
-          setRawByQuery({ ...nextRaw });
-          setFetchedAtByQuery({ ...nextAt });
-        }
-      }
-
-      if (!cancelled) {
-        setRawByQuery(nextRaw);
-        setFetchedAtByQuery(nextAt);
-        setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    setLoading(true);
+    return subscribeCompareLoad(allQueries, (snap, done) => {
+      setRawByQuery(snap.raw);
+      setFetchedAtByQuery(snap.at);
+      if (done) setLoading(false);
+    });
   }, [queriesKey]);
 
   const primary = primaryQuery.trim();
