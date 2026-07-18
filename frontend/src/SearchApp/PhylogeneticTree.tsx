@@ -988,6 +988,76 @@ function ancestorIdsOf(pathId: string): string[] {
   return ids;
 }
 
+function pathLeaf(pathId: string): string {
+  const parts = pathId.split(PATH_SEP);
+  return parts[parts.length - 1] ?? pathId;
+}
+
+function collectPathIds(
+  node: PhilogeneticTreeNode,
+  pathId: string,
+  out: Set<string>,
+): void {
+  out.add(pathId);
+  Object.keys(node.childs).forEach((name) => {
+    collectPathIds(node.childs[name], `${pathId}${PATH_SEP}${name}`, out);
+  });
+}
+
+function displayTipPathId(
+  pathLabels: string[],
+  tip: PhilogeneticTreeNode,
+): string {
+  return (
+    pathLabels.filter((p) => !isBlankClade(p)).join(PATH_SEP) ||
+    (isBlankClade(tip.clade_name) ? "__root__" : tip.clade_name)
+  );
+}
+
+/**
+ * Keep collapsed nodes that still exist after a tree rebuild.
+ * If a full path disappeared (e.g. classification tag change) but exactly one
+ * node shares the same clade leaf name, remap to that path.
+ */
+function pruneCollapsedIds(
+  prev: Set<string>,
+  valid: Set<string>,
+): Set<string> {
+  if (prev.size === 0) return prev;
+
+  const byLeaf = new Map<string, string[]>();
+  valid.forEach((id) => {
+    const leaf = pathLeaf(id);
+    if (isBlankClade(leaf) || leaf === "__root__") return;
+    const list = byLeaf.get(leaf);
+    if (list) list.push(id);
+    else byLeaf.set(leaf, [id]);
+  });
+
+  const next = new Set<string>();
+  prev.forEach((id) => {
+    if (valid.has(id)) {
+      next.add(id);
+      return;
+    }
+    const leaf = pathLeaf(id);
+    if (isBlankClade(leaf) || leaf === "__root__") return;
+    const candidates = byLeaf.get(leaf);
+    if (candidates?.length === 1) {
+      next.add(candidates[0]);
+    }
+  });
+
+  if (next.size === prev.size) {
+    let same = true;
+    next.forEach((id) => {
+      if (!prev.has(id)) same = false;
+    });
+    if (same) return prev;
+  }
+  return next;
+}
+
 function TreeFindBar({
   open,
   onClose,
@@ -1196,8 +1266,16 @@ function PhilogeneticTree({
   ]);
 
   useEffect(() => {
-    setCollapsedIds(new Set());
-  }, [displayFrom, displayTo, countMode]);
+    if (!treeModel) return;
+    const { pathLabels, tip, projected } = treeModel;
+    const valid = new Set<string>();
+    if (pathLabels.length > 0) {
+      collectPathIds(tip, displayTipPathId(pathLabels, tip), valid);
+    } else {
+      collectPathIds(projected, "__root__", valid);
+    }
+    setCollapsedIds((prev) => pruneCollapsedIds(prev, valid));
+  }, [treeModel]);
 
   const toggleCollapsed = useCallback(
     (id: string, pin?: { clientX: number; clientY: number }) => {

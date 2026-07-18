@@ -1159,6 +1159,78 @@ tfoot td {
   color: var(--color-muted);
 }
 
+.query-history {
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.query-history__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.query-history__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.query-history__list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.query-history__card {
+  padding: 12px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.query-history__card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.query-history__time {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.query-history__count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.query-history__queries {
+  margin-bottom: 10px;
+}
+
+.query-history__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.query-history__actions .btn {
+  text-decoration: none;
+}
+
 .tree-viewport {
   width: calc(100vw - 16px);
   margin-left: calc(50% - 50vw + 8px);

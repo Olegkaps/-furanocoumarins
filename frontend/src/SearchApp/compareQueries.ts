@@ -26,6 +26,18 @@ export function serializeCompareQueries(queries: string[]): string | null {
   return JSON.stringify(cleaned);
 }
 
+/** Build `?query=…&cmp=…` for primary + extras (primary first). */
+export function buildCompareSearchParams(queries: string[]): string {
+  const cleaned = queries.map((q) => q.trim()).filter(Boolean);
+  if (cleaned.length === 0) return "";
+  const [primary, ...extras] = cleaned;
+  const params = new URLSearchParams();
+  params.set("query", primary);
+  const cmp = serializeCompareQueries(extras);
+  if (cmp != null) params.set(CMP_PARAM, cmp);
+  return params.toString();
+}
+
 export function readCompareQueriesFromParams(
   searchParams: URLSearchParams,
 ): string[] {

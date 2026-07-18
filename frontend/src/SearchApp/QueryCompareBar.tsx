@@ -10,6 +10,7 @@ import {
 } from "./compareQueries";
 import { fetchSearchData, filterResponse } from "./searchApi";
 import { isEmpty } from "../shared/api";
+import { recordQueryHistory } from "../shared/queryHistory";
 
 export type CompareSeries = {
   query: string;
@@ -69,6 +70,14 @@ function subscribeCompareLoad(
           };
           listeners.forEach((l) => l(snap, false));
         }
+      }
+      const fetched = queries.filter((q) => partial.raw[q] != null);
+      if (fetched.length > 0) {
+        const lastAt =
+          fetched.map((q) => partial.at[q]).filter(Boolean).at(-1) ??
+          new Date().toISOString();
+        // One history row per load (full group), not a prefix per sequential fetch.
+        recordQueryHistory(fetched, lastAt);
       }
       entryRef.done = true;
       const finalSnap = {
@@ -180,6 +189,60 @@ export function useCompareSeries(primaryQuery: string): {
   return { series, colorsByQuery, extraQueries, primaryRaw, loading };
 }
 
+export function CompareQueriesDisplay({
+  queries,
+  colorsByQuery,
+  onRemove,
+}: {
+  /** Primary first, then extras. */
+  queries: string[];
+  colorsByQuery: Record<string, string>;
+  /** When set, extras (not primary) show a remove control. */
+  onRemove?: (query: string) => void;
+}) {
+  if (queries.length === 0) return null;
+  const [primary, ...extras] = queries;
+
+  return (
+    <ul className="query-compare-bar__list">
+      {primary !== "" && (
+        <li className="query-compare-bar__item">
+          <span
+            className="query-compare-bar__swatch"
+            style={{ background: colorsByQuery[primary] }}
+          />
+          <span className="query-compare-bar__text" title={primary}>
+            {primary}
+          </span>
+          <span className="query-compare-bar__tag">primary</span>
+        </li>
+      )}
+      {extras.map((q) => (
+        <li key={q} className="query-compare-bar__item">
+          <span
+            className="query-compare-bar__swatch"
+            style={{ background: colorsByQuery[q] }}
+          />
+          <span className="query-compare-bar__text" title={q}>
+            {q}
+          </span>
+          {onRemove && (
+            <button
+              type="button"
+              className="query-compare-bar__remove"
+              title="Remove query"
+              aria-label={`Remove ${q}`}
+              onClick={() => onRemove(q)}
+            >
+              <Xmark width={14} height={14} />
+            </button>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function QueryCompareBar({
   primaryQuery,
   colorsByQuery,
@@ -219,6 +282,8 @@ export function QueryCompareBar({
     return null;
   }
 
+  const listQueries = primary !== "" ? [primary, ...extras] : extras;
+
   return (
     <NewFeatureHint
       label="New"
@@ -257,40 +322,11 @@ export function QueryCompareBar({
             </button>
           </div>
         )}
-        <ul className="query-compare-bar__list">
-          {primary !== "" && (
-            <li className="query-compare-bar__item">
-              <span
-                className="query-compare-bar__swatch"
-                style={{ background: colorsByQuery[primary] }}
-              />
-              <span className="query-compare-bar__text" title={primary}>
-                {primary}
-              </span>
-              <span className="query-compare-bar__tag">primary</span>
-            </li>
-          )}
-          {extras.map((q) => (
-            <li key={q} className="query-compare-bar__item">
-              <span
-                className="query-compare-bar__swatch"
-                style={{ background: colorsByQuery[q] }}
-              />
-              <span className="query-compare-bar__text" title={q}>
-                {q}
-              </span>
-              <button
-                type="button"
-                className="query-compare-bar__remove"
-                title="Remove query"
-                aria-label={`Remove ${q}`}
-                onClick={() => remove(q)}
-              >
-                <Xmark width={14} height={14} />
-              </button>
-            </li>
-          ))}
-        </ul>
+        <CompareQueriesDisplay
+          queries={listQueries}
+          colorsByQuery={colorsByQuery}
+          onRemove={remove}
+        />
       </div>
     </NewFeatureHint>
   );

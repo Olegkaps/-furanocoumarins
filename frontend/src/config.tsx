@@ -26,6 +26,8 @@ let config = {
     ],
     /** Client-side TTL for cached GET /search, /metadata, /article (ms). */
     "API_CACHE_TTL_MS": 30 * 60 * 1000,
+    /** Keep query-history groups for this long (default ~1.5 years). */
+    "QUERY_HISTORY_RETENTION_MS": 18 * 30 * 24 * 60 * 60 * 1000,
     /** Developer initials shown in the site footer (replace the placeholder). */
     "DEVELOPER_INITIALS": "🍩 Oleg Kapshayi",
 }
