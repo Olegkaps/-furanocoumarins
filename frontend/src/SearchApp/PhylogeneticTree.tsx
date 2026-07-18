@@ -1,9 +1,17 @@
 import { useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isEmpty } from "../shared/api";
-import { ZoomableContainer } from "../shared/ui";
+import { ZoomableContainer, type ZoomableHandle } from "../shared/ui";
 import config from "../config";
-import { ArrowUpRightFromSquare } from "@gravity-ui/icons";
+import {
+  ArrowUpRightFromSquare,
+  ChevronDown,
+  ChevronRight,
+  FontCase,
+  Magnifier,
+  Xmark,
+} from "@gravity-ui/icons";
 import { InfoTip } from "../shared/ui/InfoTip";
 
 class Specie {
@@ -14,6 +22,19 @@ class Specie {
     this.values_count = count;
     this.clades = clades;
   }
+}
+
+const PATH_SEP = "›";
+
+type TreeViewCtx = {
+  collapsedIds: Set<string>;
+  toggleCollapsed: (id: string) => void;
+  matchIds: Set<string>;
+  activeMatchId: string | null;
+};
+
+function isBlankClade(name: string): boolean {
+  return name.replaceAll(" ", "") === "";
 }
 
 class PhilogeneticTreeNode {
@@ -74,12 +95,12 @@ class PhilogeneticTreeNode {
     child_ind: number = 0,
     total_bros: number = 0,
     displayName?: string,
+    ctx?: TreeViewCtx,
+    nodePath: string = "",
   ) {
     const rawLabel = displayName ?? this.clade_name;
     const segmentCount = countCollapsedSegments(rawLabel);
     const isCollapsedPath = segmentCount > 1 || this.is_path_stem;
-    // Collapsed paths keep spaces as nbsp so segments stay on one line while truncating.
-    // Plain labels keep real spaces so long names can wrap.
     const label = isCollapsedPath
       ? rawLabel.replace(/ /g, "\u00A0")
       : rawLabel;
@@ -90,12 +111,16 @@ class PhilogeneticTreeNode {
       return cb - ca || a.localeCompare(b);
     });
 
-    const childCount = Object.keys(this.childs).length;
+    const pathId =
+      nodePath ||
+      (isBlankClade(this.clade_name) ? "__root__" : this.clade_name);
+    const childCount = childNames.length;
+    const subtreeHidden = ctx?.collapsedIds.has(pathId) ?? false;
+    const canToggleSubtree = childCount > 1;
+
     const wouldHideCount =
       (childCount <= 1 && total_bros === 1) ||
       (meta_ind === 1 && total_bros === 1);
-    // Exception: empty rank then a named clade of unary length 1 (e.g. after
-    // truncating display so "" / X becomes a leaf) — still show the link on X.
     const showCount =
       !wouldHideCount ||
       (this.after_empty_rank && this.clade_name.replaceAll(" ", "") !== "");
@@ -103,6 +128,10 @@ class PhilogeneticTreeNode {
     const fullTitle = displayName
       ? displayName.replace(/\u00A0/g, " ")
       : meta_names[meta_ind] || rawLabel;
+
+    const searchText = fullTitle.replace(/\u00A0/g, " ").trim();
+    const isMatch = ctx?.matchIds.has(pathId) ?? false;
+    const isActiveMatch = ctx?.activeMatchId === pathId;
 
     return (
       <div
@@ -113,7 +142,13 @@ class PhilogeneticTreeNode {
         }}
       >
         <div
-          className="tree-branch-cell"
+          className={
+            "tree-branch-cell" +
+            (isMatch ? " is-search-match" : "") +
+            (isActiveMatch ? " is-search-active" : "")
+          }
+          data-tree-node-id={pathId}
+          data-tree-search-text={searchText}
           style={{
             display: "table-cell",
             verticalAlign: "middle",
@@ -154,36 +189,68 @@ class PhilogeneticTreeNode {
               )}
             </p>
           </div>
-          {showCount && (
-            <div className="tree-branch-count">
-              <CountButton
-                number={this.childs_num}
-                clade_key={this.link_key || meta[meta_ind] || ""}
-                clade_val={this.link_val || this.clade_name}
-                plain={this.is_path_stem}
-              />
-            </div>
-          )}
+          <div className="tree-branch-actions">
+            {canToggleSubtree && ctx && (
+              <button
+                type="button"
+                className="tree-subtree-toggle"
+                title={subtreeHidden ? "Expand subtree" : "Collapse subtree"}
+                aria-label={subtreeHidden ? "Expand subtree" : "Collapse subtree"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ctx.toggleCollapsed(pathId);
+                }}
+              >
+                {subtreeHidden ? (
+                  <ChevronRight width={14} height={14} />
+                ) : (
+                  <ChevronDown width={14} height={14} />
+                )}
+              </button>
+            )}
+            {showCount && (
+              <div className="tree-branch-count">
+                <CountButton
+                  number={this.childs_num}
+                  clade_key={this.link_key || meta[meta_ind] || ""}
+                  clade_val={this.link_val || this.clade_name}
+                  plain={this.is_path_stem}
+                />
+              </div>
+            )}
+          </div>
           <TreeCladesAdapter
             drawLeftBorder={meta_ind === 0 || child_ind === total_bros - 1}
           />
         </div>
         <div style={{ display: "table-cell", verticalAlign: "middle" }}>
-          {isEmpty(this.childs) || !this.is_visible ? (
-            <div></div>
+          {isEmpty(this.childs) || !this.is_visible || subtreeHidden ? (
+            <div>
+              {subtreeHidden && canToggleSubtree && (
+                <span className="tree-subtree-hidden-hint">
+                  {childCount} branches hidden
+                </span>
+              )}
+            </div>
           ) : (
             <div>
-              {childNames.map((name, ind) => (
-                <div key={name}>
-                  {this.childs[name].render(
-                    meta,
-                    meta_names,
-                    meta_ind + 1,
-                    ind,
-                    childNames.length,
-                  )}
-                </div>
-              ))}
+              {childNames.map((name, ind) => {
+                const childPath = `${pathId}${PATH_SEP}${name}`;
+                return (
+                  <div key={name}>
+                    {this.childs[name].render(
+                      meta,
+                      meta_names,
+                      meta_ind + 1,
+                      ind,
+                      childNames.length,
+                      undefined,
+                      ctx,
+                      childPath,
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -232,10 +299,6 @@ function ensureChild(
   return parent.childs[name];
 }
 
-function isBlankClade(name: string): boolean {
-  return name.replaceAll(" ", "") === "";
-}
-
 /**
  * Build a display-only tree: levels before `fromLevel` become a path stem,
  * levels after `toLevel` are omitted. Counts are copied from the source tree.
@@ -251,12 +314,22 @@ function projectTreeForDisplay(
   const walk = (
     orig: PhilogeneticTreeNode,
     depth: number,
+    /** Ancestor names only (not including `orig`). */
     prefix: string[],
     dParent: PhilogeneticTreeNode,
+    sourceParent: PhilogeneticTreeNode,
   ) => {
     if (depth < fromLevel) {
       Object.values(orig.childs).forEach((child) => {
-        walk(child, depth + 1, [...prefix, child.clade_name], dParent);
+        walk(
+          child,
+          depth + 1,
+          isBlankClade(orig.clade_name)
+            ? prefix
+            : [...prefix, orig.clade_name],
+          dParent,
+          orig,
+        );
       });
       return;
     }
@@ -267,13 +340,12 @@ function projectTreeForDisplay(
 
     let attach = dParent;
     if (depth === fromLevel && prefix.length > 0) {
-      const stemName = prefix
-        .filter((p) => !isBlankClade(p))
-        .join(" / ");
+      const stemName = prefix.filter((p) => !isBlankClade(p)).join(" / ");
       if (stemName) {
         const stem = ensureChild(dParent, stemName);
         stem.is_path_stem = true;
-        stem.childs_num = Math.max(stem.childs_num, orig.childs_num);
+        // Stem represents the folded ancestors — use the parent's count.
+        stem.childs_num = Math.max(stem.childs_num, sourceParent.childs_num);
         stem.link_key = "";
         stem.link_val = stemName;
         attach = stem;
@@ -295,14 +367,15 @@ function projectTreeForDisplay(
 
     if (depth < toLevel) {
       Object.values(orig.childs).forEach((child) => {
-        walk(child, depth + 1, [], dNode);
+        walk(child, depth + 1, [], dNode, orig);
       });
     }
   };
 
   Object.values(sourceRoot.childs).forEach((child) => {
-    walk(child, 0, [], displayRoot);
+    walk(child, 0, [], displayRoot, sourceRoot);
   });
+  displayRoot.childs_num = sourceRoot.childs_num;
   recomputeCladesNum(displayRoot);
   return displayRoot;
 }
@@ -483,6 +556,188 @@ function assignUniqueCountsToTree(
   });
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildFindRegex(
+  query: string,
+  opts: { matchCase: boolean; regex: boolean; wholeWord: boolean },
+): RegExp | null {
+  if (query === "") return null;
+  try {
+    let source = opts.regex ? query : escapeRegExp(query);
+    if (opts.wholeWord) {
+      source = `(?<![\\w])(?:${source})(?![\\w])`;
+    }
+    return new RegExp(source, opts.matchCase ? "g" : "gi");
+  } catch {
+    return null;
+  }
+}
+
+type SearchableNode = { id: string; text: string };
+
+function collectSearchableNodes(
+  node: PhilogeneticTreeNode,
+  pathId: string,
+  displayName: string | undefined,
+  out: SearchableNode[],
+) {
+  const text = (displayName ?? node.clade_name).replace(/\u00A0/g, " ").trim();
+  if (text !== "") {
+    out.push({ id: pathId, text });
+    // Also index path segments for collapsed labels
+    text.split(/\s*\/\s*/).forEach((seg) => {
+      const t = seg.trim();
+      if (t && t !== text) out.push({ id: pathId, text: t });
+    });
+  }
+  Object.keys(node.childs)
+    .sort()
+    .forEach((name) => {
+      collectSearchableNodes(
+        node.childs[name],
+        `${pathId}${PATH_SEP}${name}`,
+        undefined,
+        out,
+      );
+    });
+}
+
+function ancestorIdsOf(pathId: string): string[] {
+  const parts = pathId.split(PATH_SEP);
+  const ids: string[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    ids.push(parts.slice(0, i).join(PATH_SEP));
+  }
+  return ids;
+}
+
+function TreeFindBar({
+  open,
+  onClose,
+  query,
+  setQuery,
+  matchCase,
+  setMatchCase,
+  useRegex,
+  setUseRegex,
+  wholeWord,
+  setWholeWord,
+  matchIndex,
+  matchCount,
+  onNext,
+  onPrev,
+}: {
+  open: boolean;
+  onClose: () => void;
+  query: string;
+  setQuery: (q: string) => void;
+  matchCase: boolean;
+  setMatchCase: (v: boolean) => void;
+  useRegex: boolean;
+  setUseRegex: (v: boolean) => void;
+  wholeWord: boolean;
+  setWholeWord: (v: boolean) => void;
+  matchIndex: number;
+  matchCount: number;
+  onNext: () => void;
+  onPrev: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="tree-find-bar"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onClose();
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          if (e.shiftKey) onPrev();
+          else onNext();
+        }
+      }}
+    >
+      <Magnifier width={16} height={16} aria-hidden />
+      <input
+        ref={inputRef}
+        type="text"
+        className="tree-find-bar__input"
+        placeholder="Find clade"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        aria-label="Find clade"
+      />
+      <span className="tree-find-bar__count">
+        {matchCount === 0 ? "No results" : `${matchIndex + 1} of ${matchCount}`}
+      </span>
+      <button
+        type="button"
+        className={`tree-find-bar__toggle${matchCase ? " is-active" : ""}`}
+        title="Match Case"
+        aria-pressed={matchCase}
+        onClick={() => setMatchCase(!matchCase)}
+      >
+        <FontCase width={14} height={14} />
+      </button>
+      <button
+        type="button"
+        className={`tree-find-bar__toggle${wholeWord ? " is-active" : ""}`}
+        title="Match Whole Word"
+        aria-pressed={wholeWord}
+        onClick={() => setWholeWord(!wholeWord)}
+      >
+        <span className="tree-find-bar__ab">Ab</span>
+      </button>
+      <button
+        type="button"
+        className={`tree-find-bar__toggle${useRegex ? " is-active" : ""}`}
+        title="Use Regular Expression"
+        aria-pressed={useRegex}
+        onClick={() => setUseRegex(!useRegex)}
+      >
+        <span className="tree-find-bar__re">.*</span>
+      </button>
+      <button
+        type="button"
+        className="tree-find-bar__nav"
+        title="Previous Match (⇧Enter)"
+        onClick={onPrev}
+      >
+        ↑
+      </button>
+      <button
+        type="button"
+        className="tree-find-bar__nav"
+        title="Next Match (Enter)"
+        onClick={onNext}
+      >
+        ↓
+      </button>
+      <button
+        type="button"
+        className="tree-find-bar__close"
+        title="Close (Esc)"
+        onClick={onClose}
+      >
+        <Xmark width={14} height={14} />
+      </button>
+    </div>
+  );
+}
+
 function PhilogeneticTree({
   species,
   meta,
@@ -504,41 +759,216 @@ function PhilogeneticTree({
   displayFrom: number;
   displayTo: number;
 }) {
-  if (species.length === 0) {
+  const zoomRef = useRef<ZoomableHandle>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [matchCase, setMatchCase] = useState(false);
+  const [useRegex, setUseRegex] = useState(false);
+  const [wholeWord, setWholeWord] = useState(false);
+  const [matchIndex, setMatchIndex] = useState(0);
+
+  const treeModel = useMemo(() => {
+    if (species.length === 0) return null;
+    const aggregateChildCounts = countMode === "all";
+    const root = new PhilogeneticTreeNode("");
+    for (const specie of species) {
+      root.add_child(specie.clades, specie.values_count, aggregateChildCounts);
+    }
+    if (countMode === "chemicals" || countMode === "articles") {
+      assignUniqueCountsToTree(
+        root,
+        [],
+        uniquesByClades,
+        smilesColumns,
+        refColumns,
+        countMode,
+      );
+    }
+    const maxLevel = Math.max(0, meta.length - 2);
+    const from = Math.max(0, Math.min(displayFrom, maxLevel));
+    const to = Math.max(from, Math.min(displayTo, maxLevel));
+    const projected = projectTreeForDisplay(root, meta, from, to);
+    const collapsed = collapseUnaryFromRoot(projected);
+    return { projected, ...collapsed, from, to };
+  }, [
+    species,
+    meta,
+    countMode,
+    uniquesByClades,
+    smilesColumns,
+    refColumns,
+    displayFrom,
+    displayTo,
+  ]);
+
+  useEffect(() => {
+    setCollapsedIds(new Set());
+  }, [displayFrom, displayTo, countMode]);
+
+  const toggleCollapsed = useCallback((id: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const searchable = useMemo(() => {
+    if (!treeModel) return [] as SearchableNode[];
+    const out: SearchableNode[] = [];
+    const { pathLabels, tip, projected } = treeModel;
+    if (pathLabels.length > 0) {
+      const tipId =
+        pathLabels.filter((p) => !isBlankClade(p)).join(PATH_SEP) ||
+        tip.clade_name;
+      collectSearchableNodes(tip, tipId, pathLabels.join(" / "), out);
+    } else {
+      collectSearchableNodes(projected, "__root__", "", out);
+    }
+    return out;
+  }, [treeModel]);
+
+  const matchIdsList = useMemo(() => {
+    const re = buildFindRegex(findQuery, {
+      matchCase,
+      regex: useRegex,
+      wholeWord,
+    });
+    if (!re) return [] as string[];
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    searchable.forEach(({ id, text }) => {
+      re.lastIndex = 0;
+      if (re.test(text) && !seen.has(id)) {
+        seen.add(id);
+        ids.push(id);
+      }
+    });
+    return ids;
+  }, [searchable, findQuery, matchCase, useRegex, wholeWord]);
+
+  useEffect(() => {
+    setMatchIndex(0);
+  }, [findQuery, matchCase, useRegex, wholeWord, matchIdsList.length]);
+
+  const activeMatchId =
+    matchIdsList.length > 0
+      ? matchIdsList[Math.min(matchIndex, matchIdsList.length - 1)]
+      : null;
+
+  const goMatch = useCallback(
+    (dir: 1 | -1) => {
+      if (matchIdsList.length === 0) return;
+      setMatchIndex(
+        (i) => (i + dir + matchIdsList.length) % matchIdsList.length,
+      );
+    },
+    [matchIdsList.length],
+  );
+
+  // Expand ancestors and center on active match
+  useEffect(() => {
+    if (!activeMatchId) return;
+    const ancestors = ancestorIdsOf(activeMatchId);
+    setCollapsedIds((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      ancestors.forEach((id) => {
+        if (next.has(id)) {
+          next.delete(id);
+          changed = true;
+        }
+      });
+      // Also expand the match node itself if it was collapsed
+      if (next.has(activeMatchId)) {
+        next.delete(activeMatchId);
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+
+    const t = window.setTimeout(() => {
+      const el = document.querySelector(
+        `[data-tree-node-id="${CSS.escape(activeMatchId)}"]`,
+      ) as HTMLElement | null;
+      if (el) zoomRef.current?.centerOnElement(el);
+    }, 50);
+    return () => window.clearTimeout(t);
+  }, [activeMatchId, matchIndex]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const isFind = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f";
+      if (isFind) {
+        e.preventDefault();
+        setFindOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  if (!treeModel || species.length === 0) {
     return <div></div>;
   }
-  const aggregateChildCounts = countMode === "all";
-  const root = new PhilogeneticTreeNode("");
-  for (const specie of species) {
-    root.add_child(specie.clades, specie.values_count, aggregateChildCounts);
-  }
-  if (countMode === "chemicals" || countMode === "articles") {
-    assignUniqueCountsToTree(
-      root,
-      [],
-      uniquesByClades,
-      smilesColumns,
-      refColumns,
-      countMode,
-    );
-  }
 
-  const maxLevel = Math.max(0, meta.length - 2);
-  const from = Math.max(0, Math.min(displayFrom, maxLevel));
-  const to = Math.max(from, Math.min(displayTo, maxLevel));
-
-  const projected = projectTreeForDisplay(root, meta, from, to);
-  const { pathLabels, tip, metaOffset } = collapseUnaryFromRoot(projected);
+  const { pathLabels, tip, metaOffset, projected } = treeModel;
   const collapsedLabel = pathLabels.join(" / ");
+  const tipId =
+    pathLabels.filter((p) => !isBlankClade(p)).join(PATH_SEP) ||
+    (isBlankClade(tip.clade_name) ? "__root__" : tip.clade_name);
+
+  const ctx: TreeViewCtx = {
+    collapsedIds,
+    toggleCollapsed,
+    matchIds: new Set(matchIdsList),
+    activeMatchId,
+  };
 
   return (
-    <ZoomableContainer>
-      {pathLabels.length > 0 ? (
-        tip.render(meta, meta_names, metaOffset, 0, 1, collapsedLabel)
-      ) : (
-        projected.render(meta, meta_names)
-      )}
-    </ZoomableContainer>
+    <div className="tree-viewport-wrap">
+      <TreeFindBar
+        open={findOpen}
+        onClose={() => setFindOpen(false)}
+        query={findQuery}
+        setQuery={setFindQuery}
+        matchCase={matchCase}
+        setMatchCase={setMatchCase}
+        useRegex={useRegex}
+        setUseRegex={setUseRegex}
+        wholeWord={wholeWord}
+        setWholeWord={setWholeWord}
+        matchIndex={matchIndex}
+        matchCount={matchIdsList.length}
+        onNext={() => goMatch(1)}
+        onPrev={() => goMatch(-1)}
+      />
+      <ZoomableContainer ref={zoomRef}>
+        {pathLabels.length > 0
+          ? tip.render(
+              meta,
+              meta_names,
+              metaOffset,
+              0,
+              1,
+              collapsedLabel,
+              ctx,
+              tipId,
+            )
+          : projected.render(
+              meta,
+              meta_names,
+              0,
+              0,
+              0,
+              undefined,
+              ctx,
+              "__root__",
+            )}
+      </ZoomableContainer>
+    </div>
   );
 }
 

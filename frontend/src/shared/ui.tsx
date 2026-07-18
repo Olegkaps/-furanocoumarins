@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 
 export function Container({
   children,
@@ -61,8 +61,15 @@ export function ScrollableContainer({
   );
 }
 
+export type ZoomableHandle = {
+  centerOnElement: (el: HTMLElement) => void;
+};
+
 /** Pan/zoom viewport: wheel zooms toward cursor, drag pans. No native scrollbars. */
-export function ZoomableContainer({ children }: { children: React.ReactNode }) {
+export const ZoomableContainer = forwardRef<
+  ZoomableHandle,
+  { children: React.ReactNode }
+>(function ZoomableContainer({ children }, ref) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.85);
   const [pan, setPan] = useState({ x: 24, y: 24 });
@@ -73,6 +80,28 @@ export function ZoomableContainer({ children }: { children: React.ReactNode }) {
 
   const dragging = useRef(false);
   const lastPointer = useRef({ x: 0, y: 0 });
+
+  useImperativeHandle(ref, () => ({
+    centerOnElement: (el: HTMLElement) => {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const vRect = viewport.getBoundingClientRect();
+      const eRect = el.getBoundingClientRect();
+      const s = scaleRef.current;
+      const { x: panX, y: panY } = panRef.current;
+      // Element center in content coordinates
+      const elCenterX =
+        (eRect.left + eRect.width / 2 - vRect.left - panX) / s;
+      const elCenterY =
+        (eRect.top + eRect.height / 2 - vRect.top - panY) / s;
+      const newPan = {
+        x: vRect.width / 2 - elCenterX * s,
+        y: vRect.height / 2 - elCenterY * s,
+      };
+      panRef.current = newPan;
+      setPan(newPan);
+    },
+  }));
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -151,7 +180,11 @@ export function ZoomableContainer({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div ref={viewportRef} className="tree-viewport" title="Drag to pan, scroll to zoom">
+    <div
+      ref={viewportRef}
+      className="tree-viewport"
+      title="Drag to pan, scroll to zoom"
+    >
       <div
         className="tree-viewport__canvas"
         style={{
@@ -162,4 +195,4 @@ export function ZoomableContainer({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   );
-}
+});

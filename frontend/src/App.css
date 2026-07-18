@@ -634,9 +634,133 @@ tfoot td {
 
 .tree-branch-count {
   position: relative;
+  height: 0;
+  width: 0;
+}
+
+.tree-branch-actions {
+  position: relative;
   top: -15px;
   right: 28px;
   height: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.tree-branch-actions > * {
+  pointer-events: auto;
+}
+
+.tree-subtree-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface-alt);
+  color: var(--color-ink);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tree-subtree-toggle:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.tree-subtree-hidden-hint {
+  display: inline-block;
+  margin: 8px 12px;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.tree-branch-cell.is-search-match {
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.tree-branch-cell.is-search-active {
+  background: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.tree-viewport-wrap {
+  position: relative;
+}
+
+.tree-find-bar {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.tree-find-bar__input {
+  width: 160px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  background: var(--color-surface-alt);
+}
+
+.tree-find-bar__count {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  white-space: nowrap;
+  min-width: 4.5rem;
+}
+
+.tree-find-bar__toggle,
+.tree-find-bar__nav,
+.tree-find-bar__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-ink);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.tree-find-bar__toggle.is-active {
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.tree-find-bar__toggle:hover,
+.tree-find-bar__nav:hover,
+.tree-find-bar__close:hover {
+  background: var(--color-surface-alt);
+}
+
+.tree-find-bar__ab,
+.tree-find-bar__re {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
 }
 
 .tree-count-chip {
