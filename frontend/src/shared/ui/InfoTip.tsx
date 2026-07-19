@@ -6,10 +6,12 @@ import "./InfoTip.css";
 export function InfoTip({
   text,
   label,
+  dataTour,
 }: {
   text: string;
   /** Accessible name when text is long; defaults to "More information" */
   label?: string;
+  dataTour?: string;
 }) {
   const tipId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -51,6 +53,7 @@ export function InfoTip({
   return (
     <span
       className="info-tip"
+      data-tour={dataTour}
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
       onFocus={() => setOpen(true)}

@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Magnifier, Molecule, BranchesRight } from "@gravity-ui/icons";
 import { api } from "../shared/api";
 import { cachedGet } from "../shared/apiCache";
+import { guardMetadataCatalog } from "../shared/schemaGuard";
 import { useNavigate } from "react-router-dom";
 import Autocomplete from "./Autocomplete";
 import FullNavigation from "../FullNavigation/FullNavigation";
 import { InfoTip } from "../shared/ui/InfoTip";
+import { PageTour } from "../shared/tour/PageTour";
 
 const fetchAutocomplete = (column: string): any => {
   return async (query: string): Promise<string[]> => {
@@ -26,14 +28,20 @@ const fetchAutocomplete = (column: string): any => {
 interface AutocompletesInputProps {
   fetchAutocomplete: (query: string) => Promise<string[]>;
   onChange: (value: string) => void;
-  style: React.CSSProperties
+  style: React.CSSProperties;
+  dataTour?: string;
 }
 
-function AutocompletedInput({fetchAutocomplete, onChange, style}: AutocompletesInputProps) {
-  const [_, setSelectedValue] = useState('');
+function AutocompletedInput({
+  fetchAutocomplete,
+  onChange,
+  style,
+  dataTour,
+}: AutocompletesInputProps) {
+  const [_, setSelectedValue] = useState("");
 
   return (
-    <div className="app-container">
+    <div className="app-container" data-tour={dataTour}>
       <Autocomplete
         fetchSuggestions={fetchAutocomplete}
         onSelect={(value) => setSelectedValue(value)}
@@ -57,7 +65,11 @@ function SearchApp() {
     const response = await cachedGet("/metadata").catch(
       (err) => err.response,
     );
-    setMetadata(response?.data?.["metadata"] ?? []);
+    const meta = response?.data?.["metadata"] ?? [];
+    setMetadata(meta);
+    if (response?.status === 200) {
+      guardMetadataCatalog(meta, response.data);
+    }
 
     if (response?.status >= 400) {
       alert("Error request");
@@ -66,6 +78,21 @@ function SearchApp() {
 
   useEffect(() => {
     fetchMetadata();
+  }, []);
+
+  useEffect(() => {
+    const onTour = (e: Event) => {
+      const detail = (e as CustomEvent).detail as {
+        action?: string;
+        prepare?: string;
+      };
+      if (detail?.prepare !== "search-open-species") return;
+      if (detail.action === "enter") {
+        setOpenSection((prev) => ({ ...prev, specie: true }));
+      }
+    };
+    window.addEventListener("fuco-tour", onTour);
+    return () => window.removeEventListener("fuco-tour", onTour);
   }, []);
 
   if (metadata === undefined || metadata.length === 0) {
@@ -83,6 +110,9 @@ function SearchApp() {
     search_values.set(curr_meta, "")
   })
 
+  const firstSpecieField = parsed_metadata.find((m) =>
+    String(m["type"]).includes("specie"),
+  );
   if (parsed_metadata.length === 0) {
     navigate('/table')
   }
@@ -112,12 +142,17 @@ function SearchApp() {
 
   return <>
   <FullNavigation pageName="home" />
-  <form onSubmit={handleSearchRequest} className="search-form">
+  <PageTour tourId="search" />
+  <form onSubmit={handleSearchRequest} className="search-form" data-tour="search-form">
     <h2>Search</h2>
     {([["Species", "specie", BranchesRight], ["Chemicals", "chemical", Molecule]] as const).map(([name, type, SectionIcon], ind) => {
       const isOpen = openSection[type];
       return (
-      <div key={type} style={{ marginBottom: '12px' }}>
+      <div
+        key={type}
+        style={{ marginBottom: '12px' }}
+        data-tour={type === "specie" ? "search-section-species" : "search-section-chemicals"}
+      >
         <button
           type="button"
           onClick={() =>
@@ -157,13 +192,23 @@ function SearchApp() {
 
           return <li key={curr_meta["column"] ?? fieldInd} style={{width: '400px', position: 'relative'}}>
             <label>
-            <InfoTip text={curr_meta["description"] ?? ""} />
+            <InfoTip
+              text={curr_meta["description"] ?? ""}
+              dataTour={
+                curr_meta === firstSpecieField ? "search-info-tip" : undefined
+              }
+            />
             &nbsp;{curr_meta["name"]}:
             {fieldInd > 0 && <span style={{position: 'absolute', left: '90%', color: 'var(--color-muted)', fontWeight: 600}}>AND</span>}
             <br></br>
             <AutocompletedInput
               fetchAutocomplete={_fetch}
               onChange={(value) => {search_values.set(curr_meta, value.trim())}}
+              dataTour={
+                curr_meta === firstSpecieField
+                  ? "search-autocomplete"
+                  : undefined
+              }
               style={{
                 position: 'relative',
                 left: '20%',
@@ -179,7 +224,12 @@ function SearchApp() {
         {ind < 1 && <hr style={{border: '1px solid var(--color-border)'}}></hr>}
       </div>
     )})}
-    <button type='submit' className="btn btn-primary" style={{ display: 'block', margin: '16px auto 0' }}>
+    <button
+      type='submit'
+      className="btn btn-primary"
+      data-tour="search-submit"
+      style={{ display: 'block', margin: '16px auto 0' }}
+    >
       Search&nbsp;<Magnifier />
     </button>
   </form></>

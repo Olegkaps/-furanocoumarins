@@ -215,6 +215,7 @@ class PhilogeneticTreeNode {
               <button
                 type="button"
                 className="tree-subtree-toggle"
+                data-tour="tree-subtree-toggle"
                 title={subtreeHidden ? "Expand subtree" : "Collapse subtree"}
                 aria-label={
                   subtreeHidden ? "Expand subtree" : "Collapse subtree"
@@ -716,6 +717,7 @@ function CountButton({
   return (
     <Link
       className={blockClass}
+      data-tour="tree-subtree-link"
       to={{ pathname: "/tree", search: linkSearch }}
       title="Open subtree"
       aria-label="Open subtree"
@@ -1422,7 +1424,7 @@ function PhilogeneticTree({
   };
 
   return (
-    <div className="tree-viewport-wrap">
+    <div className="tree-viewport-wrap" data-tour="tree-viewport">
       <TreeFindBar
         open={findOpen}
         onClose={() => setFindOpen(false)}
@@ -1646,7 +1648,7 @@ function PhilogeneticTreeOrNull({
 
   const treeToolbar = (
     <div className="panel tree-toolbar">
-      <div className="tree-toolbar__group">
+      <div className="tree-toolbar__group" data-tour="tree-taxonomy">
         <span className="tree-toolbar__label">
           Select classification
           <InfoTip text={TAXONOMY_INFO} label="About taxonomy sources" />
@@ -1675,7 +1677,7 @@ function PhilogeneticTreeOrNull({
 
       <div className="tree-toolbar__divider" aria-hidden />
 
-      <div className="tree-toolbar__group">
+      <div className="tree-toolbar__group" data-tour="tree-count-mode">
         <span className="tree-toolbar__label">Count by</span>
         <div className="tree-toolbar__buttons">
           {(["chemicals", "articles", "all"] as const).map((mode) => (
@@ -1695,7 +1697,7 @@ function PhilogeneticTreeOrNull({
 
       <div className="tree-toolbar__divider" aria-hidden />
 
-      <div className="tree-toolbar__group">
+      <div className="tree-toolbar__group" data-tour="tree-depth">
         <span className="tree-toolbar__label">
           Show ranks
           <InfoTip text={DEPTH_INFO} label="About display depth" />
@@ -1752,7 +1754,10 @@ function PhilogeneticTreeOrNull({
 
       <div className="tree-toolbar__divider" aria-hidden />
 
-      <div className="tree-toolbar__group tree-toolbar__group--compare">
+      <div
+        className="tree-toolbar__group tree-toolbar__group--compare"
+        data-tour="tree-compare"
+      >
         <QueryCompareBar
           primaryQuery={primaryQuery}
           colorsByQuery={colorsByQuery}

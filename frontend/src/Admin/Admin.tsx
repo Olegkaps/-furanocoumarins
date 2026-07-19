@@ -7,14 +7,16 @@ import PasswordConfirmForm from "./AdmitPassword";
 import AdminPage from "./AdminUI";
 import FullNavigation from "../FullNavigation/FullNavigation";
 import "./Admin.css";
+import { PageTour } from "../shared/tour/PageTour";
 
 export function AdminApp() {
   const username = getName();
   return (
     <div>
-      <FullNavigation />
+      <FullNavigation pageName="admin" />
+      <PageTour tourId="admin" />
       <div className="admin-page" style={{ paddingTop: 8 }}>
-        <div className="admin-topbar" style={{ marginBottom: 8 }}>
+        <div className="admin-topbar" style={{ marginBottom: 8 }} data-tour="admin-header">
           <h1 className="admin-topbar__title" style={{ fontSize: "1.75rem" }}>
             Administration
           </h1>

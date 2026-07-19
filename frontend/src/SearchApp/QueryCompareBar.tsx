@@ -11,6 +11,7 @@ import {
 import { fetchSearchData, filterResponse } from "./searchApi";
 import { isEmpty } from "../shared/api";
 import { recordQueryHistory } from "../shared/queryHistory";
+import { guardComparePayloads } from "../shared/schemaGuard";
 
 export type CompareSeries = {
   query: string;
@@ -170,6 +171,15 @@ export function useCompareSeries(primaryQuery: string): {
   const primary = primaryQuery.trim();
   const primaryRaw =
     primary !== "" && rawByQuery[primary] ? rawByQuery[primary] : {};
+
+  useEffect(() => {
+    const loadedRaws = allQueries
+      .map((q) => rawByQuery[q])
+      .filter((r) => r != null && !isEmpty(r));
+    if (loadedRaws.length > 1) {
+      guardComparePayloads(loadedRaws);
+    }
+  }, [queriesKey, rawByQuery]);
 
   const series: CompareSeries[] = allQueries
     .map((q) => {

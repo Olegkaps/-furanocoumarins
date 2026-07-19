@@ -3,7 +3,12 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ChevronRight, ArrowUpRightFromSquare } from "@gravity-ui/icons";
 
 /** Search form that only updates the URL; data loading is owned by useCompareSeries. */
-export function SearchLine() {
+export function SearchLine({
+  tourTarget = "table-query",
+}: {
+  /** data-tour id for the page tour (table vs tree). */
+  tourTarget?: string;
+}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("query") ?? "";
   const [request, setRequest] = useState(query);
@@ -13,7 +18,7 @@ export function SearchLine() {
   }, [query]);
 
   return (
-    <div className="card">
+    <div className="card" data-tour={tourTarget}>
       <form
         className="main_form"
         onSubmit={(e) => {
@@ -56,8 +61,14 @@ export function EmptyResponse() {
 
 export function SearchLink({ path, text }: { path: string; text: string }) {
   const [searchParams] = useSearchParams();
+  const tourTarget =
+    path === "/tree"
+      ? "table-goto-tree"
+      : path === "/table"
+        ? "tree-goto-table"
+        : undefined;
   return (
-    <div className="goto-chip">
+    <div className="goto-chip" data-tour={tourTarget}>
       <p>Go to:</p>
       <Link
         to={{

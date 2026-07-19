@@ -5,6 +5,7 @@ import { SearchLine, EmptyResponse, SearchLink } from "./SearchLine";
 import { filterResponse } from "./searchApi";
 import ResultTableOrNull from "./ResultTable";
 import { useCompareSeries } from "./QueryCompareBar";
+import { PageTour } from "../shared/tour/PageTour";
 
 export function AppResultTable() {
   const [searchParams] = useSearchParams();
@@ -15,8 +16,9 @@ export function AppResultTable() {
   return (
     <>
       <FullNavigation />
+      <PageTour tourId="table" />
       <div className="page-toolbar">
-        <SearchLine />
+        <SearchLine tourTarget="table-query" />
         {!isEmpty(primaryRaw) &&
           (primaryRaw["data"]?.length === 0 ? (
             <EmptyResponse />

@@ -187,7 +187,7 @@ const AdminPage: React.FC = () => {
 
   return (
     <div className="admin-page">
-      <div className="admin-topbar">
+      <div className="admin-topbar" data-tour="admin-topbar">
         <div>
           <h2 className="admin-topbar__title">Tables</h2>
           <p className="admin-topbar__meta">
@@ -293,7 +293,7 @@ const AdminPage: React.FC = () => {
       )}
 
       {!showCreateForm && (
-        <div className="admin-tables">
+        <div className="admin-tables" data-tour="admin-tables">
           {tables?.map((table) => {
             const statusClass = table.is_active
               ? "is-active"
@@ -361,6 +361,7 @@ const AdminPage: React.FC = () => {
             <button
               type="button"
               className="admin-create-card"
+              data-tour="admin-create"
               onClick={() => setShowCreateForm(true)}
             >
               <CirclePlus width={36} height={36} />

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FileArrowUp,
@@ -594,6 +594,7 @@ function DetailAttributeTable({
   row: Map<string, string>;
   kind: "chemical" | "specie";
 }) {
+  let markedInfo = false;
   return (
     <table style={{ width: "100%", tableLayout: "fixed" }}>
       <tbody>
@@ -603,10 +604,14 @@ function DetailAttributeTable({
           } else if (!meta_val.is_specie) {
             return null;
           }
+          const tipTour =
+            !markedInfo && meta_val.description?.trim()
+              ? ((markedInfo = true), "table-detail-info")
+              : undefined;
           return (
             <tr key={meta_val.name}>
               <td style={{ width: "42%", wordBreak: "break-word" }}>
-                <InfoTip text={meta_val.description} />
+                <InfoTip text={meta_val.description} dataTour={tipTour} />
                 &nbsp;{meta_val.show_name}
               </td>
               <td style={{ width: "58%", wordBreak: "break-word" }}>
@@ -654,6 +659,7 @@ function SidePanel({
   return (
     <Container
       maxHeight="520px"
+      dataTour={kind === "chemical" ? "table-chemical-panel" : "table-species-panel"}
       style={{
         flex: "1 1 320px",
         minWidth: 280,
@@ -811,6 +817,40 @@ function ResultsWorkspace({
     smilesKey,
   );
 
+  const tourRestoreRef = useRef<"chemical" | "specie" | null>(null);
+  useEffect(() => {
+    const onTour = (e: Event) => {
+      const detail = (e as CustomEvent).detail as {
+        action?: string;
+        prepare?: string;
+      };
+      if (detail?.prepare !== "table-select") return;
+      if (detail.action === "enter") {
+        if (currentChemical !== "" || currentSpecie !== "") return;
+        if (chemicalsOptions[0]?.value) {
+          tourRestoreRef.current = "chemical";
+          setCurrentChemical(chemicalsOptions[0].value);
+        } else if (speciesOptions[0]?.value) {
+          tourRestoreRef.current = "specie";
+          setCurrentSpecie(speciesOptions[0].value);
+        }
+      } else if (detail.action === "leave") {
+        if (tourRestoreRef.current === "chemical") setCurrentChemical("");
+        if (tourRestoreRef.current === "specie") setCurrentSpecie("");
+        tourRestoreRef.current = null;
+      }
+    };
+    window.addEventListener("fuco-tour", onTour);
+    return () => window.removeEventListener("fuco-tour", onTour);
+  }, [
+    chemicalsOptions,
+    speciesOptions,
+    currentChemical,
+    currentSpecie,
+    setCurrentChemical,
+    setCurrentSpecie,
+  ]);
+
   // Selection validity uses committed filters only — hover must not clear picks.
   // Include values from all compare series (union), not only the primary query.
   const selectedSpeciesValuesKey = buildOptionsWithSeries(
@@ -955,6 +995,7 @@ function ResultsWorkspace({
       />
 
       <div
+        data-tour="table-results"
         style={{
           display: "flex",
           flexDirection: "column",
@@ -1164,8 +1205,8 @@ function TableStateBar({
   const displayMode: CountMode = countModeLocked ? "articles" : countMode;
 
   return (
-    <div className="panel panel-toolbar">
-      <div className="count-mode-block">
+    <div className="panel panel-toolbar" data-tour="table-toolbar">
+      <div className="count-mode-block" data-tour="table-count-mode">
         <div className="count-mode-block__row">
           <span>Count in lists: </span>
           {(["chemicals", "articles", "all"] as const).map((mode) => (
@@ -1192,14 +1233,17 @@ function TableStateBar({
         </p>
       </div>
 
-      <div className="panel-toolbar__compare">
+      <div className="panel-toolbar__compare" data-tour="table-compare">
         <QueryCompareBar
           primaryQuery={primaryQuery}
           colorsByQuery={colorsByQuery}
         />
       </div>
 
-      <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <label
+        data-tour="table-download"
+        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+      >
         Download results:
         <button
           type="button"

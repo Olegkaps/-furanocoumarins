@@ -4,14 +4,17 @@ export function Container({
   children,
   maxHeight = "600px",
   style,
+  dataTour,
 }: {
   children: React.ReactNode;
   maxHeight?: string;
   style?: React.CSSProperties;
+  dataTour?: string;
 }) {
   return (
     <div
       className="tree"
+      data-tour={dataTour}
       style={{
         backgroundColor: "var(--color-surface)",
         padding: "20px",

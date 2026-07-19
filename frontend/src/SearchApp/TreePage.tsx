@@ -5,6 +5,7 @@ import { SearchLine, EmptyResponse, SearchLink } from "./SearchLine";
 import { filterResponse } from "./searchApi";
 import PhilogeneticTreeOrNull from "./PhylogeneticTree";
 import { useCompareSeries } from "./QueryCompareBar";
+import { PageTour } from "../shared/tour/PageTour";
 
 export function AppPhilogeneticTree() {
   const [searchParams] = useSearchParams();
@@ -15,8 +16,9 @@ export function AppPhilogeneticTree() {
   return (
     <>
       <FullNavigation />
+      <PageTour tourId="tree" />
       <div className="page-toolbar">
-        <SearchLine />
+        <SearchLine tourTarget="tree-query" />
         {!isEmpty(primaryRaw) &&
           (primaryRaw["data"]?.length === 0 ? (
             <EmptyResponse />

@@ -8,6 +8,7 @@ import {
   type ApiCacheInfo,
   type ApiCacheKind,
 } from "../shared/apiCache";
+import { PageTour } from "../shared/tour/PageTour";
 
 function formatTs(ms: number): string {
   if (!Number.isFinite(ms)) return "—";
@@ -71,13 +72,14 @@ export default function CachePage() {
   return (
     <>
       <FullNavigation pageName="cache" />
+      <PageTour tourId="cache" />
       <div className="cache-page">
         <header className="cache-page__header">
           <h1 className="cache-page__title">
             <Database width={28} height={28} aria-hidden />
             API cache
           </h1>
-          <div className="cache-page__toolbar">
+          <div className="cache-page__toolbar" data-tour="cache-toolbar">
             <button
               type="button"
               className="btn"
@@ -105,9 +107,11 @@ export default function CachePage() {
         {loading && entries.length === 0 ? (
           <p className="empty-state">Loading…</p>
         ) : entries.length === 0 ? (
-          <p className="empty-state">Cache is empty.</p>
+          <p className="empty-state" data-tour="cache-table">
+            Cache is empty.
+          </p>
         ) : (
-          <div className="cache-page__table-wrap">
+          <div className="cache-page__table-wrap" data-tour="cache-table">
             <table className="cache-page__table">
               <thead>
                 <tr>

@@ -15,6 +15,7 @@ import SubstancePage from "./SubstancePage/SubstancePage";
 import { SiteFooter } from "./shared/SiteFooter";
 import HistoryPage from "./SearchApp/HistoryPage";
 import CachePage from "./SearchApp/CachePage";
+import { CacheSchemaBanner } from "./shared/CacheSchemaBanner";
 
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
     <BrowserRouter>
       <div className="app-shell">
         <div className="app-shell__main">
+          <CacheSchemaBanner />
           <Routes>
               <Route path="/" element={<Navigate to="/about" />}/>
               <Route path="/search" element={<SearchApp />}/>

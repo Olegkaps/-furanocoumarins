@@ -9,6 +9,7 @@ import {
 } from "../shared/queryHistory";
 import { buildCompareSearchParams, syncCompareColors } from "./compareQueries";
 import { CompareQueriesDisplay } from "./QueryCompareBar";
+import { PageTour } from "../shared/tour/PageTour";
 
 function formatHistoryTime(iso: string): string {
   const t = Date.parse(iso);
@@ -46,7 +47,7 @@ function HistoryEntryCard({ entry }: { entry: QueryHistoryEntry }) {
           colorsByQuery={colorsByQuery}
         />
       </div>
-      <div className="query-history__actions">
+      <div className="query-history__actions" data-tour="history-open">
         <Link
           className="btn"
           to={{ pathname: "/tree", search: search ? `?${search}` : "" }}
@@ -81,6 +82,7 @@ export default function HistoryPage() {
   return (
     <>
       <FullNavigation pageName="history" />
+      <PageTour tourId="history" />
       <div className="query-history">
         <header className="query-history__header">
           <h1 className="query-history__title">
@@ -90,6 +92,7 @@ export default function HistoryPage() {
           <button
             type="button"
             className="btn"
+            data-tour="history-clear"
             onClick={clear}
             disabled={entries.length === 0}
             title="Clear history"
@@ -99,9 +102,11 @@ export default function HistoryPage() {
           </button>
         </header>
         {entries.length === 0 ? (
-          <p className="empty-state">No saved queries yet.</p>
+          <p className="empty-state" data-tour="history-list">
+            No saved queries yet.
+          </p>
         ) : (
-          <div className="query-history__list">
+          <div className="query-history__list" data-tour="history-list">
             {entries.map((entry) => (
               <HistoryEntryCard key={entry.id} entry={entry} />
             ))}
