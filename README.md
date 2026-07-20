@@ -19,9 +19,24 @@ Which data will be displayed on the website is completely determined by the admi
 
 - **Importing data**: downloading data from Google Tables.
 - **Data analysis**: filtering by conditions with visualization of results.
+- **Query comparison**: run up to four search queries side by side (see [Comparing queries](#comparing-queries)).
 - **Phylogenetic trees**: automatic construction of a tree indicating the number of finds for each taxonomic group.
 - **The results are in the table**: final table with filtered data.
 - **Admin panel**: database content management (adding, editing, deleting records).
+
+## Comparing queries
+
+On the results table and phylogenetic tree pages you can compare several searches at once (up to **4**, including the primary query).
+
+1. Open results for a primary query .
+2. In **Compare queries**, add extra query strings.
+3. Each query gets a stable color; the set is stored in the URL as `cmp` (JSON array of extras), so you can share or bookmark the comparison.
+
+**Table:** rows are the union of all queries. Colored markers show which queries matched each row; export to `.xlsx` writes one sheet per query plus an About sheet.
+
+**Tree:** count chips on nodes show per-query hit counts (layout adapts for 2–4 series). Colors match the compare bar.
+
+Successful compare groups are also saved in browser **History** (`/history`) for later reopen.
 
 ## Technology stack
 
