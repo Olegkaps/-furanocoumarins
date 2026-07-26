@@ -1,0 +1,288 @@
+/* Admin panel — classical official look (uses site CSS variables) */
+
+.admin-page {
+  width: min(1200px, 96%);
+  margin: 0 auto;
+  padding: 24px 0 48px;
+}
+
+.admin-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-topbar__title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  color: var(--color-ink);
+}
+
+.admin-topbar__meta {
+  color: var(--color-muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.admin-topbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.admin-user__name {
+  margin: 0;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.admin-tables {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.admin-table-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  min-height: 180px;
+}
+
+.admin-table-card.is-active {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface));
+}
+
+.admin-table-card.is-broken {
+  border-color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 6%, var(--color-surface));
+}
+
+.admin-table-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  color: var(--color-muted);
+}
+
+.admin-table-card__badge.is-active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, white);
+}
+
+.admin-table-card__badge.is-broken {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 8%, white);
+}
+
+.admin-table-card h3 {
+  margin: 4px 0 0;
+  font-size: 1.15rem;
+  word-break: break-word;
+}
+
+.admin-table-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-muted);
+}
+
+.admin-table-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.admin-create-card {
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  cursor: pointer;
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.admin-create-card:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-surface-alt);
+}
+
+.admin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(28, 35, 51, 0.45);
+}
+
+.admin-modal__dialog {
+  width: min(420px, 100%);
+  padding: 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.admin-modal__dialog h3 {
+  margin: 0 0 16px;
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+}
+
+.admin-modal__dialog label {
+  display: block;
+  margin-bottom: 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-ink);
+}
+
+.admin-modal__dialog input[type="text"],
+.admin-modal__dialog input[type="file"],
+.admin-modal__dialog input[type="password"] {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  box-sizing: border-box;
+}
+
+.admin-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.btn-danger {
+  background: color-mix(in srgb, var(--color-danger) 8%, white);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.btn-danger:hover {
+  background: color-mix(in srgb, var(--color-danger) 14%, white);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.auth-page {
+  min-height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(360px, 100%);
+  padding: 28px 28px 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.auth-card h2 {
+  margin: 0 0 20px;
+  text-align: center;
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+}
+
+.auth-card label {
+  display: block;
+  margin-bottom: 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.auth-card input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  box-sizing: border-box;
+}
+
+.auth-card__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.auth-card__error {
+  margin: 8px 0 0;
+  text-align: center;
+  color: var(--color-danger);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.auth-card__success {
+  margin: 8px 0 0;
+  text-align: center;
+  color: var(--color-success);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.auth-card__links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}

@@ -1,24 +1,30 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 
 export function Container({
   children,
   maxHeight = "600px",
+  style,
+  dataTour,
 }: {
   children: React.ReactNode;
   maxHeight?: string;
+  style?: React.CSSProperties;
+  dataTour?: string;
 }) {
   return (
     <div
       className="tree"
+      data-tour={dataTour}
       style={{
-        backgroundColor: "white",
-        padding: "30px",
-        paddingTop: 0,
-        border: "1px solid #d4d4d4ff",
-        borderRadius: "20px",
+        backgroundColor: "var(--color-surface)",
+        padding: "20px",
+        paddingTop: 12,
+        border: "1px solid var(--color-border)",
+        borderRadius: "var(--radius)",
         maxHeight,
         maxWidth: "100%",
         position: "relative",
+        ...style,
       }}
     >
       {children}
@@ -29,23 +35,28 @@ export function Container({
 export function ScrollableContainer({
   children,
   maxHeight = "600px",
+  height,
 }: {
   children: React.ReactNode;
   maxHeight?: string;
+  /** Prefer fixed height so scrolling works reliably (table cells ignore max-height). */
+  height?: string;
 }) {
   return (
     <div
-      className="tree"
+      className="tree scrollable-container"
       style={{
-        backgroundColor: "white",
-        padding: "30px",
-        paddingTop: 0,
-        border: "1px solid #d4d4d4ff",
-        borderRadius: "20px",
-        maxHeight,
+        backgroundColor: "var(--color-surface)",
+        padding: "16px",
+        border: "1px solid var(--color-border)",
+        borderRadius: "var(--radius)",
+        height: height ?? undefined,
+        maxHeight: height ? undefined : maxHeight,
         maxWidth: "100%",
-        overflow: "scroll",
+        overflowX: "auto",
+        overflowY: "auto",
         position: "relative",
+        minHeight: 0,
       }}
     >
       {children}
@@ -53,37 +64,155 @@ export function ScrollableContainer({
   );
 }
 
-export function ZoomableContainer({ children }: { children: React.ReactNode }) {
-  const [zoomLevel, setZoomLevel] = useState(0.7);
-  const containerRef = useRef<HTMLDivElement>(null);
+export type ZoomableHandle = {
+  centerOnElement: (el: HTMLElement) => void;
+  /** After layout change, shift pan so `el`'s center stays at the given client point. */
+  keepElementAtClientPoint: (
+    el: HTMLElement,
+    clientX: number,
+    clientY: number,
+  ) => void;
+};
+
+/** Pan/zoom viewport: wheel zooms toward cursor, drag pans. No native scrollbars. */
+export const ZoomableContainer = forwardRef<
+  ZoomableHandle,
+  { children: React.ReactNode }
+>(function ZoomableContainer({ children }, ref) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.85);
+  const [pan, setPan] = useState({ x: 24, y: 24 });
+  const scaleRef = useRef(scale);
+  const panRef = useRef(pan);
+  scaleRef.current = scale;
+  panRef.current = pan;
+
+  const dragging = useRef(false);
+  const lastPointer = useRef({ x: 0, y: 0 });
+
+  useImperativeHandle(ref, () => ({
+    centerOnElement: (el: HTMLElement) => {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const vRect = viewport.getBoundingClientRect();
+      const eRect = el.getBoundingClientRect();
+      const s = scaleRef.current;
+      const { x: panX, y: panY } = panRef.current;
+      // Element center in content coordinates
+      const elCenterX =
+        (eRect.left + eRect.width / 2 - vRect.left - panX) / s;
+      const elCenterY =
+        (eRect.top + eRect.height / 2 - vRect.top - panY) / s;
+      const newPan = {
+        x: vRect.width / 2 - elCenterX * s,
+        y: vRect.height / 2 - elCenterY * s,
+      };
+      panRef.current = newPan;
+      setPan(newPan);
+    },
+    keepElementAtClientPoint: (el, clientX, clientY) => {
+      const eRect = el.getBoundingClientRect();
+      const elClientX = eRect.left + eRect.width / 2;
+      const elClientY = eRect.top + eRect.height / 2;
+      const newPan = {
+        x: panRef.current.x + (clientX - elClientX),
+        y: panRef.current.y + (clientY - elClientY),
+      };
+      panRef.current = newPan;
+      setPan(newPan);
+    },
+  }));
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const handleWheel = (e: WheelEvent) => {
+    const el = viewportRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const delta = e.deltaY;
-      const newZoom = zoomLevel + (delta > 0 ? -0.1 : 0.1);
-      setZoomLevel(Math.max(0.5, Math.min(newZoom, 1.1)));
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const oldScale = scaleRef.current;
+      const factor = e.deltaY > 0 ? 1 / 1.08 : 1.08;
+      const newScale = Math.min(2.8, Math.max(0.2, oldScale * factor));
+      if (newScale === oldScale) return;
+
+      const { x: panX, y: panY } = panRef.current;
+      const contentX = (mx - panX) / oldScale;
+      const contentY = (my - panY) / oldScale;
+      const newPan = {
+        x: mx - contentX * newScale,
+        y: my - contentY * newScale,
+      };
+      scaleRef.current = newScale;
+      panRef.current = newPan;
+      setScale(newScale);
+      setPan(newPan);
     };
-    container.addEventListener("wheel", handleWheel, { passive: false });
-    return () => container.removeEventListener("wheel", handleWheel);
-  }, [zoomLevel]);
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("a, button, input, select, textarea, label")) return;
+      dragging.current = true;
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+      el.setPointerCapture(e.pointerId);
+      el.classList.add("is-panning");
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragging.current) return;
+      const dx = e.clientX - lastPointer.current.x;
+      const dy = e.clientY - lastPointer.current.y;
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+      const next = {
+        x: panRef.current.x + dx,
+        y: panRef.current.y + dy,
+      };
+      panRef.current = next;
+      setPan(next);
+    };
+
+    const endPan = (e: PointerEvent) => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      el.classList.remove("is-panning");
+      try {
+        el.releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released */
+      }
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", endPan);
+    el.addEventListener("pointercancel", endPan);
+
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", endPan);
+      el.removeEventListener("pointercancel", endPan);
+    };
+  }, []);
 
   return (
-    <ScrollableContainer>
+    <div
+      ref={viewportRef}
+      className="tree-viewport"
+      title="Drag to pan, scroll to zoom"
+    >
       <div
-        ref={containerRef}
-        className="smart-zoom-container"
+        className="tree-viewport__canvas"
         style={{
-          zoom: zoomLevel,
-          display: "block",
-          width: "100%",
-          backgroundColor: "#f9f9f9",
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
         }}
       >
         {children}
       </div>
-    </ScrollableContainer>
+    </div>
   );
-}
+});

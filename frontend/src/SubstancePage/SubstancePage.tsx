@@ -1,11 +1,38 @@
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import FullNavigation from "../FullNavigation/FullNavigation";
 import { useEditablePage } from "../features/editable-page/useEditablePage";
 import { EditablePageContent } from "../features/editable-page/EditablePageContent";
 
+function resolveSmiles(
+  smilesParam: string | undefined,
+  searchParams: URLSearchParams,
+): string | null {
+  const fromQuery = searchParams.get("smiles");
+  if (fromQuery != null && fromQuery !== "") {
+    return fromQuery;
+  }
+  if (smilesParam != null && smilesParam !== "") {
+    try {
+      return decodeURIComponent(smilesParam);
+    } catch {
+      return smilesParam;
+    }
+  }
+  return null;
+}
+
+function smilesCanvasId(smiles: string): string {
+  let hash = 0;
+  for (let i = 0; i < smiles.length; i++) {
+    hash = (hash * 31 + smiles.charCodeAt(i)) | 0;
+  }
+  return `smiles_${Math.abs(hash).toString(36)}`;
+}
+
 export default function SubstancePage() {
   const { smiles: smilesEncoded } = useParams<{ smiles: string }>();
-  const smiles = smilesEncoded ? decodeURIComponent(smilesEncoded) : null;
+  const [searchParams] = useSearchParams();
+  const smiles = resolveSmiles(smilesEncoded, searchParams);
 
   const state = useEditablePage(smiles);
 
@@ -14,7 +41,7 @@ export default function SubstancePage() {
       <>
         <FullNavigation />
         <div style={{ padding: "24px", maxWidth: "800px", margin: "0 auto" }}>
-          <p style={{ color: "#666" }}>Invalid page.</p>
+          <p className="empty-state">Invalid page.</p>
         </div>
       </>
     );
@@ -42,13 +69,17 @@ export default function SubstancePage() {
         }}
       >
         <div key={smiles} style={{ marginBottom: "24px" }}>
-          <canvas id={smiles} className="smiles" />
+          <canvas
+            id={smilesCanvasId(smiles)}
+            className="smiles"
+            data-smiles={smiles}
+          />
         </div>
         <div
           style={{
             marginBottom: "8px",
-            color: "#666",
-            fontFamily: "monospace",
+            color: "var(--color-muted)",
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
             fontSize: "14px",
           }}
         >

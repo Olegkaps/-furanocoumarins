@@ -8,12 +8,14 @@ on:
     branches: [ "main" ]
     paths:
     - "backend/admin/**"
+    - "docker-compose.test.yaml"
     - ".github/workflows/backed-go.yml"
 
   pull_request:
     branches: [ "main" ]
     paths:
     - "backend/admin/**"
+    - "docker-compose.test.yaml"
     - ".github/workflows/backed-go.yml"
 
 jobs:
@@ -39,13 +41,13 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.24'
+        go-version: '1.25'
 
     - name: Build
       run: cd backend/admin && go build -v ./...
 
     - name: Test
-      run: cd backend/admin && ENV_TYPE="AUTOTEST" go test -v ./...
+      run: docker compose -f docker-compose.test.yaml run --rm --build test
 
     - name: Build the Docker image
       run: docker build ./backend/admin --tag back-app

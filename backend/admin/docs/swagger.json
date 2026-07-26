@@ -1,19 +1,71 @@
 {
     "basePath": "/",
     "definitions": {
-        "cassandra.ColumnMeta": {
+        "admin_internal_presentation_http_search.MetadataResponse": {
             "additionalProperties": false,
+            "example": {
+                "metadata": [
+                    {
+                        "column": "species",
+                        "description": "Plant species name",
+                        "name": "Species",
+                        "type": "text search"
+                    }
+                ],
+                "timestamp": "2026-01-15T12:00:00Z"
+            },
             "properties": {
-                "column": {
-                    "type": "string"
+                "metadata": {
+                    "items": {
+                        "$ref": "#/definitions/search.ColumnMeta"
+                    },
+                    "type": "array"
                 },
-                "description": {
+                "timestamp": {
                     "type": "string"
+                }
+            },
+            "type": "object"
+        },
+        "admin_internal_presentation_http_search.SearchResponse": {
+            "additionalProperties": false,
+            "example": {
+                "data": [
+                    {
+                        "smiles": "O=C1Oc2ccccc2C=C1",
+                        "species": "Angelica archangelica"
+                    }
+                ],
+                "metadata": [
+                    {
+                        "column": "species",
+                        "description": "Plant species name",
+                        "name": "Species",
+                        "type": "text search"
+                    }
+                ],
+                "timestamp": "2026-01-15T12:00:00Z"
+            },
+            "properties": {
+                "data": {
+                    "description": "Result rows (dynamic columns)",
+                    "items": {
+                        "additionalProperties": true,
+                        "example": {
+                            "smiles": "O=C1Oc2ccccc2C=C1",
+                            "species": "Angelica archangelica"
+                        },
+                        "type": "object"
+                    },
+                    "type": "array"
                 },
-                "name": {
-                    "type": "string"
+                "metadata": {
+                    "items": {
+                        "$ref": "#/definitions/search.ColumnMeta"
+                    },
+                    "type": "array"
                 },
-                "type": {
+                "timestamp": {
                     "type": "string"
                 }
             },
@@ -21,35 +73,53 @@
         },
         "cassandra.Table": {
             "additionalProperties": false,
+            "example": {
+                "created_at": "2026-01-15T12:00:00Z",
+                "is_active": true,
+                "is_ok": true,
+                "name": "furanocoumarins_v2",
+                "tableData": "chemdb.data_2026_01_15T12_00_00_000",
+                "tableMeta": "chemdb.meta_2026_01_15T12_00_00_000",
+                "tableSpecies": "chemdb.species_2026_01_15T12_00_00_000",
+                "version": "v2.0"
+            },
             "properties": {
                 "created_at": {
+                    "example": "2026-01-15T12:00:00Z",
                     "type": "string"
                 },
                 "is_active": {
+                    "example": true,
                     "type": "boolean"
                 },
                 "is_ok": {
+                    "example": true,
                     "type": "boolean"
                 },
                 "name": {
+                    "example": "furanocoumarins_v2",
                     "type": "string"
                 },
                 "tableData": {
+                    "example": "chemdb.data_2026_01_15T12_00_00_000",
                     "type": "string"
                 },
                 "tableMeta": {
+                    "example": "chemdb.meta_2026_01_15T12_00_00_000",
                     "type": "string"
                 },
                 "tableSpecies": {
+                    "example": "chemdb.species_2026_01_15T12_00_00_000",
                     "type": "string"
                 },
                 "version": {
+                    "example": "v2.0",
                     "type": "string"
                 }
             },
             "type": "object"
         },
-        "http.ArticleValResponse": {
+        "response.ArticleValResponse": {
             "additionalProperties": false,
             "example": {
                 "val": "@article{key2024,\n  author = {Smith, J.},\n  title = {Title},\n  year = {2024}\n}"
@@ -62,7 +132,7 @@
             },
             "type": "object"
         },
-        "http.ErrorResponse": {
+        "response.ErrorResponse": {
             "additionalProperties": false,
             "example": {
                 "error": "error message"
@@ -75,7 +145,7 @@
             },
             "type": "object"
         },
-        "http.TokenResponse": {
+        "response.TokenResponse": {
             "additionalProperties": false,
             "example": {
                 "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -90,8 +160,18 @@
         },
         "search.AutocompleteResponse": {
             "additionalProperties": false,
+            "example": {
+                "values": [
+                    "Angelica archangelica",
+                    "Angelica dahurica"
+                ]
+            },
             "properties": {
                 "values": {
+                    "example": [
+                        "Angelica archangelica",
+                        "Angelica dahurica"
+                    ],
                     "items": {
                         "type": "string"
                     },
@@ -100,38 +180,29 @@
             },
             "type": "object"
         },
-        "search.GetMetadataResponse": {
+        "search.ColumnMeta": {
             "additionalProperties": false,
-            "properties": {
-                "metadata": {
-                    "items": {
-                        "$ref": "#/definitions/cassandra.ColumnMeta"
-                    },
-                    "type": "array"
-                },
-                "timestamp": {
-                    "type": "string"
-                }
+            "example": {
+                "column": "species",
+                "description": "Plant species name",
+                "name": "Species",
+                "type": "text search"
             },
-            "type": "object"
-        },
-        "search.SearchResponse": {
-            "additionalProperties": false,
             "properties": {
-                "data": {
-                    "items": {
-                        "additionalProperties": {},
-                        "type": "object"
-                    },
-                    "type": "array"
+                "column": {
+                    "example": "species",
+                    "type": "string"
                 },
-                "metadata": {
-                    "items": {
-                        "$ref": "#/definitions/cassandra.ColumnMeta"
-                    },
-                    "type": "array"
+                "description": {
+                    "example": "Plant species name",
+                    "type": "string"
                 },
-                "timestamp": {
+                "name": {
+                    "example": "Species",
+                    "type": "string"
+                },
+                "type": {
+                    "example": "text search",
                     "type": "string"
                 }
             },
@@ -151,6 +222,7 @@
                 "parameters": [
                     {
                         "description": "Article ID",
+                        "example": "key2024",
                         "in": "path",
                         "name": "id",
                         "required": true,
@@ -164,19 +236,19 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.ArticleValResponse"
+                            "$ref": "#/definitions/response.ArticleValResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -195,6 +267,7 @@
                 "parameters": [
                     {
                         "description": "Username or email",
+                        "example": "admin@example.com",
                         "in": "formData",
                         "name": "uname_or_email",
                         "required": true,
@@ -208,13 +281,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -233,6 +306,7 @@
                 "parameters": [
                     {
                         "description": "Token from email link",
+                        "example": "linAbCdEf123",
                         "in": "formData",
                         "name": "word",
                         "required": true,
@@ -246,19 +320,19 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.TokenResponse"
+                            "$ref": "#/definitions/response.TokenResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -277,6 +351,7 @@
                 "parameters": [
                     {
                         "description": "Token from email link",
+                        "example": "pswXyZ987",
                         "in": "formData",
                         "name": "word",
                         "required": true,
@@ -284,6 +359,7 @@
                     },
                     {
                         "description": "New password",
+                        "example": "new-secret",
                         "in": "formData",
                         "name": "password",
                         "required": true,
@@ -297,13 +373,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -322,6 +398,7 @@
                 "parameters": [
                     {
                         "description": "Username or email",
+                        "example": "admin@example.com",
                         "in": "formData",
                         "name": "uname_or_email",
                         "required": true,
@@ -329,6 +406,7 @@
                     },
                     {
                         "description": "Password",
+                        "example": "secret",
                         "in": "formData",
                         "name": "password",
                         "required": true,
@@ -342,19 +420,19 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.TokenResponse"
+                            "$ref": "#/definitions/response.TokenResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -373,6 +451,7 @@
                 "parameters": [
                     {
                         "description": "Username or email",
+                        "example": "admin@example.com",
                         "in": "formData",
                         "name": "uname_or_email",
                         "required": true,
@@ -386,13 +465,13 @@
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -412,19 +491,19 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.TokenResponse"
+                            "$ref": "#/definitions/response.TokenResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -445,6 +524,7 @@
                 "parameters": [
                     {
                         "description": "Column name",
+                        "example": "species",
                         "in": "path",
                         "name": "column",
                         "required": true,
@@ -452,6 +532,7 @@
                     },
                     {
                         "description": "Prefix to match",
+                        "example": "Angel",
                         "in": "query",
                         "name": "value",
                         "required": true,
@@ -471,13 +552,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -509,13 +590,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -543,6 +624,20 @@
                         "name": "file",
                         "required": true,
                         "type": "file"
+                    },
+                    {
+                        "description": "Meta sheet name",
+                        "example": "meta",
+                        "in": "formData",
+                        "name": "meta",
+                        "type": "string"
+                    },
+                    {
+                        "description": "Table name",
+                        "example": "furanocoumarins_v2",
+                        "in": "formData",
+                        "name": "name",
+                        "type": "string"
                     }
                 ],
                 "responses": {
@@ -552,13 +647,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -592,7 +687,7 @@
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -613,6 +708,7 @@
                 "parameters": [
                     {
                         "description": "Table timestamp",
+                        "example": "2026-01-15T12:00:00.000Z",
                         "in": "path",
                         "name": "timestamp",
                         "required": true,
@@ -626,13 +722,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -657,13 +753,13 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/search.GetMetadataResponse"
+                            "$ref": "#/definitions/admin_internal_presentation_http_search.MetadataResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -679,6 +775,7 @@
                 "parameters": [
                     {
                         "description": "Page name",
+                        "example": "about",
                         "in": "path",
                         "name": "name",
                         "required": true,
@@ -698,19 +795,19 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -727,6 +824,7 @@
                 "parameters": [
                     {
                         "description": "Page name",
+                        "example": "about",
                         "in": "path",
                         "name": "name",
                         "required": true,
@@ -734,6 +832,7 @@
                     },
                     {
                         "description": "Markdown content",
+                        "example": "# About\\n\\nPlatform for furanocoumarins analysis.",
                         "in": "body",
                         "name": "body",
                         "required": true,
@@ -752,19 +851,19 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -799,6 +898,7 @@
                 "parameters": [
                     {
                         "description": "Search query",
+                        "example": "species = 'Angelica'",
                         "in": "query",
                         "name": "q",
                         "required": true,
@@ -812,19 +912,19 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/search.SearchResponse"
+                            "$ref": "#/definitions/admin_internal_presentation_http_search.SearchResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -840,6 +940,7 @@
                 "parameters": [
                     {
                         "description": "Table timestamp",
+                        "example": "2026-01-15T12:00:00.000Z",
                         "in": "path",
                         "name": "timestamp",
                         "required": true,
@@ -853,13 +954,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },
@@ -884,7 +985,7 @@
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 },

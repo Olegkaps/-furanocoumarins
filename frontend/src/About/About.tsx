@@ -16,6 +16,7 @@ export default function About() {
 
   return (
     <div
+      data-tour="about-content"
       style={{
         padding: "24px",
         maxWidth: state.editMode ? "1400px" : "800px",

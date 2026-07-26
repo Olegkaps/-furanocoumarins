@@ -6,6 +6,14 @@ backend/secrets/
 ignores/
 result-cols.txt
 
+# Go build and test artifacts
+*.exe
+*.exe~
+*.test
+*.out
+/backend/admin/admin
+/cli
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

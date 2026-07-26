@@ -1,6 +1,8 @@
 import React from "react";
 import { ArrowUpRightFromSquare, Copy } from "@gravity-ui/icons";
 import { TruncatedText } from "../shared/ui/TruncatedText";
+import { CitationRefList } from "../shared/ui/CitationPopover";
+import "../shared/ui/CitationPopover.css";
 
 async function copyTextToClipboard(text: string) {
   try {
@@ -25,7 +27,7 @@ async function copyTextToClipboard(text: string) {
 }
 
 function SmilesMetaBlock({ value }: { value: string }) {
-  const canvasId = `${value}_${generateRandomString(5)}`;
+  const canvasId = `smiles_${generateRandomString(8)}`;
   return (
     <div
       style={{
@@ -45,28 +47,20 @@ function SmilesMetaBlock({ value }: { value: string }) {
         onMouseDown={(e) => {
           e.stopPropagation();
         }}
+        className="btn"
         style={{
           position: "absolute",
           top: 0,
           right: 0,
           zIndex: 1,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 5,
-          border: "none",
-          borderRadius: 4,
-          background: "rgba(255, 255, 255, 0.92)",
-          cursor: "pointer",
           padding: "4px 8px",
           fontSize: "11px",
-          fontWeight: 500,
-          color: "#666",
         }}
       >
         <Copy width={14} height={14} />
         copy smiles
       </button>
-      <canvas id={canvasId} className="smiles">
+      <canvas id={canvasId} className="smiles" data-smiles={value}>
         {value}
       </canvas>
     </div>
@@ -166,13 +160,26 @@ class DataMeta {
       links.push(new Link(val, text_val))
     })
 
-    return <>
-      {links.map((link, _) => (
-      <a href={this.additional_data.replace("%s", link.id)} target="_blank">
-        {this.render_default(link.text, 70, <>&nbsp;<ArrowUpRightFromSquare /></>)}
-      </a>
-    ))}
-    </>
+    return (
+      <span className="meta-link-list">
+        {links.map((link, i) => (
+          <React.Fragment key={`${link.id}-${i}`}>
+            {i > 0 && <span>, </span>}
+            <a
+              className="meta-link"
+              href={this.additional_data.replace("%s", link.id)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span className="meta-link__text">
+                <TruncatedText text={link.text} maxLength={70} />
+              </span>
+              <ArrowUpRightFromSquare className="meta-link__icon" width={14} height={14} aria-hidden />
+            </a>
+          </React.Fragment>
+        ))}
+      </span>
+    );
   }
 
   render_cls(value: string) {
@@ -184,7 +191,10 @@ class DataMeta {
   }
 
   render_reference(value: string) {
-    return <a target="_blank" href={"/reference/" + value}>{this.render_default(value)}</a>
+    if (!value.trim()) {
+      return <></>;
+    }
+    return <CitationRefList value={value} />;
   }
 }
 

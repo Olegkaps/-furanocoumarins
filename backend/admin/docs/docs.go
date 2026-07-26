@@ -28,6 +28,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "key2024",
                         "description": "Article ID",
                         "name": "id",
                         "in": "path",
@@ -38,19 +39,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.ArticleValResponse"
+                            "$ref": "#/definitions/response.ArticleValResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -69,6 +70,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "admin@example.com",
                         "description": "Username or email",
                         "name": "uname_or_email",
                         "in": "formData",
@@ -82,13 +84,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -110,6 +112,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "linAbCdEf123",
                         "description": "Token from email link",
                         "name": "word",
                         "in": "formData",
@@ -120,19 +123,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.TokenResponse"
+                            "$ref": "#/definitions/response.TokenResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -151,6 +154,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "pswXyZ987",
                         "description": "Token from email link",
                         "name": "word",
                         "in": "formData",
@@ -158,6 +162,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "new-secret",
                         "description": "New password",
                         "name": "password",
                         "in": "formData",
@@ -171,13 +176,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -199,6 +204,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "admin@example.com",
                         "description": "Username or email",
                         "name": "uname_or_email",
                         "in": "formData",
@@ -206,6 +212,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "secret",
                         "description": "Password",
                         "name": "password",
                         "in": "formData",
@@ -216,19 +223,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.TokenResponse"
+                            "$ref": "#/definitions/response.TokenResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -247,6 +254,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "admin@example.com",
                         "description": "Username or email",
                         "name": "uname_or_email",
                         "in": "formData",
@@ -260,13 +268,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -291,19 +299,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/http.TokenResponse"
+                            "$ref": "#/definitions/response.TokenResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -322,6 +330,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "species",
                         "description": "Column name",
                         "name": "column",
                         "in": "path",
@@ -329,6 +338,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "Angel",
                         "description": "Prefix to match",
                         "name": "value",
                         "in": "query",
@@ -345,13 +355,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -388,13 +398,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -422,6 +432,20 @@ const docTemplate = `{
                         "name": "file",
                         "in": "formData",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "example": "meta",
+                        "description": "Meta sheet name",
+                        "name": "meta",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "example": "furanocoumarins_v2",
+                        "description": "Table name",
+                        "name": "name",
+                        "in": "formData"
                     }
                 ],
                 "responses": {
@@ -431,13 +455,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -471,7 +495,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -492,6 +516,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "2026-01-15T12:00:00.000Z",
                         "description": "Table timestamp",
                         "name": "timestamp",
                         "in": "path",
@@ -505,13 +530,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -531,13 +556,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/search.GetMetadataResponse"
+                            "$ref": "#/definitions/admin_internal_presentation_http_search.MetadataResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -556,6 +581,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "about",
                         "description": "Page name",
                         "name": "name",
                         "in": "path",
@@ -572,19 +598,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -609,12 +635,14 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "about",
                         "description": "Page name",
                         "name": "name",
                         "in": "path",
                         "required": true
                     },
                     {
+                        "example": "# About\\n\\nPlatform for furanocoumarins analysis.",
                         "description": "Markdown content",
                         "name": "body",
                         "in": "body",
@@ -631,19 +659,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -676,6 +704,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "species = 'Angelica'",
                         "description": "Search query",
                         "name": "q",
                         "in": "query",
@@ -686,19 +715,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/search.SearchResponse"
+                            "$ref": "#/definitions/admin_internal_presentation_http_search.SearchResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -719,6 +748,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "2026-01-15T12:00:00.000Z",
                         "description": "Table timestamp",
                         "name": "timestamp",
                         "in": "path",
@@ -732,13 +762,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -763,7 +793,7 @@ const docTemplate = `{
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/http.ErrorResponse"
+                            "$ref": "#/definitions/response.ErrorResponse"
                         }
                     }
                 }
@@ -771,19 +801,37 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "cassandra.ColumnMeta": {
+        "admin_internal_presentation_http_search.MetadataResponse": {
             "type": "object",
             "properties": {
-                "column": {
-                    "type": "string"
+                "metadata": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/search.ColumnMeta"
+                    }
                 },
-                "description": {
+                "timestamp": {
                     "type": "string"
+                }
+            }
+        },
+        "admin_internal_presentation_http_search.SearchResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": {}
+                    }
                 },
-                "name": {
-                    "type": "string"
+                "metadata": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/search.ColumnMeta"
+                    }
                 },
-                "type": {
+                "timestamp": {
                     "type": "string"
                 }
             }
@@ -792,32 +840,40 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "created_at": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "2026-01-15T12:00:00Z"
                 },
                 "is_active": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": true
                 },
                 "is_ok": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": true
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "furanocoumarins_v2"
                 },
                 "tableData": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "chemdb.data_2026_01_15T12_00_00_000"
                 },
                 "tableMeta": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "chemdb.meta_2026_01_15T12_00_00_000"
                 },
                 "tableSpecies": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "chemdb.species_2026_01_15T12_00_00_000"
                 },
                 "version": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "v2.0"
                 }
             }
         },
-        "http.ArticleValResponse": {
+        "response.ArticleValResponse": {
             "type": "object",
             "properties": {
                 "val": {
@@ -826,7 +882,7 @@ const docTemplate = `{
                 }
             }
         },
-        "http.ErrorResponse": {
+        "response.ErrorResponse": {
             "type": "object",
             "properties": {
                 "error": {
@@ -835,7 +891,7 @@ const docTemplate = `{
                 }
             }
         },
-        "http.TokenResponse": {
+        "response.TokenResponse": {
             "type": "object",
             "properties": {
                 "token": {
@@ -851,42 +907,32 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
+                    },
+                    "example": [
+                        "Angelica archangelica",
+                        "Angelica dahurica"
+                    ]
                 }
             }
         },
-        "search.GetMetadataResponse": {
+        "search.ColumnMeta": {
             "type": "object",
             "properties": {
-                "metadata": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/cassandra.ColumnMeta"
-                    }
+                "column": {
+                    "type": "string",
+                    "example": "species"
                 },
-                "timestamp": {
-                    "type": "string"
-                }
-            }
-        },
-        "search.SearchResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    }
+                "description": {
+                    "type": "string",
+                    "example": "Plant species name"
                 },
-                "metadata": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/cassandra.ColumnMeta"
-                    }
+                "name": {
+                    "type": "string",
+                    "example": "Species"
                 },
-                "timestamp": {
-                    "type": "string"
+                "type": {
+                    "type": "string",
+                    "example": "text search"
                 }
             }
         }

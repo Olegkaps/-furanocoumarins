@@ -1,16 +1,17 @@
-import React, { useState } from 'react';
-import { api } from './utils';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from "react";
+import { api } from "./utils";
+import { useNavigate } from "react-router-dom";
+import "./Admin.css";
 
-
-const PasswordConfirmForm: React.FC<{word: string}> = (props) => {
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
+const PasswordConfirmForm: React.FC<{ word: string }> = (props) => {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
   const isValidPassword = (password: string) => {
-    const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&-])[A-Za-z\d@$!%*?&-]{8,}$/;
+    const regex =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&-])[A-Za-z\d@$!%*?&-]{8,}$/;
     return regex.test(password);
   };
 
@@ -18,81 +19,61 @@ const PasswordConfirmForm: React.FC<{word: string}> = (props) => {
     e.preventDefault();
 
     if (!isValidPassword(newPassword)) {
-      setError('The password must contain at least 8 characters, 1 uppercase letter, 1 lowercase letter, and 1 special character');
+      setError(
+        "The password must contain at least 8 characters, 1 uppercase letter, 1 lowercase letter, and 1 special character",
+      );
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Passwords are differs');
+      setError("Passwords are differs");
       return;
     }
 
-    var bodyFormData = new FormData();
-    bodyFormData.append("password", newPassword)
-    bodyFormData.append("word", props.word)
-    const response = await api.post('/auth/confirm-password-change', bodyFormData).catch((err) => {return err.response});
+    const bodyFormData = new FormData();
+    bodyFormData.append("password", newPassword);
+    bodyFormData.append("word", props.word);
+    const response = await api
+      .post("/auth/confirm-password-change", bodyFormData)
+      .catch((err) => err.response);
 
     if (response?.status < 400) {
-        navigate("/login")
+      navigate("/login");
     } else {
-        setError('Cannot process request');
+      setError("Cannot process request");
     }
   };
 
   return (
-    <div style={{
-      width: '300px',
-      margin: 'auto',
-      padding: '40px',
-      border: '1px solid #ccc',
-      borderRadius: '5px',
-      backgroundColor: '#f9f9f9'
-    }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Reset password</h2>
-
-      <form onSubmit={handleSubmit}>
-        <div>
+    <div className="auth-page">
+      <div className="auth-card">
+        <h2>Set new password</h2>
+        <form onSubmit={handleSubmit}>
           <label>
-            New password:
+            New password
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
+              autoComplete="new-password"
             />
           </label>
-        </div>
-
-        <div>
           <label>
-            Repeat password:
+            Repeat password
             <input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
+              autoComplete="new-password"
             />
           </label>
-        </div>
-
-        <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-          <button
-            type="submit"
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#007bff',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '5px'
-            }}
-          >
-            Confirm
-          </button>
-        </div>
-      </form>
-
-      <div style={{ color: 'red', textAlign: 'center' }}>
-        {error}
+          <div className="auth-card__actions">
+            <button type="submit" className="btn btn-primary">
+              Confirm
+            </button>
+          </div>
+        </form>
+        {error && <p className="auth-card__error">{error}</p>}
       </div>
     </div>
   );

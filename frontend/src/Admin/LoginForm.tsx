@@ -1,111 +1,86 @@
-import React, { useEffect, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
-
+import React, { useEffect, useState } from "react";
+import { Navigate, useNavigate, Link } from "react-router-dom";
 import { api, setToken } from "./utils";
-
-
-
+import "./Admin.css";
 
 const LoginForm: React.FC = () => {
-  const [uname_or_email, setLogin] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [uname_or_email, setLogin] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [isLoginMode, setIsLoginMode] = useState(true);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const url = isLoginMode ? '/auth/login' : '/auth/login-mail';
-    
-    var bodyFormData = new FormData();
-    bodyFormData.append("uname_or_email", uname_or_email)
+    const url = isLoginMode ? "/auth/login" : "/auth/login-mail";
+
+    const bodyFormData = new FormData();
+    bodyFormData.append("uname_or_email", uname_or_email);
     if (isLoginMode) {
-      bodyFormData.append("password", password)
+      bodyFormData.append("password", password);
     }
 
-    const response = await api.post(url, bodyFormData).catch((err) => {return err.response});
+    const response = await api
+      .post(url, bodyFormData)
+      .catch((err) => err.response);
 
     if (response?.status === 401 || response?.status === 400) {
-        setError('Incorrect email login data, check it out');
+      setError("Incorrect email login data, check it out");
     } else if (response?.status > 199 && response?.status < 400) {
-        setError("")
-        if (isLoginMode) {
-          setToken(response.data.token);
-          navigate("/admin")
-        } else {
-          alert("Mail sent")
-        }
+      setError("");
+      if (isLoginMode) {
+        setToken(response.data.token);
+        navigate("/admin");
+      } else {
+        alert("Mail sent");
+      }
     } else {
-        setError('Cannot process request')
+      setError("Cannot process request");
     }
   };
 
   return (
-    <div style={{
-      width: '300px',
-      margin: 'auto',
-      padding: '40px',
-      border: '1px solid #ccc',
-      borderRadius: '5px',
-      backgroundColor: '#f9f9f9'
-    }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Authorization</h2>
-
+    <div className="auth-page">
+      <div className="auth-card">
+        <h2>Sign in</h2>
         <form onSubmit={handleSubmit}>
-          <div>
+          <label>
+            Username or email
+            <input
+              type="text"
+              value={uname_or_email}
+              onChange={(e) => setLogin(e.target.value)}
+              autoComplete="username"
+            />
+          </label>
+          {isLoginMode && (
             <label>
-              Username or Email:
-              <input 
-                type="text" 
-                value={uname_or_email} 
-                onChange={(e) => setLogin(e.target.value)} 
-                style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
               />
             </label>
-      {isLoginMode ? (
-            <label>
-              Password:
-              <input 
-                type="password" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                style={{ width: '100%', padding: '8px', marginBottom: '10px' }}
-              />
-            </label>
-      ) : (
-        <></>
-      )}
+          )}
+          <div className="auth-card__actions">
+            <button type="submit" className="btn btn-primary">
+              {isLoginMode ? "Login" : "Send login link"}
+            </button>
           </div>
         </form>
-
-      <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-        <button 
-          type="submit" 
-          onClick={handleSubmit} 
-          style={{ padding: '10px 20px', backgroundColor: '#007bff', color: '#fff', border: 'none', borderRadius: '5px' }}
-        >
-          Login
-        </button>
-      </div>
-
-      <div style={{ color: 'red', textAlign: 'center' }}>
-        {error}
-      </div>
-
-      <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-        <a 
-          href="#" 
-          onClick={() => setIsLoginMode(!isLoginMode)} 
-          style={{ color: '#007bff', textDecoration: 'none' }}
-        >
-          {isLoginMode ? 'Log in by mail' : 'Log in by password'}
-        </a>
-      </div>
-
-      <div style={{ textAlign: 'center', marginTop: '15px' }}>
-        <a href="/reset" style={{ color: '#007bff', textDecoration: 'none' }}>
-          Reset password
-        </a>
+        {error && <p className="auth-card__error">{error}</p>}
+        <div className="auth-card__links">
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setIsLoginMode(!isLoginMode)}
+          >
+            {isLoginMode ? "Log in by mail" : "Log in by password"}
+          </button>
+          <Link to="/reset">Reset password</Link>
+        </div>
       </div>
     </div>
   );
@@ -113,25 +88,26 @@ const LoginForm: React.FC = () => {
 
 export default LoginForm;
 
-export const MailAdmit: React.FC<{word: string}> = (props) => {
-  var bodyFormData = new FormData();
-  bodyFormData.append("word", props.word)
-  const [result, setResult] = useState('bad');
+export const MailAdmit: React.FC<{ word: string }> = (props) => {
+  const bodyFormData = new FormData();
+  bodyFormData.append("word", props.word);
+  const [result, setResult] = useState("bad");
 
   useEffect(() => {
-    async function _() {
-      var response = await api.post('/auth/confirm-login-mail', bodyFormData).catch((err) => {return err.response});
+    async function confirm() {
+      const response = await api
+        .post("/auth/confirm-login-mail", bodyFormData)
+        .catch((err) => err.response);
       if (response?.status > 199 && response?.status < 400) {
-          setToken(response.data.token);
-          setResult("ok")
+        setToken(response.data.token);
+        setResult("ok");
       }
     }
-    _().then(() => {})
-  }, [])
+    void confirm();
+  }, []);
 
-  if (result == "ok") {
-      return <Navigate to="/admin" />
-  } else {
-      return <p>Incorrect link</p>
+  if (result === "ok") {
+    return <Navigate to="/admin" />;
   }
-}
+  return <p className="empty-state">Incorrect link</p>;
+};

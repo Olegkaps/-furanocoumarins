@@ -1,36 +1,56 @@
 basePath: /
 definitions:
-  cassandra.ColumnMeta:
+  admin_internal_presentation_http_search.MetadataResponse:
     properties:
-      column:
+      metadata:
+        items:
+          $ref: '#/definitions/search.ColumnMeta'
+        type: array
+      timestamp:
         type: string
-      description:
-        type: string
-      name:
-        type: string
-      type:
+    type: object
+  admin_internal_presentation_http_search.SearchResponse:
+    properties:
+      data:
+        items:
+          additionalProperties: {}
+          type: object
+        type: array
+      metadata:
+        items:
+          $ref: '#/definitions/search.ColumnMeta'
+        type: array
+      timestamp:
         type: string
     type: object
   cassandra.Table:
     properties:
       created_at:
+        example: "2026-01-15T12:00:00Z"
         type: string
       is_active:
+        example: true
         type: boolean
       is_ok:
+        example: true
         type: boolean
       name:
+        example: furanocoumarins_v2
         type: string
       tableData:
+        example: chemdb.data_2026_01_15T12_00_00_000
         type: string
       tableMeta:
+        example: chemdb.meta_2026_01_15T12_00_00_000
         type: string
       tableSpecies:
+        example: chemdb.species_2026_01_15T12_00_00_000
         type: string
       version:
+        example: v2.0
         type: string
     type: object
-  http.ArticleValResponse:
+  response.ArticleValResponse:
     properties:
       val:
         example: |-
@@ -41,13 +61,13 @@ definitions:
           }
         type: string
     type: object
-  http.ErrorResponse:
+  response.ErrorResponse:
     properties:
       error:
         example: error message
         type: string
     type: object
-  http.TokenResponse:
+  response.TokenResponse:
     properties:
       token:
         example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
@@ -56,31 +76,26 @@ definitions:
   search.AutocompleteResponse:
     properties:
       values:
+        example:
+        - Angelica archangelica
+        - Angelica dahurica
         items:
           type: string
         type: array
     type: object
-  search.GetMetadataResponse:
+  search.ColumnMeta:
     properties:
-      metadata:
-        items:
-          $ref: '#/definitions/cassandra.ColumnMeta'
-        type: array
-      timestamp:
+      column:
+        example: species
         type: string
-    type: object
-  search.SearchResponse:
-    properties:
-      data:
-        items:
-          additionalProperties: {}
-          type: object
-        type: array
-      metadata:
-        items:
-          $ref: '#/definitions/cassandra.ColumnMeta'
-        type: array
-      timestamp:
+      description:
+        example: Plant species name
+        type: string
+      name:
+        example: Species
+        type: string
+      type:
+        example: text search
         type: string
     type: object
 info:
@@ -94,6 +109,7 @@ paths:
       description: Returns bibtex text for the given article ID
       parameters:
       - description: Article ID
+        example: key2024
         in: path
         name: id
         required: true
@@ -104,15 +120,15 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.ArticleValResponse'
+            $ref: '#/definitions/response.ArticleValResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Get article by ID
       tags:
       - bibtex
@@ -123,6 +139,7 @@ paths:
       description: Sends password reset link to user email
       parameters:
       - description: Username or email
+        example: admin@example.com
         in: formData
         name: uname_or_email
         required: true
@@ -133,11 +150,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Request password change
       tags:
       - auth
@@ -148,6 +165,7 @@ paths:
       description: Exchanges word from email link for JWT token
       parameters:
       - description: Token from email link
+        example: linAbCdEf123
         in: formData
         name: word
         required: true
@@ -158,15 +176,15 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.TokenResponse'
+            $ref: '#/definitions/response.TokenResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Confirm login via magic link
       tags:
       - auth
@@ -177,11 +195,13 @@ paths:
       description: Sets new password using token from email link
       parameters:
       - description: Token from email link
+        example: pswXyZ987
         in: formData
         name: word
         required: true
         type: string
       - description: New password
+        example: new-secret
         in: formData
         name: password
         required: true
@@ -192,11 +212,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Confirm password change
       tags:
       - auth
@@ -207,11 +227,13 @@ paths:
       description: Returns JWT token on success
       parameters:
       - description: Username or email
+        example: admin@example.com
         in: formData
         name: uname_or_email
         required: true
         type: string
       - description: Password
+        example: secret
         in: formData
         name: password
         required: true
@@ -222,15 +244,15 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.TokenResponse'
+            $ref: '#/definitions/response.TokenResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Login with username/email and password
       tags:
       - auth
@@ -241,6 +263,7 @@ paths:
       description: Sends a magic link to user email for passwordless login
       parameters:
       - description: Username or email
+        example: admin@example.com
         in: formData
         name: uname_or_email
         required: true
@@ -251,11 +274,11 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Request login link by email
       tags:
       - auth
@@ -268,15 +291,15 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.TokenResponse'
+            $ref: '#/definitions/response.TokenResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Renew JWT token
@@ -287,11 +310,13 @@ paths:
       description: Returns prefix-matched values for a column
       parameters:
       - description: Column name
+        example: species
         in: path
         name: column
         required: true
         type: string
       - description: Prefix to match
+        example: Angel
         in: query
         name: value
         required: true
@@ -306,11 +331,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Autocomplete column values
       tags:
       - search
@@ -331,11 +356,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Update bibtex file
@@ -352,17 +377,27 @@ paths:
         name: file
         required: true
         type: file
+      - description: Meta sheet name
+        example: meta
+        in: formData
+        name: meta
+        type: string
+      - description: Table name
+        example: furanocoumarins_v2
+        in: formData
+        name: name
+        type: string
       responses:
         "200":
           description: OK
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create table from Excel file
@@ -383,7 +418,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Get list of all tables
@@ -394,6 +429,7 @@ paths:
       description: Sets the given table as the active one
       parameters:
       - description: Table timestamp
+        example: "2026-01-15T12:00:00.000Z"
         in: path
         name: timestamp
         required: true
@@ -404,11 +440,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Activate table by timestamp
@@ -423,11 +459,11 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/search.GetMetadataResponse'
+            $ref: '#/definitions/admin_internal_presentation_http_search.MetadataResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Get current table metadata
       tags:
       - search
@@ -436,6 +472,7 @@ paths:
       description: Returns markdown content of a page from S3
       parameters:
       - description: Page name
+        example: about
         in: path
         name: name
         required: true
@@ -450,15 +487,15 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Get page content by name
       tags:
       - pages
@@ -468,11 +505,13 @@ paths:
       description: Uploads markdown content for a page (admin only)
       parameters:
       - description: Page name
+        example: about
         in: path
         name: name
         required: true
         type: string
       - description: Markdown content
+        example: '# About\n\nPlatform for furanocoumarins analysis.'
         in: body
         name: body
         required: true
@@ -486,15 +525,15 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Create or update page
@@ -514,6 +553,7 @@ paths:
       description: Searches the active table by query string
       parameters:
       - description: Search query
+        example: species = 'Angelica'
         in: query
         name: q
         required: true
@@ -524,15 +564,15 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/search.SearchResponse'
+            $ref: '#/definitions/admin_internal_presentation_http_search.SearchResponse'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       summary: Search main app data
       tags:
       - search
@@ -541,6 +581,7 @@ paths:
       description: Deletes the table with the given timestamp
       parameters:
       - description: Table timestamp
+        example: "2026-01-15T12:00:00.000Z"
         in: path
         name: timestamp
         required: true
@@ -551,11 +592,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete table by timestamp
@@ -570,7 +611,7 @@ paths:
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/http.ErrorResponse'
+            $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
       summary: Delete all bad tables
