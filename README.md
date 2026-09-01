@@ -1,23 +1,25 @@
 # Furanocoumarins Analysis Platform
 
+Authentication, authorization, and the one-time user migration are documented in [docs/AUTH_MASTER.md](docs/AUTH_MASTER.md).
+
 ![app ui (seacrh)](./img/search-page.png)
 
 A web‑based platform for analyzing the content of furanocoumarins and other substances in plants.
-It allows you to download data from Google Tables, build phylogenetic trees and analyze the distribution of substances by taxanomy.
+It allows administrators to import XLSX workbooks, build phylogenetic trees and analyze the distribution of substances by taxonomy.
 
 Below is an example of the site's UI (home page): search bar, phylogenetic tree, and results table.
 
 ![app ui (tree)](./img/phylogenetic-tree.png)
 ![app ui (table)](./img/search-result.png)
 
-Which data will be displayed on the website is completely determined by the administrator through the settings in the Google Sheet, as shown below. Using the __LIST__ type, a list of sheets that contain data of the same type is registered, and all columns that will be displayed on the website are specified for them
+Which data is displayed is determined by metadata inside the uploaded XLSX workbook, as shown below. Using the `__LIST__` type, administrators register workbook sheets that contain the same kind of data and specify the displayed columns.
 
 ![settings in Google sheets](./img/fuco_sheets.png)
 ![admin page](./img/admin-page.png)
 
 ## Key features
 
-- **Importing data**: downloading data from Google Tables.
+- **Importing data**: uploading validated XLSX workbooks.
 - **Data analysis**: filtering by conditions with visualization of results.
 - **Query comparison**: run up to four search queries side by side (see [Comparing queries](#comparing-queries)).
 - **Phylogenetic trees**: automatic construction of a tree indicating the number of finds for each taxonomic group.
@@ -43,7 +45,10 @@ Successful compare groups are also saved in browser **History** (`/history`) for
 **Backend**:
 - Language: Go.
 - Containerization: Docker.
-- Database of administrators: PostgreSQL + Redis.
+- Identity, OTP, sessions, invitations, bans, and RBAC: private auth-master
+  with its own PostgreSQL database.
+- The legacy PostgreSQL `users` table is read only by the one-time importer;
+  its password hashes are never copied.
 - Table data storage: Apache Cassandra.
 - Object storage: S3-compatible storage (MinIO in dev) for editable page content (About, substance descriptions).
 - UI library for Cassandra: Netflix Data Explorer.
@@ -66,15 +71,27 @@ For local work use [docker-compose.local.yaml](docker-compose.local.yaml): go-au
 
    Edit `env/.env` if needed. See [Environment variables](#environment-variables).
 
-2. Start the stack:
+2. On a first deployment, start infrastructure without `authd`/`go-auth`:
+
+   ```bash
+   docker compose -f docker-compose.local.yaml up -d postgres redis cassandra minio auth-postgres mailpit
+   ```
+
+3. Initialize the domain databases, then run the one-time `make auth-import`
+   migration. The target starts `authd` once to initialize its owned schema,
+   stops both old and new auth writers for the import, then restores the
+   services — see
+   [Database initialization](#database-initialization) and
+   [auth-master integration](docs/AUTH_MASTER.md).
+
+4. Start the complete stack. On later runs this is the only Compose command
+   needed:
 
    ```bash
    docker compose -f docker-compose.local.yaml up -d
    ```
 
-3. Initialize databases and create an admin — see [Database initialization](#database-initialization).
-
-4. Frontend (optional):
+5. Frontend (optional):
 
    ```bash
    docker build -t furanocoumarins-frontend ./frontend
@@ -102,7 +119,7 @@ Full setup, certificate renewal, and secrets rotation: [deploy/swarm/README.md](
 
 ## Database initialization
 
-After the first launch of the backend, build the CLI and run init in this order (keyspace first, then tables):
+Before the first complete backend launch, build the CLI and initialize the domain stores in this order (Cassandra keyspace first, then its tables). Auth-master owns its own schema and initializes it when `authd` starts; the legacy PostgreSQL schema is only the migration source.
 
 - Build CLI binary:
   ```bash
@@ -116,28 +133,14 @@ After the first launch of the backend, build the CLI and run init in this order 
   ./cli init cassandra   # Tables including chemdb.pages (for About and substance pages)
   ```
 
-- Creating administrator accounts:
-  ```bash
-  ./cli create_admin <username> <email>
-  ```
+- Do not create new administrators in the legacy users table. The selected
+  migrated superuser creates invitations and is the only actor allowed to
+  grant the auth-master `admin` role.
 
-- Run tests (recommended — unit + coverage ≥95% + Postgres integration):
+- Install and run the repository-owned auth/migration/browser gates:
   ```bash
-  docker compose -f docker-compose.test.yaml run --rm --build test
-  ```
-  Locally without Docker (unit + coverage gate):
-  ```bash
-  cd backend/admin && ./scripts/test.sh
-  ```
-  Locally with an already running Postgres:
-  ```bash
-  cd backend/admin
-  export TEST_POSTGRES_DSN="user=postgres password=postgres dbname=postgres host=127.0.0.1 port=5432 sslmode=disable"
-  RUN_INTEGRATION=1 ./scripts/test.sh
-  ```
-  Quick unit-only run:
-  ```bash
-  cd backend/admin && go test -v ./...
+  make install
+  make test
   ```
 
 - Cassandra vs Redis vs PostgreSQL cache benchmarks (Podman + `go test -bench`, not part of default `./...`): [backend/admin/benchmarks/cassandra_vs_redis/README.md](backend/admin/benchmarks/cassandra_vs_redis/README.md).
@@ -181,7 +184,14 @@ Main backend (go-auth) variables are loaded from `env/.env` (and related files u
 - CORS: `ALLOW_ORIGIN`
 - Links in emails: `DOMAIN_PREF`
 - S3 (for editable pages): `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`; optionally `S3_REGION`, `S3_USE_PATH_STYLE`
-- SMTP and other app settings as used in the compose/env files (`SMTP_HOST`, `SMTP_PORT`, `MAIL`, `MAIL_SECRET`)
+- SMTP and other app settings as used in the compose/env files (`SMTP_HOST`, `SMTP_PORT`, `SMTP_TIMEOUT` with a positive five-second default, `MAIL`, `MAIL_SECRET`)
+
+XLSX imports preflight the metadata and joins before their first Cassandra
+write. Concurrent app replicas reserve the millisecond registry key with a
+LocalSerial `IF NOT EXISTS` lightweight transaction and retry only definite
+collisions; an uncertain CAS error stops immediately. The in-process “another
+import is running” response is a usability guard, while Cassandra provides the
+cross-replica uniqueness guarantee without deployment downtime.
 
 **Frontend:**
 - `VITE_REACT_APP_BACKEND_SOURCE` — backend API base URL (used as `BASE_URL` in [frontend/src/config.tsx](frontend/src/config.tsx)). Must be set at build/run time for the frontend to call the API.

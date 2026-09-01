@@ -8,6 +8,12 @@ import (
 )
 
 func CreateSASIIndex(session *gocql.Session, table string, column string) error {
+	if err := validateQualifiedIdentifier(table); err != nil {
+		return err
+	}
+	if err := ValidateIdentifier(column); err != nil {
+		return err
+	}
 	err := session.Query(fmt.Sprintf(
 		`CREATE CUSTOM INDEX ON %s (%s)
 		USING 'org.apache.cassandra.index.sasi.SASIIndex'

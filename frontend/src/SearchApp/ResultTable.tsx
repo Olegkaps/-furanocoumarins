@@ -18,6 +18,8 @@ import { InfoTip } from "../shared/ui/InfoTip";
 import { substancePagePath } from "../shared/substanceUrl";
 import { QueryCompareBar, type CompareSeries } from "./QueryCompareBar";
 import { CitationPopover } from "../shared/ui/CitationPopover";
+import { getMetadataTypeModifier, hasMetadataTypeToken } from "../shared/metadataType";
+import { resultGroupIdentity, resultRowIdentity } from "./resultRowIdentity";
 import * as XLSX from "xlsx";
 
 function collectUniqueTokensFromRow(
@@ -180,16 +182,22 @@ function rowsFromResponseData(
     const chem_row = new Map<string, string>();
     const specie_row = new Map<string, string>();
     const value_row = new Map<string, string>();
+    const chemicalIdentity: Array<[string, unknown]> = [];
+    const speciesIdentity: Array<[string, unknown]> = [];
     meta.forEach((m) => {
-      const item = data_item[m.name] != null ? String(data_item[m.name]) : "";
+      const rawItem = data_item[m.name];
+      const item = rawItem != null ? String(rawItem) : "";
       // SMILES is often typed without `table_`, so is_chemical is false — still attach to chem.
-      if (m.is_chemical || m.type === "smiles") chem_row.set(m.name, item);
-      else if (m.is_specie) specie_row.set(m.name, item);
+      if (m.is_chemical || m.type === "smiles") {
+        chem_row.set(m.name, item);
+        chemicalIdentity.push([m.name, rawItem]);
+      } else if (m.is_specie) {
+        specie_row.set(m.name, item);
+        speciesIdentity.push([m.name, rawItem]);
+      }
       else value_row.set(m.name, item);
     });
-    const chem_key_str = [...chem_row.values()].sort().join("");
-    const specie_key_str = [...specie_row.values()].sort().join("");
-    const key = chem_key_str + specie_key_str;
+    const key = resultGroupIdentity(chemicalIdentity, speciesIdentity);
     if (!map.has(key)) {
       map.set(
         key,
@@ -238,26 +246,34 @@ function collectArticleSeriesColors(
   return out;
 }
 
+type ResultValueRow = {
+  values: Map<string, string>;
+  specie: string;
+  chemical: string;
+};
+
 function mergeValueRowsFromSeries(
   filteredBySeries: SeriesRowSet[],
   refColumns: string[],
-): Array<Map<string, string>> {
+): ResultValueRow[] {
   const seen = new Set<string>();
-  const out: Array<Map<string, string>> = [];
+  const out: ResultValueRow[] = [];
   filteredBySeries.forEach(({ rows }) => {
     rows.forEach((dr) => {
       dr.value_rows.forEach((row) => {
-        const refKey = refColumns.map((c) => row.get(c) ?? "").join("\0");
-        const key =
-          refKey.replace(/\0/g, "") !== ""
-            ? `ref:${refKey}`
-            : `row:${[...row.entries()]
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([k, v]) => `${k}=${v}`)
-                .join("\0")}`;
+        const key = resultRowIdentity(
+          dr.specie_val,
+          dr.chemical_val,
+          row,
+          refColumns,
+        );
         if (seen.has(key)) return;
         seen.add(key);
-        out.push(row);
+        out.push({
+          values: row,
+          specie: dr.specie_val,
+          chemical: dr.chemical_val,
+        });
       });
     });
   });
@@ -397,20 +413,24 @@ function ResultTableBody({
   meta,
   articleSeriesColors,
 }: {
-  rows: Array<Map<string, string>>;
+  rows: ResultValueRow[];
   meta: Array<DataMeta>;
   articleSeriesColors?: Map<string, string[]>;
 }) {
   return (
     <tbody>
       {rows.map((row, rowIdx) => (
-        <tr key={rowIdx}>
+        <tr
+          key={rowIdx}
+          data-row-species={row.specie}
+          data-row-chemical={row.chemical}
+        >
           {meta.map((meta_val, ind) => {
             if (meta_val.is_grouping || meta_val.is_ignore) {
               return <></>;
             }
             const isRef = meta_val.type === "reference";
-            const raw = row.get(meta_val.name);
+            const raw = row.values.get(meta_val.name);
             return (
               <td
                 key={meta_val.name}
@@ -479,7 +499,7 @@ function ResultTable({
   referenceCount,
   articleSeriesColors,
 }: {
-  rows: Array<Map<string, string>>;
+  rows: ResultValueRow[];
   meta: Array<DataMeta>;
   referenceCount?: number;
   articleSeriesColors?: Map<string, string[]>;
@@ -1491,10 +1511,7 @@ function ResultTableOrNull({
   }
 
   const data_meta: Array<DataMeta> = [];
-  const data = new Map<string, DataRows>();
-  const group_chem_inds = new Set<number>();
   let chem_key_column = "";
-  const group_specie_inds = new Set<number>();
   let specie_key_column = "";
 
   const metadata = response["metadata"].sort(
@@ -1514,36 +1531,35 @@ function ResultTableOrNull({
     let additional_data = "";
 
     const full_type = meta_item["type"];
-    if (full_type.includes("link")) {
+    const linkModifier = getMetadataTypeModifier(full_type, "link");
+    if (linkModifier) {
       data_type = "link";
-      additional_data = full_type.split("link[")[1].split("]")[0];
-    } else if (full_type.includes("clas")) {
+      additional_data = linkModifier[0];
+    } else if (getMetadataTypeModifier(full_type, "clas")) {
       data_type = "clas";
-    } else if (full_type.includes("SMILES")) {
+    } else if (hasMetadataTypeToken(full_type, "SMILES")) {
       data_type = "smiles";
-    } else if (full_type.includes("ref[]")) {
+    } else if (hasMetadataTypeToken(full_type, "ref[]")) {
       data_type = "reference";
     }
 
-    if (full_type.includes("chemical")) {
-      group_chem_inds.add(data_meta.length);
-      if (full_type.includes("keycolumn")) {
+    if (hasMetadataTypeToken(full_type, "chemical")) {
+      if (hasMetadataTypeToken(full_type, "keycolumn")) {
         chem_key_column = data_name;
       }
-    } else if (full_type.includes("specie")) {
-      group_specie_inds.add(data_meta.length);
-      if (full_type.includes("keycolumn")) {
+    } else if (hasMetadataTypeToken(full_type, "specie")) {
+      if (hasMetadataTypeToken(full_type, "keycolumn")) {
         specie_key_column = data_name;
       }
     }
 
     let group_type = "";
-    if (full_type.includes("chemical")) {
+    if (hasMetadataTypeToken(full_type, "chemical")) {
       group_type = "chemical";
-    } else if (full_type.includes("specie")) {
+    } else if (hasMetadataTypeToken(full_type, "specie")) {
       group_type = "specie";
     }
-    if (!full_type.includes("table_")) {
+    if (!hasMetadataTypeToken(full_type, "table_")) {
       group_type = "ignore";
     }
     data_meta.push(
@@ -1558,55 +1574,12 @@ function ResultTableOrNull({
     );
   });
 
-  response["data"].forEach((data_item: { [index: string]: any }) => {
-    const row = new Map<string, string>();
-    const group_chem_row = new Map<string, string>();
-    const group_specie_row = new Map<string, string>();
-
-    data_meta.forEach((meta_item: DataMeta, ind) => {
-      const item = data_item[meta_item.name] ? data_item[meta_item.name] : "";
-      if (group_chem_inds.has(ind)) {
-        group_chem_row.set(meta_item.name, item);
-      } else if (group_specie_inds.has(ind)) {
-        group_specie_row.set(meta_item.name, item);
-      } else {
-        row.set(meta_item.name, item);
-      }
-    });
-
-    const chem_key: string[] = [];
-    group_chem_row.forEach((val) => {
-      chem_key.push(val);
-    });
-    const chem_key_str = chem_key.sort().join("");
-
-    const specie_key: string[] = [];
-    group_specie_row.forEach((val) => {
-      specie_key.push(val);
-    });
-    const specie_key_str = specie_key.sort().join("");
-
-    const key = chem_key_str + specie_key_str;
-
-    if (!data.has(key)) {
-      data.set(
-        key,
-        new DataRows(
-          group_specie_row,
-          specie_key_column,
-          group_chem_row,
-          chem_key_column,
-          [],
-        ),
-      );
-    }
-    data.get(key)?.add_row(row);
-  });
-
-  const rows: Array<DataRows> = [];
-  data.forEach((val) => {
-    rows.push(val);
-  });
+  const rows = rowsFromResponseData(
+    response["data"],
+    data_meta,
+    chem_key_column,
+    specie_key_column,
+  );
 
   return (
     <ResultTableWrapper

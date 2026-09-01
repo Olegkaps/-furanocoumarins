@@ -8,7 +8,9 @@
 package main
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -27,6 +29,11 @@ func main() {
 			logging.Fatal("%s", err)
 		}
 	}()
+	startupCtx, cancelStartup := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelStartup()
+	if err := container.Cassandra.EnsureActivationSchema(startupCtx); err != nil {
+		logging.Fatal("initialize Cassandra activation schema: %s", err)
+	}
 
 	http.Handle("/metrics", promhttp.Handler())
 	presentation.StartMetricsServer()

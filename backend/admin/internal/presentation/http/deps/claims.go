@@ -5,6 +5,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+
+	infraauth "admin/internal/infrastructure/authmaster"
 )
 
 func jwtClaims(c *fiber.Ctx) (jwt.MapClaims, error) {
@@ -20,6 +22,9 @@ func jwtClaims(c *fiber.Ctx) (jwt.MapClaims, error) {
 }
 
 func JWTUsername(c *fiber.Ctx) (string, error) {
+	if user, ok := c.Locals("auth-master-user").(infraauth.User); ok {
+		return user.Login, nil
+	}
 	claims, err := jwtClaims(c)
 	if err != nil {
 		return "", err
@@ -29,6 +34,13 @@ func JWTUsername(c *fiber.Ctx) (string, error) {
 		return "", fmt.Errorf("missing username in token")
 	}
 	return name, nil
+}
+
+func AuthEmail(c *fiber.Ctx) (string, error) {
+	if user, ok := c.Locals("auth-master-user").(infraauth.User); ok && user.Email != nil && *user.Email != "" {
+		return *user.Email, nil
+	}
+	return "", fmt.Errorf("missing email in authenticated profile")
 }
 
 func JWTRole(c *fiber.Ctx) (string, error) {

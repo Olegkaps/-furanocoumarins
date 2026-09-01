@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	appcreate "admin/internal/application/create"
 	domainsearch "admin/internal/domain/search"
 	"admin/internal/presentation/http/response"
 )
@@ -43,7 +44,8 @@ func ValidateRequest(searchRequest string, columns []domainsearch.ColumnMeta) er
 func VisibleColumns(columns []domainsearch.ColumnMeta) []string {
 	var selected []string
 	for _, col := range columns {
-		if !strings.Contains(strings.ToLower(col.Type), "invisible") {
+		hidden, err := appcreate.HasColumnTypeToken(col.Type, "invisible")
+		if err == nil && !hidden {
 			selected = append(selected, col.Column)
 		}
 	}
@@ -51,27 +53,6 @@ func VisibleColumns(columns []domainsearch.ColumnMeta) []string {
 }
 
 func IsTypesEqual(oldType, newType string) bool {
-	oldList := strings.Split(oldType, " ")
-	newList := strings.Split(newType, " ")
-
-	oldMap := make(map[string]struct{})
-	for _, t := range oldList {
-		if t == "primary" || strings.Contains(t, "external[") {
-			continue
-		}
-		oldMap[t] = struct{}{}
-	}
-
-	visited := 0
-	for _, t := range newList {
-		if t == "primary" || strings.Contains(t, "external[") {
-			continue
-		}
-		visited++
-		if _, exists := oldMap[t]; !exists {
-			return false
-		}
-	}
-
-	return len(oldMap) == visited
+	equal, err := appcreate.ColumnTypesEquivalent(oldType, newType)
+	return err == nil && equal
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { api, getToken, isTokenExists, delToken } from "./utils";
 import { Navigate } from "react-router-dom";
 import {
@@ -32,6 +32,24 @@ class Table {
   }
 }
 
+function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
+	return new Promise((resolve, reject) => {
+		if (signal.aborted) {
+			reject(new DOMException("Import status polling cancelled", "AbortError"));
+			return;
+		}
+		const onAbort = () => {
+			window.clearTimeout(timer);
+			reject(new DOMException("Import status polling cancelled", "AbortError"));
+		};
+		const timer = window.setTimeout(() => {
+			signal.removeEventListener("abort", onAbort);
+			resolve();
+		}, milliseconds);
+		signal.addEventListener("abort", onAbort, { once: true });
+	});
+}
+
 const AdminPage: React.FC = () => {
   const [tables, setTables] = useState(Array<Table>);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -41,50 +59,49 @@ const AdminPage: React.FC = () => {
   const [showSaveBibtex, setShowSaveBibtex] = useState(false);
   const [bibtexFile, setBibtexFile] = useState<File>();
   const [tokenBroken, setTokenBroken] = useState(false);
+	const [tableNotice, setTableNotice] = useState("");
+	const importPoll = useRef<AbortController | null>(null);
 
-  if (!isTokenExists() || tokenBroken) {
-    return <Navigate to="/login" />;
-  }
   const token = getToken();
 
-  const fetchTables = async () => {
+  const fetchTables = async (signal?: AbortSignal): Promise<Table[]> => {
     const token = getToken();
     if (!token) {
       setTokenBroken(true);
-      return;
+      return [];
     }
-    const response = await api
-      .post(
-        "/get-tables-list",
-        {},
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
-      .catch((err) => err.response);
+    const response = await api.post(
+	  "/get-tables-list",
+	  {},
+	  { headers: { Authorization: `Bearer ${token}` }, signal },
+	);
 
     if (response?.status === 401) {
       delToken();
       setTokenBroken(true);
-      return;
+      return [];
     }
 
-    setTables(
-      response.data?.sort((a: Table, b: Table) => {
+	const nextTables = (response.data ?? []).sort((a: Table, b: Table) => {
         const date_b = new Date(b.created_at);
         const date_a = new Date(a.created_at);
         if (date_a < date_b) return -1;
         if (date_a > date_b) return 1;
         return 0;
-      }),
-    );
-
-    if (response?.status >= 400) {
-      alert("Error request");
-    }
+	});
+	setTables(nextTables);
+	return nextTables;
   };
 
   useEffect(() => {
-    fetchTables();
-  }, [token]);
+	if (token && !tokenBroken) void fetchTables().catch(() => setTableNotice("Could not load tables; retry the page."));
+  }, [token, tokenBroken]);
+
+	useEffect(() => () => importPoll.current?.abort(), []);
+
+  if (!isTokenExists() || tokenBroken) {
+    return <Navigate to="/login" />;
+  }
 
   const handleCreateTable = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,20 +115,79 @@ const AdminPage: React.FC = () => {
     bodyFormData.append("file", googleSheetFile);
     bodyFormData.append("meta", googleMetaList);
     bodyFormData.append("name", googleSheetName);
-    setShowCreateForm(false);
-
-    const response = await api
-      .post("/create-table", bodyFormData, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .catch((err) => err.response);
-
-    if (response?.status === 400) {
-      alert("Incorrect link");
-    }
-
-    setTimeout(() => fetchTables(), 3000);
+	const submittedName = googleSheetName;
+	setTableNotice(`Uploading ${submittedName}…`);
+	importPoll.current?.abort();
+	const controller = new AbortController();
+	importPoll.current = controller;
+	let accepted = false;
+	try {
+		const response = await api.post("/create-table", bodyFormData, {
+			headers: { Authorization: `Bearer ${token}` },
+			signal: controller.signal,
+		});
+		accepted = true;
+		setShowCreateForm(false);
+		const importID = String(response.data?.import_id ?? "");
+		if (!importID) throw new Error("missing import identifier");
+		setTableNotice(`Importing ${submittedName}…`);
+		await waitForImport(importID, submittedName, controller.signal);
+	} catch (error: unknown) {
+		if (controller.signal.aborted) return;
+		const status = (error as { response?: { status?: number } })?.response?.status;
+		if (!accepted && status === 409) {
+			setShowCreateForm(true);
+			setTableNotice("Another import is running. Your file and form values are preserved; wait for it to finish, then retry.");
+			return;
+		}
+		setTableNotice(accepted
+			? `Could not determine the final status of ${submittedName}. Reload the table list before retrying.`
+			: `Upload failed for ${submittedName}; check the file and retry.`);
+	}
   };
+
+	const waitForImport = async (importID: string, name: string, signal: AbortSignal) => {
+		const deadline = Date.now() + 120_000;
+		while (Date.now() < deadline) {
+			let status: { data?: { state?: unknown } };
+			try {
+				status = await api.get(`/table-imports/${encodeURIComponent(importID)}`, {
+					headers: { Authorization: `Bearer ${getToken()}` },
+					signal,
+				});
+			} catch (error: unknown) {
+				if (signal.aborted) throw error;
+				const code = (error as { response?: { status?: number } })?.response?.status;
+				try { await fetchTables(signal); } catch { /* retain terminal recovery text */ }
+				setTableNotice(code === 404
+					? `${name} import status is unavailable; the server may have restarted. Check the table list before retrying.`
+					: `Could not read ${name} import status. Reload the table list before retrying.`);
+				return;
+			}
+			const state = status.data?.state;
+			if (state === "ready") {
+				try {
+					await fetchTables(signal);
+					setTableNotice(`${name} is Ready`);
+				} catch {
+					setTableNotice(`${name} is Ready, but the table list could not refresh. Reload the page.`);
+				}
+				return;
+			}
+			if (state === "broken") {
+				try { await fetchTables(signal); } catch { /* keep the terminal failure visible */ }
+				setTableNotice(`${name} import failed (Broken). Check your email or backend logs, then correct the workbook and retry.`);
+				return;
+			}
+			if (state !== "importing") {
+				try { await fetchTables(signal); } catch { /* retain malformed-response notice */ }
+				setTableNotice(`${name} import returned an invalid status. Reload the table list before retrying.`);
+				return;
+			}
+			await abortableDelay(1000, signal);
+		}
+		setTableNotice(`${name} import timed out. It may still be running; reload the table list before retrying.`);
+	};
 
   const handleSetActiveTable = async (
     e: React.FormEvent,
@@ -119,16 +195,21 @@ const AdminPage: React.FC = () => {
   ) => {
     e.preventDefault();
     const token = getToken();
-
-    await api
-      .post(
-        "/make-table-active/" + tableTimestamp,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
-      .catch((err) => err.response);
-
-    setTimeout(() => fetchTables(), 3000);
+	setTableNotice("Activating table…");
+	try {
+		await api.post(
+			"/make-table-active/" + tableTimestamp,
+			{},
+			{ headers: { Authorization: `Bearer ${token}` } },
+		);
+		await fetchTables();
+		setTableNotice("Table is Active");
+	} catch (error: unknown) {
+		const detail = (error as { response?: { data?: { error?: unknown } } })?.response?.data?.error;
+		setTableNotice(typeof detail === "string" && detail.length > 0
+			? detail
+			: "Could not activate the table. The previous active table was preserved; retry or inspect backend logs.");
+	}
   };
 
   const handleDeleteTable = async (
@@ -215,6 +296,7 @@ const AdminPage: React.FC = () => {
           </button>
         </div>
       </div>
+	  {tableNotice && <p role="status" data-testid="table-notice">{tableNotice}</p>}
 
       {showCreateForm && (
         <div className="admin-modal" role="dialog" aria-modal="true">
@@ -304,6 +386,7 @@ const AdminPage: React.FC = () => {
               <div
                 key={table.created_at}
                 className={`admin-table-card ${statusClass}`.trim()}
+				data-table-name={table.name}
               >
                 {table.is_active && (
                   <span className="admin-table-card__badge is-active">

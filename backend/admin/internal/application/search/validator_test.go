@@ -47,14 +47,33 @@ func TestVisibleColumnsNegativeAllInvisible(t *testing.T) {
 	assert.Empty(t, search.VisibleColumns(cols))
 }
 
+func TestVisibleColumnsUsesExactInvisibleToken(t *testing.T) {
+	cols := []domainsearch.ColumnMeta{
+		{Column: "visible", Type: "uninvisible text"},
+		{Column: "also_visible", Type: "link[https://example.test/invisible/%s] text"},
+		{Column: "hidden", Type: "invisible text"},
+		{Column: "invalid", Type: "link["},
+	}
+	assert.Equal(t, []string{"visible", "also_visible"}, search.VisibleColumns(cols))
+}
+
 func TestIsTypesEqualPositive(t *testing.T) {
 	assert.True(t, search.IsTypesEqual("text primary", "text external[foo]"))
 	assert.True(t, search.IsTypesEqual("text search chemical", "text search chemical"))
+	assert.True(t, search.IsTypesEqual("clas[01][gbif] table_specie", "table_specie clas[01][gbif]"))
+	assert.True(t, search.IsTypesEqual("link[https://example.test/%s] table_", "table_ link[https://example.test/%s]"))
+	assert.True(t, search.IsTypesEqual("set[Bergapten Psoralen] chemical", "chemical set[Bergapten Psoralen]"))
+	assert.True(t, search.IsTypesEqual("table_chemical SMILES", "table_chemical smiles"))
 }
 
 func TestIsTypesEqualNegative(t *testing.T) {
 	assert.False(t, search.IsTypesEqual("text search", "text"))
 	assert.False(t, search.IsTypesEqual("text chemical", "text specie"))
+	assert.False(t, search.IsTypesEqual("clas[01][gbif]", "clas[01][original]"))
+	assert.False(t, search.IsTypesEqual("link[https://one.test/%s]", "link[https://two.test/%s]"))
+	assert.False(t, search.IsTypesEqual("set[one two]", "set[one three]"))
+	assert.False(t, search.IsTypesEqual("external[sunset]", "set"))
+	assert.False(t, search.IsTypesEqual("table_chemical SMILES", "table_chemical Smiles"))
 }
 
 func TestValidateRequestSQLInjectionNegative(t *testing.T) {

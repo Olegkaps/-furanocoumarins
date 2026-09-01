@@ -9,7 +9,8 @@ import {
 import './App.css'
 import SearchApp, { AppPhilogeneticTree, AppResultTable } from "./SearchApp/SearchApp";
 import AboutPage from "./About/AboutPage";
-import { AdminApp, AdminLogin, AdminLogout, AdminReset, AdminAdmit } from "./Admin/Admin";
+import { AdminApp, AdminLogin, AdminLogout, AdminReset, AdminAdmit, AdminMagicCallback } from "./Admin/Admin";
+import Register from "./Admin/Register";
 import { Reference } from "./Reference/Reference";
 import SubstancePage from "./SubstancePage/SubstancePage";
 import { SiteFooter } from "./shared/SiteFooter";
@@ -39,6 +40,8 @@ function App() {
               <Route path="/logout" element={<AdminLogout />}/>
               <Route path="/reset" element={<AdminReset />}/>
               <Route path="/admit/:code" element={<AdminAdmit />}/>
+			  <Route path="/admit" element={<AdminMagicCallback />}/>
+			  <Route path="/register" element={<Register />}/>
               <Route path="/admin" element={<AdminApp />}/>
               <Route path="/reference/:article_id" element={<Reference />}/>
           </Routes>

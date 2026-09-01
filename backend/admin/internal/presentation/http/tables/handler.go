@@ -1,6 +1,9 @@
 package tables
 
 import (
+	"net/url"
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 
 	"admin/internal/app"
@@ -15,6 +18,14 @@ type Handler struct {
 
 func NewHandler(container *app.Container) *Handler {
 	return &Handler{Handler: deps.New(container)}
+}
+
+func parseTimestampParam(c *fiber.Ctx, value string) (time.Time, error) {
+	decoded, err := url.PathUnescape(value)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return persistence.String2Time(c, decoded)
 }
 
 // GetTablesList godoc
@@ -44,7 +55,7 @@ func (h *Handler) GetTablesList(c *fiber.Ctx) error {
 // @Failure      400,500 {object} response.ErrorResponse
 // @Router       /make-table-active/{timestamp} [post]
 func (h *Handler) ActivateTable(c *fiber.Ctx) error {
-	tableTime, err := persistence.String2Time(c, c.Params("timestamp"))
+	tableTime, err := parseTimestampParam(c, c.Params("timestamp"))
 	if err != nil {
 		return response.Resp400(c, err)
 	}
@@ -68,7 +79,7 @@ func (h *Handler) ActivateTable(c *fiber.Ctx) error {
 // @Failure      400,500 {object} response.ErrorResponse
 // @Router       /table/{timestamp} [delete]
 func (h *Handler) DeleteTable(c *fiber.Ctx) error {
-	tableTime, err := persistence.String2Time(c, c.Params("timestamp"))
+	tableTime, err := parseTimestampParam(c, c.Params("timestamp"))
 	if err != nil {
 		return response.Resp400(c, err)
 	}

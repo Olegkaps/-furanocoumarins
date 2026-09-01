@@ -4,14 +4,13 @@ import (
 	"net/http"
 
 	"github.com/ansrivas/fiberprometheus/v2"
-	jwtware "github.com/gofiber/contrib/jwt"
 	"github.com/gofiber/contrib/swagger"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/sirupsen/logrus"
 
 	"admin/internal/app"
-	authhandler "admin/internal/presentation/http/auth"
+	authmasterhandler "admin/internal/presentation/http/authmaster"
 	bibtexhandler "admin/internal/presentation/http/bibtex"
 	createhandler "admin/internal/presentation/http/create"
 	pageshandler "admin/internal/presentation/http/pages"
@@ -42,7 +41,7 @@ func NewApp(container *app.Container) *fiber.App {
 		}))
 	}
 
-	auth := authhandler.NewHandler(container)
+	externalAuth := authmasterhandler.New(container)
 	search := searchhandler.NewHandler(container)
 	tables := tableshandler.NewHandler(container)
 	bibtex := bibtexhandler.NewHandler(container)
@@ -56,25 +55,45 @@ func NewApp(container *app.Container) *fiber.App {
 	app.Get("/pages/:name", pages.GetPage)
 
 	app.Get("/ping", response.Resp200)
-	app.Post("/auth/login", auth.Login)
-	app.Post("/auth/login-mail", auth.LoginMail)
-	app.Post("/auth/confirm-login-mail", auth.ConfirmLoginMail)
-	app.Post("/auth/change-password", auth.ChangePassword)
-	app.Post("/auth/confirm-password-change", auth.ConfirmPasswordChange)
+	// Fixed compatibility surface: authd itself is private and arbitrary proxy
+	// paths are deliberately impossible.
+	app.Post("/auth/login", externalAuth.JSON("/v1/auth/login", authmasterhandler.LoginBody))
+	app.Post("/auth/login-verify-otp", externalAuth.JSON("/v1/auth/login/verify-otp", authmasterhandler.OTPVerifyBody))
+	app.Post("/auth/login-mail", externalAuth.JSON("/v1/auth/login/magic-link", authmasterhandler.MagicStartBody))
+	app.Post("/auth/confirm-login-mail", externalAuth.JSON("/v1/auth/login/magic-link/verify", authmasterhandler.MagicVerifyBody))
+	app.Post("/auth/register", externalAuth.Forward(fiber.MethodPost, "/v1/auth/register"))
+	app.Get("/auth/registration-invite", externalAuth.ForwardQuery(fiber.MethodGet, "/v1/auth/registration-invite", "token"))
+	app.Post("/auth/password-reset/start", externalAuth.Forward(fiber.MethodPost, "/v1/auth/password/reset/start"))
+	app.Post("/auth/password-reset/complete", externalAuth.Forward(fiber.MethodPost, "/v1/auth/password/reset/complete"))
+	app.Post("/auth/refresh", externalAuth.Forward(fiber.MethodPost, "/v1/auth/refresh"))
+	app.Post("/auth/logout", externalAuth.Forward(fiber.MethodPost, "/v1/auth/logout"))
+	app.Get("/auth/me", externalAuth.Forward(fiber.MethodGet, "/v1/me"))
+	app.Post("/auth/password/2fa", externalAuth.Forward(fiber.MethodPost, "/v1/auth/password/2fa"))
+	app.Post("/auth/password", externalAuth.Forward(fiber.MethodPost, "/v1/auth/password"))
+	app.Get("/auth/sessions", externalAuth.Forward(fiber.MethodGet, "/v1/sessions"))
+	app.Delete("/auth/sessions/:sessionID", externalAuth.ForwardPath(fiber.MethodDelete, func(c *fiber.Ctx) string { return "/v1/sessions/" + c.Params("sessionID") }))
+	app.Post("/auth/sessions/revoke-otp", externalAuth.Forward(fiber.MethodPost, "/v1/sessions/revoke-otp"))
+	app.Post("/auth/sessions/:sessionID/revoke", externalAuth.ForwardPath(fiber.MethodPost, func(c *fiber.Ctx) string { return "/v1/sessions/" + c.Params("sessionID") + "/revoke" }))
 
-	app.Use(jwtware.New(jwtware.Config{
-		SigningKey: jwtware.SigningKey{Key: settings.C.SecretKeyBytes()},
-	}))
-	app.Post("/auth/renew-token", auth.RenewToken)
+	super := app.Group("/auth/admin", authmasterhandler.RequireSuperuser(container))
+	super.Post("/invitations", externalAuth.Forward(fiber.MethodPost, "/v1/admin/registration-invites"))
+	super.Get("/users", externalAuth.ForwardQuery(fiber.MethodGet, "/v1/admin/users", "q", "cursor", "page_size"))
+	super.Post("/users/:userID/ban", externalAuth.ForwardPath(fiber.MethodPost, func(c *fiber.Ctx) string { return "/v1/admin/users/" + c.Params("userID") + "/ban" }))
+	super.Delete("/users/:userID/ban", externalAuth.ForwardPath(fiber.MethodDelete, func(c *fiber.Ctx) string { return "/v1/admin/users/" + c.Params("userID") + "/ban" }))
+	super.Post("/signing-keys/rotate", externalAuth.Forward(fiber.MethodPost, "/v1/admin/signing-keys/rotate"))
+	super.Get("/roles", externalAuth.ForwardRoles(fiber.MethodGet, "/v1/roles", "q", "cursor", "page_size"))
+	super.Post("/roles/:roleID/members", externalAuth.ForwardPath(fiber.MethodPost, func(c *fiber.Ctx) string { return "/v1/roles/" + c.Params("roleID") + "/members" }))
+	super.Delete("/roles/:roleID/members/:userID", externalAuth.ForwardPath(fiber.MethodDelete, func(c *fiber.Ctx) string { return "/v1/roles/" + c.Params("roleID") + "/members/" + c.Params("userID") }))
 
-	app.Post("/create-table", create.CreateTable)
-	app.Post("/get-tables-list", tables.GetTablesList)
-	app.Post("/make-table-active/:timestamp", tables.ActivateTable)
-	app.Delete("/table/:timestamp", tables.DeleteTable)
-	app.Delete("/tables", tables.DeleteAllBadTables)
-
-	app.Put("/bibtex", bibtex.UpdateFile)
-	app.Put("/pages/:name", pages.PutPage)
+	app.Post("/get-tables-list", authmasterhandler.RequireUser(container), tables.GetTablesList)
+	admin := authmasterhandler.RequireAdmin(container)
+	app.Post("/create-table", admin, create.CreateTable)
+	app.Get("/table-imports/:importID", admin, create.ImportStatus)
+	app.Post("/make-table-active/:timestamp", admin, tables.ActivateTable)
+	app.Delete("/table/:timestamp", admin, tables.DeleteTable)
+	app.Delete("/tables", admin, tables.DeleteAllBadTables)
+	app.Put("/bibtex", admin, bibtex.UpdateFile)
+	app.Put("/pages/:name", admin, pages.PutPage)
 
 	return app
 }

@@ -3,6 +3,8 @@
  * bump while old responses are still in the client cache).
  */
 
+import { getMetadataTypeModifier } from "./metadataType";
+
 export type SchemaSuspicion = {
   message: string;
   detail?: string;
@@ -120,9 +122,9 @@ export function inspectSearchPayload(payload: unknown): string | null {
   // clas / default[] references should point at known columns
   const colSet = new Set(cols);
   for (const item of meta as Array<{ type?: string; column?: string }>) {
-    const t = item.type ?? "";
-    if (t.includes("default[")) {
-      const def = t.split("default[")[1]?.split("]")[0];
+    const defaultModifier = getMetadataTypeModifier(item.type ?? "", "default");
+    if (defaultModifier) {
+      const def = defaultModifier[0];
       if (def && !colSet.has(def) && !colSet.has(item.column ?? "")) {
         // soft: only flag if many such misses — skip for single
       }

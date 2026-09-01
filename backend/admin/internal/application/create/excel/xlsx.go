@@ -66,7 +66,10 @@ func ReadXLSXToMap(file *excelize.File, sheetName string, columnNames []string, 
 				error_messages = append(error_messages, fmt.Sprintf("missing key %q in row %d", keyColumn, rowNum+2))
 				continue
 			}
-			key = strings.Trim(row[keyIdx], " ")
+			// The primary value participates in joins after hidden annotations are
+			// removed. Index the row by that exact persisted value as well, or an
+			// external key such as `a#note#b` is stored as `ab` but can never join.
+			key = strings.Trim(RemoveHiden(row[keyIdx]), " ")
 		}
 
 		if key == "" {

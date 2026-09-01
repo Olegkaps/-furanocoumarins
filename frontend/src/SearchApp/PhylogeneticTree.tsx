@@ -13,6 +13,7 @@ import {
 } from "@gravity-ui/icons";
 import { InfoTip } from "../shared/ui/InfoTip";
 import { QueryCompareBar, type CompareSeries } from "./QueryCompareBar";
+import { getMetadataTypeModifier, hasMetadataTypeToken } from "../shared/metadataType";
 import {
   appendCladeClause,
   readCompareQueriesFromParams,
@@ -1544,17 +1545,13 @@ function PhilogeneticTreeOrNull({
   all_tags.add(tag);
 
   metadata_response.forEach((meta_item: { [index: string]: any }) => {
-    const _type = meta_item["type"];
-    if (!_type.includes("clas[")) {
+    const classification = getMetadataTypeModifier(String(meta_item["type"]), "clas");
+    if (!classification) {
       return;
     }
 
-    const curr_num: string = _type.split("clas[")[1].split("]")[0];
-
-    let curr_tag = "original";
-    if (_type.includes("][")) {
-      curr_tag = _type.split("][")[1].split("]")[0];
-    }
+    const curr_num = classification[0];
+    const curr_tag = classification[1] ?? "original";
 
     all_tags.add(curr_tag);
     if (curr_tag === "original" && !(curr_num in class_num_to_tag)) {
@@ -1583,12 +1580,12 @@ function PhilogeneticTreeOrNull({
   const smilesColumns = (
     response["metadata"] as Array<{ [index: string]: string }>
   )
-    .filter((m) => m["type"]?.includes("SMILES"))
+    .filter((m) => hasMetadataTypeToken(String(m["type"]), "SMILES"))
     .map((m) => m["column"]);
   const refColumns = (
     response["metadata"] as Array<{ [index: string]: string }>
   )
-    .filter((m) => m["type"]?.includes("ref[]"))
+    .filter((m) => hasMetadataTypeToken(String(m["type"]), "ref[]"))
     .map((m) => m["column"]);
 
   const uniquesByClades = buildUniquesByClades(

@@ -6,8 +6,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	appbibtex "admin/internal/application/bibtex"
 	"admin/internal/app"
+	appbibtex "admin/internal/application/bibtex"
+	appcreate "admin/internal/application/create"
 	domainmail "admin/internal/domain/mail"
 	"admin/internal/infrastructure/logging"
 	"admin/internal/presentation/http/deps"
@@ -56,14 +57,9 @@ func (h *Handler) GetArticle(c *fiber.Ctx) error {
 // @Failure      400,500 {object} response.ErrorResponse
 // @Router       /bibtex [put]
 func (h *Handler) UpdateFile(c *fiber.Ctx) error {
-	name, err := deps.JWTUsername(c)
+	authorEmail, err := deps.AuthEmail(c)
 	if err != nil {
 		return response.Resp401(c, err)
-	}
-
-	dbUser, err := h.Container.Users.FindByLoginOrEmail(c.Context(), name)
-	if err != nil {
-		return response.Resp400(c, err)
 	}
 
 	file, err := c.FormFile("file")
@@ -102,7 +98,11 @@ func (h *Handler) UpdateFile(c *fiber.Ctx) error {
 	timestamp := activeTable.Timestamp.Format("2006-01-02 15:04:05.00000 -07:00 MST")
 	var refColumn string
 	for _, col := range columns {
-		if strings.Contains(col.Type, "ref[]") {
+		isReference, parseErr := appcreate.HasColumnTypeToken(col.Type, "ref[]")
+		if parseErr != nil {
+			return response.RespErr(c, fmt.Errorf("invalid stored column metadata for %q: %w", col.Column, parseErr))
+		}
+		if isReference {
 			refColumn = col.Column
 			break
 		}
@@ -110,7 +110,7 @@ func (h *Handler) UpdateFile(c *fiber.Ctx) error {
 
 	if strings.Trim(refColumn, " ") == "" {
 		err = h.SendMail(c.Context(), domainmail.Message{
-			To:      dbUser.Email,
+			To:      authorEmail,
 			Subject: "Updated bibtex file",
 			Body: fmt.Sprintf(
 				"Bibtex file updated, but active table %s has no column with type `ref[]`, check skipped",
@@ -139,7 +139,7 @@ func (h *Handler) UpdateFile(c *fiber.Ctx) error {
 	}
 
 	if err := h.SendMail(c.Context(), domainmail.Message{
-		To: dbUser.Email, Subject: "Updated bibtex file", Body: message,
+		To: authorEmail, Subject: "Updated bibtex file", Body: message,
 	}); err != nil {
 		return response.Resp500(c, err)
 	}

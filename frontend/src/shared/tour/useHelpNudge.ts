@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type NudgeReason = "idle" | "rage-click" | "scroll-thrash" | null;
 
@@ -29,12 +29,12 @@ export function useHelpNudge(paused: boolean): {
   const scrollDir = useRef<Array<{ t: number; dir: 1 | -1 }>>([]);
   const lastScrollY = useRef(window.scrollY);
 
-  const clearNudge = () => {
+  const clearNudge = useCallback(() => {
     setNudge(false);
     setReason(null);
-  };
+  }, []);
 
-  const maybeNudge = (why: Exclude<NudgeReason, null>) => {
+  const maybeNudge = useCallback((why: Exclude<NudgeReason, null>) => {
     if (paused) return;
     const now = Date.now();
     if (now - mountedAt.current < GRACE_MS) return;
@@ -42,11 +42,11 @@ export function useHelpNudge(paused: boolean): {
     lastNudgeAt.current = now;
     setReason(why);
     setNudge(true);
-  };
+  }, [paused]);
 
-  const markActivity = () => {
+  const markActivity = useCallback(() => {
     lastActivity.current = Date.now();
-  };
+  }, []);
 
   useEffect(() => {
     if (paused) {
@@ -125,7 +125,7 @@ export function useHelpNudge(paused: boolean): {
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("scroll", onScroll, true);
     };
-  }, [paused]);
+  }, [clearNudge, markActivity, maybeNudge, paused]);
 
   return { nudge, reason, clearNudge };
 }

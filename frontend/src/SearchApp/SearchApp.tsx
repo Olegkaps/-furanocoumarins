@@ -8,6 +8,7 @@ import Autocomplete from "./Autocomplete";
 import FullNavigation from "../FullNavigation/FullNavigation";
 import { InfoTip } from "../shared/ui/InfoTip";
 import { PageTour } from "../shared/tour/PageTour";
+import { getMetadataTypeModifier, hasMetadataTypeToken } from "../shared/metadataType";
 
 const fetchAutocomplete = (column: string): any => {
   return async (query: string): Promise<string[]> => {
@@ -103,7 +104,7 @@ function SearchApp() {
   let search_values = new Map<{[index: string]: any;}, string>()
 
   metadata.forEach((curr_meta) => {
-    if (!curr_meta["type"].includes("search")) {
+    if (!hasMetadataTypeToken(String(curr_meta["type"]), "search")) {
       return
     }
     parsed_metadata.push(curr_meta)
@@ -111,7 +112,7 @@ function SearchApp() {
   })
 
   const firstSpecieField = parsed_metadata.find((m) =>
-    String(m["type"]).includes("specie"),
+    hasMetadataTypeToken(String(m["type"]), "specie"),
   );
   if (parsed_metadata.length === 0) {
     navigate('/table')
@@ -126,7 +127,7 @@ function SearchApp() {
         return
       }
       let op = " = "
-      if (key["type"].includes("set")) {
+      if (hasMetadataTypeToken(String(key["type"]), "set")) {
         op = " CONTAINS "
       }
       search_params.push(key["column"] + op + "'" + val + "'")
@@ -172,14 +173,15 @@ function SearchApp() {
         {isOpen && (
       <ul>
         {parsed_metadata.map((curr_meta, fieldInd) => {
-          if (!curr_meta["type"].includes(type)) {
+          if (!hasMetadataTypeToken(String(curr_meta["type"]), type)) {
             return null
           }
 
           let _fetch: (query: string) => Promise<string[]>
 
-          if (curr_meta["type"].includes("set[")) {
-            let values = curr_meta["type"].split("set[")[1].split("]")[0].split(" ")
+          const finiteChoices = getMetadataTypeModifier(String(curr_meta["type"]), "set");
+          if (finiteChoices) {
+            const values = finiteChoices[0].split(/\s+/);
 
             _fetch = async (query: string): Promise<string[]> => {
               return values.filter((item: string) =>

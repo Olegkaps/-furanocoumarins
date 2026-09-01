@@ -18,12 +18,12 @@ import (
 )
 
 type envConfig struct {
-	PgUser     string `env:"PG_USER" env-default:"postgres"`
-	PgPassword string `env:"PG_PASSWORD" env-default:"password"`
-	PgDb       string `env:"PG_DB" env-default:"mydb"`
-	PgHost     string `env:"PG_HOST" env-default:"localhost"`
-	PgPort     string `env:"PG_PORT" env-default:"5432"`
-	PgSSLMode  string `env:"PG_SSLMODE" env-default:"disable"`
+	PgUser        string `env:"PG_USER" env-default:"postgres"`
+	PgPassword    string `env:"PG_PASSWORD" env-default:"password"`
+	PgDb          string `env:"PG_DB" env-default:"mydb"`
+	PgHost        string `env:"PG_HOST" env-default:"localhost"`
+	PgPort        string `env:"PG_PORT" env-default:"5432"`
+	PgSSLMode     string `env:"PG_SSLMODE" env-default:"disable"`
 	CassandraHost string `env:"CASSANDRA_HOST" env-default:"127.0.0.1"`
 }
 
@@ -58,6 +58,12 @@ const (
 	is_active BOOLEAN,
 	is_ok BOOLEAN,
 	PRIMARY KEY (created_at));`
+
+	cassandraTableActivationSchema = `CREATE TABLE IF NOT EXISTS chemdb.table_activation (
+	scope TEXT PRIMARY KEY,
+	active_created_at TIMESTAMP,
+	lock_token TEXT,
+	lock_expires_at TIMESTAMP);`
 
 	cassandraBibtexSchema = `CREATE TABLE IF NOT EXISTS chemdb.bibtex (
     article_id TEXT,
@@ -160,7 +166,7 @@ func initCassandra() {
 	}
 	defer session.Close()
 
-	for _, q := range []string{cassandraVersionsSchema, cassandraBibtexSchema, cassandraPagesSchema} {
+	for _, q := range []string{cassandraVersionsSchema, cassandraTableActivationSchema, cassandraBibtexSchema, cassandraPagesSchema} {
 		err = session.Query(q).Exec()
 		if err != nil {
 			log.Fatal(err)

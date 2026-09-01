@@ -1,14 +1,17 @@
 package cassandra
 
 import (
-	"admin/internal/pkg/version"
-	"admin/internal/presentation/http/response"
-	"admin/internal/infrastructure/logging"
+	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2"
+
+	"admin/internal/infrastructure/logging"
+	"admin/internal/pkg/version"
+	"admin/internal/presentation/http/response"
 )
 
 type Table struct {
@@ -22,9 +25,7 @@ type Table struct {
 	IsActive     bool      `json:"is_active" example:"true"`
 }
 
-func InserTable(session *gocql.Session, t *Table) error {
-	err := session.Query(
-		`INSERT INTO chemdb.tables (
+const reserveTableCQL = `INSERT INTO chemdb.tables (
 			created_at,
 			name,
 			version,
@@ -33,7 +34,50 @@ func InserTable(session *gocql.Session, t *Table) error {
 			table_species,
 			is_active,
 			is_ok
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?) IF NOT EXISTS;`
+
+const tableActivationSchemaCQL = `CREATE TABLE IF NOT EXISTS chemdb.table_activation (
+	scope TEXT PRIMARY KEY,
+	active_created_at TIMESTAMP,
+	lock_token TEXT,
+	lock_expires_at TIMESTAMP)`
+
+const activateReadyTableCQL = `
+	UPDATE chemdb.tables
+	SET is_active = true
+	WHERE created_at = ?
+	IF is_ok = true`
+
+const updateActivePointerCQL = `
+	UPDATE chemdb.table_activation
+	SET active_created_at = ?
+	WHERE scope = ?
+	IF lock_token = ?`
+
+const acquireTableActivationLockCQL = `
+	UPDATE chemdb.table_activation
+	SET lock_token = ?, lock_expires_at = ?
+	WHERE scope = ?
+	IF lock_token = ? AND active_created_at = ?`
+
+const (
+	tableActivationScope    = "current"
+	tableActivationAttempts = 500
+	tableActivationPause    = 10 * time.Millisecond
+	tableActivationLease    = 10 * time.Second
+)
+
+var emptyActivationTimestamp = time.Unix(0, 0).UTC()
+
+type tableActivationState struct {
+	activeCreatedAt time.Time
+	lockToken       string
+	lockExpiresAt   time.Time
+}
+
+func ReserveTable(session *gocql.Session, t *Table) (bool, error) {
+	existing := make(map[string]interface{})
+	applied, err := session.Query(reserveTableCQL,
 		t.Timestamp,
 		t.Name,
 		t.Version,
@@ -42,11 +86,11 @@ func InserTable(session *gocql.Session, t *Table) error {
 		t.TableSpecies,
 		t.IsActive,
 		t.IsOk,
-	).Exec()
+	).SerialConsistency(gocql.LocalSerial).MapScanCAS(existing)
 	if err != nil {
-		return &response.UserError{E: err}
+		return false, &response.ServerError{E: err}
 	}
-	return nil
+	return applied, nil
 }
 
 func SetTableOk(session *gocql.Session, t *Table) error {
@@ -63,46 +107,189 @@ func SetTableOk(session *gocql.Session, t *Table) error {
 	return nil
 }
 
-func GetActiveTable(c *fiber.Ctx, session *gocql.Session) (*Table, error) {
+func readTableActivationState(ctx context.Context, session *gocql.Session) (tableActivationState, error) {
+	var state tableActivationState
+	err := session.Query(`
+		SELECT active_created_at, lock_token, lock_expires_at
+		FROM chemdb.table_activation
+		WHERE scope = ?`, tableActivationScope,
+	).WithContext(ctx).Consistency(gocql.Quorum).Scan(&state.activeCreatedAt, &state.lockToken, &state.lockExpiresAt)
+	return state, err
+}
+
+func legacyActiveTimestamps(ctx context.Context, session *gocql.Session) ([]time.Time, error) {
 	iter := session.Query(`
-		SELECT created_at, table_meta, table_data, version, is_ok, is_active, name
+		SELECT created_at
 		FROM chemdb.tables
 		WHERE is_active = true
-		ALLOW FILTERING
-	`).Iter()
-
-	results := []Table{}
-
-	var activeTable Table
-	for iter.Scan(
-		&activeTable.Timestamp,
-		&activeTable.TableMeta,
-		&activeTable.TableData,
-		&activeTable.Version,
-		&activeTable.IsOk,
-		&activeTable.IsActive,
-		&activeTable.Name,
-	) {
-		results = append(results, activeTable)
+		ALLOW FILTERING`).WithContext(ctx).Iter()
+	var timestamps []time.Time
+	var timestamp time.Time
+	for iter.Scan(&timestamp) {
+		timestamps = append(timestamps, timestamp)
 	}
-
 	if err := iter.Close(); err != nil {
-		logging.Error(c, "%s", err.Error())
-		return nil, &response.ServerError{E: err}
+		return nil, err
 	}
-	if len(results) == 0 {
+	return timestamps, nil
+}
+
+func ensureTableActivationState(session *gocql.Session) (tableActivationState, error) {
+	return ensureTableActivationStateContext(context.Background(), session)
+}
+
+func ensureTableActivationStateContext(ctx context.Context, session *gocql.Session) (tableActivationState, error) {
+	state, err := readTableActivationState(ctx, session)
+	if err == nil {
+		return state, nil
+	}
+	if !errors.Is(err, gocql.ErrNotFound) {
+		return tableActivationState{}, &response.ServerError{E: err}
+	}
+
+	legacy, err := legacyActiveTimestamps(ctx, session)
+	if err != nil {
+		return tableActivationState{}, &response.ServerError{E: err}
+	}
+	if len(legacy) > 1 {
+		return tableActivationState{}, &response.ServerError{E: fmt.Errorf("multiple legacy active tables found")}
+	}
+	active := emptyActivationTimestamp
+	if len(legacy) == 1 {
+		active = legacy[0]
+	}
+	initial := tableActivationState{
+		activeCreatedAt: active,
+		lockToken:       "",
+		lockExpiresAt:   emptyActivationTimestamp,
+	}
+	existing := make(map[string]interface{})
+	applied, err := session.Query(`
+		INSERT INTO chemdb.table_activation (scope, active_created_at, lock_token, lock_expires_at)
+		VALUES (?, ?, ?, ?) IF NOT EXISTS`,
+		tableActivationScope, initial.activeCreatedAt, initial.lockToken, initial.lockExpiresAt,
+	).WithContext(ctx).SerialConsistency(gocql.LocalSerial).MapScanCAS(existing)
+	if err != nil {
+		return tableActivationState{}, &response.ServerError{E: err}
+	}
+	if applied {
+		return initial, nil
+	}
+	state, err = readTableActivationState(ctx, session)
+	if err != nil {
+		return tableActivationState{}, &response.ServerError{E: err}
+	}
+	return state, nil
+}
+
+func acquireTableActivationLock(session *gocql.Session) (tableActivationState, string, error) {
+	token := gocql.TimeUUID().String()
+	for attempt := 0; attempt < tableActivationAttempts; attempt++ {
+		state, err := ensureTableActivationState(session)
+		if err != nil {
+			return tableActivationState{}, "", err
+		}
+		now := time.Now().UTC()
+		if state.lockToken != "" && state.lockExpiresAt.After(now) {
+			time.Sleep(tableActivationPause)
+			continue
+		}
+		existing := make(map[string]interface{})
+		applied, err := session.Query(acquireTableActivationLockCQL,
+			token, now.Add(tableActivationLease), tableActivationScope, state.lockToken, state.activeCreatedAt,
+		).SerialConsistency(gocql.LocalSerial).MapScanCAS(existing)
+		if err != nil {
+			return tableActivationState{}, "", &response.ServerError{E: err}
+		}
+		if applied {
+			state.lockToken = token
+			state.lockExpiresAt = now.Add(tableActivationLease)
+			return state, token, nil
+		}
+		time.Sleep(tableActivationPause)
+	}
+	return tableActivationState{}, "", &response.ServerError{E: fmt.Errorf("table activation is busy; retry")}
+}
+
+func releaseTableActivationLock(session *gocql.Session, token string) error {
+	existing := make(map[string]interface{})
+	applied, err := session.Query(`
+		UPDATE chemdb.table_activation
+		SET lock_token = ?, lock_expires_at = ?
+		WHERE scope = ?
+		IF lock_token = ?`,
+		"", emptyActivationTimestamp, tableActivationScope, token,
+	).SerialConsistency(gocql.LocalSerial).MapScanCAS(existing)
+	if err != nil {
+		return &response.ServerError{E: err}
+	}
+	if !applied {
+		return &response.ServerError{E: fmt.Errorf("table activation lock was lost")}
+	}
+	return nil
+}
+
+func withTableActivationLock(session *gocql.Session, operation func(tableActivationState, string) error) error {
+	state, token, err := acquireTableActivationLock(session)
+	if err != nil {
+		return err
+	}
+	operationErr := operation(state, token)
+	releaseErr := releaseTableActivationLock(session, token)
+	return errors.Join(operationErr, releaseErr)
+}
+
+func GetActiveTable(c *fiber.Ctx, session *gocql.Session) (*Table, error) {
+	state, err := ensureTableActivationState(session)
+	if err != nil {
+		return nil, err
+	}
+	if state.activeCreatedAt.Equal(emptyActivationTimestamp) {
 		logging.Warn(c, "no active table found")
 		return nil, &response.UserError{E: fmt.Errorf("no active table found")}
 	}
-	if len(results) > 1 {
-		logging.Error(c, "multiple active tables found")
-		return nil, &response.ServerError{E: fmt.Errorf("multiple active tables found")}
-	}
 
-	return &results[0], nil
+	var activeTable Table
+	err = session.Query(`
+		SELECT created_at, table_meta, table_data, table_species, version, is_ok, name
+		FROM chemdb.tables
+		WHERE created_at = ?`, state.activeCreatedAt,
+	).Consistency(gocql.Quorum).Scan(
+		&activeTable.Timestamp,
+		&activeTable.TableMeta,
+		&activeTable.TableData,
+		&activeTable.TableSpecies,
+		&activeTable.Version,
+		&activeTable.IsOk,
+		&activeTable.Name,
+	)
+	if err != nil {
+		logging.Error(c, "active table pointer is invalid: %s", err.Error())
+		return nil, &response.ServerError{E: err}
+	}
+	if !activeTable.IsOk {
+		return nil, &response.ServerError{E: fmt.Errorf("active table is not ready")}
+	}
+	activeTable.IsActive = true
+	return &activeTable, nil
 }
 
 func GetAllTables(session *gocql.Session) ([]*Table, error) {
+	tables, err := getAllTablesRaw(session)
+	if err != nil {
+		return nil, err
+	}
+	state, err := ensureTableActivationState(session)
+	if err != nil {
+		return nil, err
+	}
+	for _, table := range tables {
+		table.IsActive = !state.activeCreatedAt.Equal(emptyActivationTimestamp) && table.Timestamp.Equal(state.activeCreatedAt)
+	}
+	return tables, nil
+}
+
+func getAllTablesRaw(session *gocql.Session) ([]*Table, error) {
 	tables := make([]*Table, 0)
 	iter := session.Query(`SELECT created_at, name, version, is_active, is_ok FROM chemdb.tables`).Iter()
 
@@ -175,6 +362,15 @@ func DeleteTable(c *fiber.Ctx, session *gocql.Session, timestamp time.Time) erro
 		logging.Warn(c, "trying to delete table %v - too early", timestamp)
 		return nil
 	}
+	return withTableActivationLock(session, func(state tableActivationState, _ string) error {
+		if state.activeCreatedAt.Equal(timestamp) {
+			return &response.UserError{E: fmt.Errorf("cannot delete the active table")}
+		}
+		return deleteTableLocked(session, timestamp)
+	})
+}
+
+func deleteTableLocked(session *gocql.Session, timestamp time.Time) error {
 
 	updateQuery := `
 		UPDATE chemdb.tables 
@@ -183,9 +379,15 @@ func DeleteTable(c *fiber.Ctx, session *gocql.Session, timestamp time.Time) erro
 		IF is_active = false
 	`
 
-	err := session.Query(updateQuery, timestamp).Exec()
+	existing := make(map[string]interface{})
+	applied, err := session.Query(updateQuery, timestamp).
+		SerialConsistency(gocql.LocalSerial).
+		MapScanCAS(existing)
 	if err != nil {
 		return &response.UserError{E: err}
+	}
+	if !applied {
+		return &response.UserError{E: fmt.Errorf("table is active, missing, or already being deleted")}
 	}
 
 	selectQuery := `
@@ -233,51 +435,41 @@ func DeleteTable(c *fiber.Ctx, session *gocql.Session, timestamp time.Time) erro
 }
 
 func ActivateTable(session *gocql.Session, timestamp time.Time) error {
-	activateQuery := `
-		UPDATE chemdb.tables
-		SET is_active = true
-		WHERE created_at = ?
-		IF is_ok = true
-	`
-
-	if err := session.Query(activateQuery, timestamp).Exec(); err != nil {
-		return &response.UserError{E: err}
-	}
-
-	selectQuery := `
-		SELECT created_at
-		FROM chemdb.tables
-		WHERE is_active = true
-		ALLOW FILTERING
-	`
-
-	var active_tables []time.Time
-	var curr_timestamp time.Time
-
-	iter := session.Query(selectQuery).Iter()
-	for iter.Scan(&curr_timestamp) {
-		if curr_timestamp.Equal(timestamp) {
-			continue
-		}
-		active_tables = append(active_tables, curr_timestamp)
-	}
-
-	err := iter.Close()
-	if err != nil {
-		return &response.ServerError{E: err}
-	}
-
-	deactivateQuery := `
-		UPDATE chemdb.tables
-		SET is_active = false
-		WHERE created_at = ?
-	`
-
-	for _, curr_timestamp := range active_tables {
-		err = session.Query(deactivateQuery, curr_timestamp).Exec()
+	return withTableActivationLock(session, func(_ tableActivationState, token string) error {
+		existing := make(map[string]interface{})
+		applied, err := session.Query(activateReadyTableCQL, timestamp).SerialConsistency(gocql.LocalSerial).MapScanCAS(existing)
 		if err != nil {
 			return &response.ServerError{E: err}
 		}
-	}
-	return nil
+		if !applied {
+			return &response.UserError{E: fmt.Errorf("table does not exist or is not ready")}
+		}
+
+		existing = make(map[string]interface{})
+		applied, err = session.Query(updateActivePointerCQL, timestamp, tableActivationScope, token).SerialConsistency(gocql.LocalSerial).MapScanCAS(existing)
+		if err != nil {
+			return &response.ServerError{E: err}
+		}
+		if !applied {
+			return &response.ServerError{E: fmt.Errorf("table activation lock expired")}
+		}
+
+		tables, err := getAllTablesRaw(session)
+		if err != nil {
+			return err
+		}
+		for _, table := range tables {
+			if table.Timestamp.Equal(timestamp) || !table.IsActive {
+				continue
+			}
+			if err := session.Query(`
+				UPDATE chemdb.tables
+				SET is_active = false
+				WHERE created_at = ?`, table.Timestamp,
+			).Exec(); err != nil {
+				return &response.ServerError{E: err}
+			}
+		}
+		return nil
+	})
 }

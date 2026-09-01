@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${FAKE_DOCKER_STATE:?}"
+: "${FAKE_SCENARIO:?}"
+: "${FAKE_DEPLOYED_IMAGE:?}"
+
+printf '%s\n' "$*" >>"${FAKE_DOCKER_STATE}/calls"
+
+next_count() {
+  local name="$1"
+  local file="${FAKE_DOCKER_STATE}/${name}.count"
+  local value=0
+  if [[ -f "${file}" ]]; then
+    value="$(<"${file}")"
+  fi
+  value=$((value + 1))
+  printf '%s' "${value}" >"${file}"
+  printf '%s' "${value}"
+}
+
+if [[ "$1" == "secret" && "$2" == "inspect" ]]; then
+  exit 0
+fi
+
+if [[ "$1" != "service" ]]; then
+  echo "unsupported fake docker call: $*" >&2
+  exit 90
+fi
+shift
+
+case "$1" in
+  inspect)
+    shift
+    if [[ "${1:-}" == "--format" ]]; then
+      format="$2"
+      service="$3"
+      case "${format}" in
+        *ContainerSpec.Image*) printf '%s\n' "${FAKE_DEPLOYED_IMAGE}" ;;
+        *Replicated.Replicas*)
+          if [[ "${service}" == *_go-auth ]]; then
+            printf '%s\n' "${FAKE_GO_AUTH_REPLICAS:-4}"
+          else
+            printf '%s\n' "${FAKE_AUTHD_REPLICAS:-3}"
+          fi
+          ;;
+        *) echo "unsupported inspect format: ${format}" >&2; exit 91 ;;
+      esac
+    fi
+    ;;
+  scale)
+    exit 0
+    ;;
+  ps)
+    service="${*: -1}"
+    if [[ "${service}" == *_auth-import-once ]]; then
+		if [[ "${FAKE_SCENARIO}" == "import_ps_error" ]]; then
+			echo "simulated importer inspection failure" >&2
+			exit 88
+		fi
+      count="$(next_count importer)"
+      case "${FAKE_SCENARIO}" in
+        failed) printf 'Failed 1 second ago\n' ;;
+        rejected) printf 'Rejected 1 second ago\n' ;;
+        import_timeout) printf 'Running 1 second ago\n' ;;
+        *)
+          if [[ "${count}" -lt 2 ]]; then
+            printf 'Running 1 second ago\n'
+          else
+            printf 'Complete 1 second ago\n'
+          fi
+          ;;
+      esac
+    else
+		if [[ "${FAKE_SCENARIO}" == "writer_ps_error" ]]; then
+			echo "simulated writer inspection failure" >&2
+			exit 89
+		fi
+      count="$(next_count writer)"
+      if [[ "${FAKE_SCENARIO}" == "writer_timeout" || "${count}" -le "${FAKE_WRITER_ACTIVE_CALLS:-2}" ]]; then
+        printf 'Running 1 second ago\n'
+      else
+        printf 'Shutdown 1 second ago\n'
+      fi
+    fi
+    ;;
+  create)
+    if [[ "${FAKE_SCENARIO}" == "writer_timeout" ]]; then
+      echo "create called while writers active" >&2
+      exit 92
+    fi
+    ;;
+  rm|logs)
+    exit 0
+    ;;
+  *)
+    echo "unsupported fake docker service call: $*" >&2
+    exit 93
+    ;;
+esac

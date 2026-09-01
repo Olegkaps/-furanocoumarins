@@ -2,6 +2,7 @@ package create
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 
 	appbibtex "admin/internal/application/bibtex"
 	"admin/internal/application/create/excel"
-	"admin/internal/application/search"
 	"admin/internal/infrastructure/logging"
 	"admin/internal/infrastructure/persistence"
 	"admin/internal/infrastructure/persistence/cassandra"
@@ -27,12 +27,6 @@ func ImportTable(
 	metaListName, fileName string,
 	log logging.Logger,
 ) (string, error) {
-	defer func() {
-		if err := tableFile.Close(); err != nil {
-			log.Warn("close excel file: %s", err)
-		}
-	}()
-
 	log.Info("import started: table=%s meta=%s", fileName, metaListName)
 
 	var message string
@@ -62,21 +56,6 @@ func importTable(
 		IsActive: false,
 	}
 
-	table.Timestamp = time.Now()
-	curr_time := table.Timestamp.Format("2006-01-02T15:04:05.000")
-
-	fixed_curr_time := persistence.FixCassandraTimestamp(curr_time)
-	table.TableMeta = "chemdb." + "meta_" + fixed_curr_time
-	table.TableData = "chemdb." + "data_" + fixed_curr_time
-	table.TableSpecies = "chemdb." + "species_" + fixed_curr_time
-
-	log.Info("creating table records: meta=%s data=%s species=%s",
-		table.TableMeta, table.TableData, table.TableSpecies)
-
-	if err := imp.InsertTable(table); err != nil {
-		return "", err
-	}
-
 	// read data
 	meta_columns := []string{"sheet", "column", "type", "description", "show_name"}
 	meta_result, err := excel.ReadXLSXToMap(TableFile, MetaListName, meta_columns, "")
@@ -99,21 +78,28 @@ func importTable(
 		if strings.HasPrefix(sheet, "__") {
 			continue
 		}
+		if err := cassandra.ValidateIdentifier(column); err != nil {
+			return "", fmt.Errorf("preflight column %q: %w", column, err)
+		}
+		parsedType, err := parseColumnType(c_type)
+		if err != nil {
+			return "", fmt.Errorf("preflight column %q: %w", column, err)
+		}
 
-		if strings.Contains(c_type, "external[structures]") ||
-			strings.Contains(c_type, "external[classification]") ||
-			(sheet == "structures" && strings.Contains(c_type, "primary")) ||
-			(sheet == "classification" && strings.Contains(c_type, "primary")) {
+		externalSheet, hasExternal := parsedType.external, parsedType.hasExternal
+		if (hasExternal && (externalSheet == "structures" || externalSheet == "classification")) ||
+			(sheet == "structures" && parsedType.hasToken("primary")) ||
+			(sheet == "classification" && parsedType.hasToken("primary")) {
 			c_type += " keycolumn"
 		}
 
-		if strings.HasPrefix(sheet, "structures") || strings.Contains(c_type, "external[structures") {
+		if strings.HasPrefix(sheet, "structures") || externalSheet == "structures" {
 			c_type += " chemical"
-		} else if strings.HasPrefix(sheet, "classification") || strings.Contains(c_type, "external[classification") {
+		} else if strings.HasPrefix(sheet, "classification") || externalSheet == "classification" {
 			c_type += " specie"
 		}
 
-		if strings.Contains(c_type, "ref[]") {
+		if parsedType.hasToken("ref[]") {
 			ref_col = column
 		}
 
@@ -121,9 +107,12 @@ func importTable(
 			c_type_old := strings.Split(val, "\t")[0]
 			c_desr_old := strings.Split(val, "\t")[1]
 
-			var is_types_identical = search.IsTypesEqual(c_type_old, c_type)
+			isTypesIdentical, compareErr := equalColumnTypes(c_type_old, c_type)
+			if compareErr != nil {
+				return "", fmt.Errorf("preflight column %q: %w", column, compareErr)
+			}
 
-			if c_desr_old != c_decr || !is_types_identical {
+			if c_desr_old != c_decr || !isTypesIdentical {
 				return "", fmt.Errorf("%s", fmt.Sprintf(
 					"column '%s' has different descriptions in different rows:\n",
 					column,
@@ -142,19 +131,9 @@ func importTable(
 		meta_keys[column] = c_type + "\t" + c_decr
 	}
 
-	err = imp.CreateAndBatchInsert(
-		table.TableMeta,
-		[]string{"sheet TEXT", "column TEXT", "type TEXT", "description TEXT", "show_name TEXT"},
-		[]string{"column"},
-		meta_data,
-	)
-	if err != nil {
-		return "", err
-	}
-	log.Info("inserted meta columns: count=%d", len(meta_data))
-
 	// normally parse meta
 	parsed_meta := make(map[string]*VirtualSheet)
+	seenSheetColumns := make(map[string]map[string]struct{})
 	for _, row := range meta_result {
 		// meta_names := []string{"sheet", "column", "type", "description"}
 		name := row[0]
@@ -186,15 +165,33 @@ func importTable(
 
 		column_name := row[1]
 		column_type := row[2]
+		parsedType, parseErr := parseColumnType(column_type)
+		if parseErr != nil {
+			return "", fmt.Errorf("preflight column %q: %w", column_name, parseErr)
+		}
+		if _, ok := seenSheetColumns[name]; !ok {
+			seenSheetColumns[name] = make(map[string]struct{})
+		}
+		columnKey := strings.ToLower(column_name)
+		if _, duplicate := seenSheetColumns[name][columnKey]; duplicate {
+			return "", fmt.Errorf("preflight sheet %q has duplicate column identifier %q", name, column_name)
+		}
+		seenSheetColumns[name][columnKey] = struct{}{}
 		parsed_meta[name].ColumnNames = append(parsed_meta[name].ColumnNames, column_name)
 		parsed_meta[name].ColumnTypes = append(parsed_meta[name].ColumnTypes, column_type)
 
-		if strings.Contains(column_type, "primary") {
+		if parsedType.hasToken("primary") {
+			if parsed_meta[name].KeyColumn != "" {
+				return "", fmt.Errorf("preflight sheet %q has more than one primary column", name)
+			}
 			parsed_meta[name].KeyColumn = column_name
 		}
 	}
 
 	for name, v_sheet := range parsed_meta {
+		if v_sheet.KeyColumn == "" {
+			return "", fmt.Errorf("preflight sheet %q has no primary column", name)
+		}
 		err = v_sheet.ReadFile(TableFile)
 		if err != nil {
 			return "", err
@@ -217,8 +214,11 @@ func importTable(
 	used_uuids := make(map[string]struct{}, len(species_sheet.Rows))
 	id := uuid.New().String()
 
-	sp_columns := species_sheet.ColumnCassTypes
+	sp_columns := append([]string(nil), species_sheet.ColumnCassTypes...)
 	sp_columns = append(sp_columns, "uuid UUID")
+	if err := validateUniqueColumnDefinitions("species", sp_columns); err != nil {
+		return "", err
+	}
 	sp_data := make([][]any, len(species_sheet.Rows))
 	i := 0
 	for _, row := range species_sheet.Rows {
@@ -233,17 +233,6 @@ func importTable(
 		used_uuids[id] = struct{}{}
 		i++
 	}
-
-	err = imp.CreateAndBatchInsert(
-		table.TableSpecies,
-		sp_columns,
-		[]string{"uuid"},
-		sp_data,
-	)
-	if err != nil {
-		return "", err
-	}
-	log.Info("inserted species rows: count=%d", len(sp_data))
 
 	// insert data
 	// parsed_meta[main]
@@ -289,6 +278,9 @@ func importTable(
 			stack_of_lists = append(stack_of_lists, next_sheet)
 		}
 	}
+	if err := validateUniqueColumnDefinitions("data", data_columns); err != nil {
+		return "", err
+	}
 
 	// WARN: joins almost repeats
 	// join data of all sheets
@@ -328,16 +320,16 @@ func importTable(
 				stack_of_primary_keys = stack_of_primary_keys[:len(stack_of_primary_keys)-1]
 				continue
 			}
+			currentRow, rowExists := curr_sheet.Rows[curr_primary_key]
+			if !rowExists || ind >= len(currentRow) {
+				message := fmt.Sprintf("Not found primary key '%s' in sheet with key column '%s'", curr_primary_key, curr_sheet.KeyColumn)
+				not_found_primary_key_messages[message] = struct{}{}
+				break
+			}
 
 			curr_arrange := curr_sheet.ArrangeOfExternals[ind]
 			if curr_arrange == "" {
-				if _, ok := curr_sheet.Rows[curr_primary_key]; !ok {
-					message := fmt.Sprintf("Not found primary key '%s' in sheet with key column '%s'",
-						curr_primary_key, curr_sheet.KeyColumn)
-					not_found_primary_key_messages[message] = struct{}{}
-					break
-				}
-				joined_row[row_ind] = curr_sheet.Rows[curr_primary_key][ind]
+				joined_row[row_ind] = currentRow[ind]
 				row_ind++
 
 			} else {
@@ -354,7 +346,10 @@ func importTable(
 				sheet_to_count[next_sheet] = 0
 				stack_of_lists = append(stack_of_lists, next_sheet)
 
-				next_primary_key := curr_sheet.Rows[curr_primary_key][ind].(string)
+				next_primary_key, ok := currentRow[ind].(string)
+				if !ok {
+					return "", fmt.Errorf("external key in sheet %q column %q is not text", curr_arrange, curr_sheet.ColumnNames[ind])
+				}
 				stack_of_primary_keys = append(stack_of_primary_keys, next_primary_key)
 			}
 		}
@@ -373,6 +368,26 @@ func importTable(
 
 	data_primary_keys := []string{"uuid"}
 
+	// All workbook metadata and joins are validated before the first Cassandra
+	// mutation. Persistence failures after reserving the table intentionally leave the
+	// existing observable Broken-table workflow intact.
+	if err := reserveUniqueTable(imp, table, time.Now()); err != nil {
+		return "", err
+	}
+	log.Info("reserved table records: meta=%s data=%s species=%s", table.TableMeta, table.TableData, table.TableSpecies)
+	if err := imp.CreateAndBatchInsert(
+		table.TableMeta,
+		[]string{"sheet TEXT", "column TEXT", "type TEXT", "description TEXT", "show_name TEXT"},
+		[]string{"column"},
+		meta_data,
+	); err != nil {
+		return "", err
+	}
+	log.Info("inserted meta columns: count=%d", len(meta_data))
+	if err := imp.CreateAndBatchInsert(table.TableSpecies, sp_columns, []string{"uuid"}, sp_data); err != nil {
+		return "", err
+	}
+	log.Info("inserted species rows: count=%d", len(sp_data))
 	err = imp.CreateAndBatchInsert(
 		table.TableData,
 		data_columns,
@@ -388,7 +403,11 @@ func importTable(
 	for _, row := range meta_result {
 		// meta_names := []string{"sheet", "column", "type", "description", "show_name"}
 		_type := row[2]
-		if strings.Contains(_type, "search") && !strings.Contains(_type, "set") && !strings.Contains(_type, "external[") {
+		parsedType, parseErr := parseColumnType(_type)
+		if parseErr != nil {
+			return "", parseErr
+		}
+		if parsedType.hasToken("search") && !parsedType.hasToken("set") && !parsedType.hasExternal {
 			err = imp.CreateSASIIndex(table.TableData, row[1])
 			if err != nil {
 				return "", err
@@ -397,14 +416,9 @@ func importTable(
 		}
 	}
 
-	// set that all is ok
-	err = imp.SetTableOk(table)
-	if err != nil {
-		return "", err
-	}
-	log.Info("marked table as ok: name=%s", FileName)
-
-	// check reference ids
+	// Complete every reference validation before the final readiness mutation.
+	// The async tracker may report Ready only after this function returns, so no
+	// fallible validation may remain after SetTableOk.
 	ref_ind := -1
 	for i, col_def := range data_columns {
 		if ref_col == strings.Split(col_def, " ")[0] {
@@ -412,31 +426,114 @@ func importTable(
 		}
 	}
 
+	message := "Column with type 'ref[]' not found, reference check skipped."
 	if ref_ind == -1 {
 		log.Warn("column with type ref[] not found, reference check skipped")
-		return "Column with type 'ref[]' not found, reference check skipped.", nil
+	} else {
+		ids_to_check := make([]string, len(joined_data))
+		for i, row := range joined_data {
+			ref_id, ok := row[ref_ind].(string)
+			if !ok {
+				return "", fmt.Errorf("reference column %q contains a non-text value", ref_col)
+			}
+			ids_to_check[i] = ref_id
+		}
+
+		corr_ids, err := imp.GetArticleIds()
+		if err != nil {
+			return "", err
+		}
+
+		warnings := appbibtex.CheckArticleIDs(corr_ids, ids_to_check)
+
+		if len(warnings) == 0 {
+			message = "Reference check passed"
+		} else {
+			message = "Failed reference checks: " + strings.Join(warnings, "\n")
+		}
+		log.Info("reference check: warnings=%d", len(warnings))
 	}
 
-	ids_to_check := make([]string, len(joined_data))
-	for i, row := range joined_data {
-		ref_id := row[ref_ind].(string)
-		ids_to_check[i] = ref_id
-	}
-
-	corr_ids, err := imp.GetArticleIds()
-	if err != nil {
+	// This is deliberately the final mutation and final external call. Once it
+	// succeeds, the handler can publish Ready without disagreeing with is_ok.
+	if err := imp.SetTableOk(table); err != nil {
 		return "", err
 	}
-
-	warnigs := appbibtex.CheckArticleIDs(corr_ids, ids_to_check)
-
-	var message string
-	if len(warnigs) == 0 {
-		message = "Reference check passed"
-	} else {
-		message = "Failed reference checks: " + strings.Join(warnigs, "\n")
-	}
-	log.Info("reference check: warnings=%d", len(warnigs))
-
 	return message, nil
+}
+
+// equalColumnTypes compares semantic metadata tokens while ignoring the two
+// location-specific modifiers that legitimately differ between a primary key
+// definition and a reference to it. Modifier arguments are never tokenized as
+// ordinary labels (for example external[sunset] does not contain "set").
+func equalColumnTypes(left, right string) (bool, error) {
+	leftType, err := parseColumnType(left)
+	if err != nil {
+		return false, err
+	}
+	rightType, err := parseColumnType(right)
+	if err != nil {
+		return false, err
+	}
+	delete(leftType.tokens, "primary")
+	delete(rightType.tokens, "primary")
+	return maps.Equal(leftType.tokens, rightType.tokens) &&
+		leftType.hasDefaultColumn == rightType.hasDefaultColumn &&
+		leftType.defaultColumn == rightType.defaultColumn &&
+		leftType.hasClassification == rightType.hasClassification &&
+		leftType.classificationLevel == rightType.classificationLevel &&
+		leftType.classificationTag == rightType.classificationTag &&
+		leftType.hasLink == rightType.hasLink &&
+		leftType.linkTemplate == rightType.linkTemplate &&
+		leftType.hasSetChoices == rightType.hasSetChoices &&
+		leftType.setChoices == rightType.setChoices, nil
+}
+
+// ColumnTypesEquivalent compares every supported semantic label and modifier,
+// while allowing the documented primary/external location difference.
+func ColumnTypesEquivalent(left, right string) (bool, error) {
+	return equalColumnTypes(left, right)
+}
+
+func validateUniqueColumnDefinitions(scope string, definitions []string) error {
+	seen := make(map[string]struct{}, len(definitions))
+	for _, definition := range definitions {
+		fields := strings.Fields(definition)
+		if len(fields) != 2 {
+			return fmt.Errorf("preflight %s column definition %q is invalid", scope, definition)
+		}
+		if err := cassandra.ValidateIdentifier(fields[0]); err != nil {
+			return fmt.Errorf("preflight %s column: %w", scope, err)
+		}
+		key := strings.ToLower(fields[0])
+		if _, duplicate := seen[key]; duplicate {
+			return fmt.Errorf("preflight %s has duplicate column identifier %q", scope, fields[0])
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
+}
+
+const tableReservationAttempts = 1024
+
+func reserveUniqueTable(imp cassandra.TableImporter, table *cassandra.Table, base time.Time) error {
+	base = base.UTC().Truncate(time.Millisecond)
+	for attempt := 0; attempt < tableReservationAttempts; attempt++ {
+		candidate := base.Add(time.Duration(attempt) * time.Millisecond)
+		fixed := persistence.FixCassandraTimestamp(candidate.Format("2006-01-02T15:04:05.000"))
+		table.Timestamp = candidate
+		table.TableMeta = "chemdb.meta_" + fixed
+		table.TableData = "chemdb.data_" + fixed
+		table.TableSpecies = "chemdb.species_" + fixed
+		applied, err := imp.ReserveTable(table)
+		if err != nil {
+			// A CAS transport error has an uncertain apply outcome. Never try a
+			// second key, which could reserve two registry rows for one import.
+			return fmt.Errorf("reserve table registry row: %w", err)
+		}
+		if applied {
+			return nil
+		}
+	}
+	return fmt.Errorf("cannot reserve a unique table timestamp after %d attempts", tableReservationAttempts)
 }

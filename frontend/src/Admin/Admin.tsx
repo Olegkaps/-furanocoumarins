@@ -1,6 +1,7 @@
-import { useParams, Navigate, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useParams, useSearchParams, Navigate, Link } from "react-router-dom";
 import { ArrowRightFromSquare } from "@gravity-ui/icons";
-import { delToken, getName, isTokenExists } from "./utils";
+import { getName, isTokenExists, logoutSession } from "./utils";
 import LoginForm, { MailAdmit } from "./LoginForm";
 import ResetPasswordForm from "./ResetPasswordForm";
 import PasswordConfirmForm from "./AdmitPassword";
@@ -8,6 +9,7 @@ import AdminPage from "./AdminUI";
 import FullNavigation from "../FullNavigation/FullNavigation";
 import "./Admin.css";
 import { PageTour } from "../shared/tour/PageTour";
+import AccountSecurity from "./AccountSecurity";
 
 export function AdminApp() {
   const username = getName();
@@ -29,6 +31,7 @@ export function AdminApp() {
         </div>
       </div>
       <AdminPage />
+	  <AccountSecurity />
     </div>
   );
 }
@@ -46,8 +49,13 @@ export function AdminLogin() {
 }
 
 export function AdminLogout() {
-  delToken();
-  return <Navigate to="/login" />;
+	const [complete, setComplete] = useState(false);
+	useEffect(() => {
+		let mounted = true;
+		void logoutSession().finally(() => { if (mounted) setComplete(true); });
+		return () => { mounted = false; };
+	}, []);
+	return complete ? <Navigate to="/login" /> : <p className="empty-state">Signing out…</p>;
 }
 
 export function AdminReset() {
@@ -78,4 +86,10 @@ export function AdminAdmit() {
     );
   }
   return <p className="empty-state">Wrong code</p>;
+}
+
+export function AdminMagicCallback() {
+	const [params] = useSearchParams();
+	const token = params.get("token");
+	return token ? <MailAdmit word={token} /> : <p className="empty-state">Wrong code</p>;
 }

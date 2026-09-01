@@ -4,6 +4,10 @@ import {
   guardSearchPayload,
   reportSchemaSuspicion,
 } from "../shared/schemaGuard";
+import {
+  getMetadataTypeModifier,
+  hasMetadataTypeToken,
+} from "../shared/metadataType";
 
 export async function fetchSearchResult(
   e: React.FormEvent | null,
@@ -42,7 +46,7 @@ export function filterResponse(searchResponse: { [index: string]: any }) {
     const resultResponse: { [index: string]: any } = {};
     resultResponse["metadata"] = [];
     searchResponse["metadata"]?.forEach((meta_item: { [index: string]: any }) => {
-      if (!meta_item["type"].includes("invisible")) {
+      if (!hasMetadataTypeToken(String(meta_item["type"]), "invisible")) {
         resultResponse["metadata"].push(meta_item);
       }
     });
@@ -51,16 +55,14 @@ export function filterResponse(searchResponse: { [index: string]: any }) {
 
     const meta_defaults: { [ind: string]: any } = {};
     searchResponse["metadata"]?.forEach((meta_item: { [index: string]: any }) => {
-      const _type = meta_item["type"];
-      if (!_type.includes("clas[") || _type.includes("invisible")) return;
-      const curr_num = _type.split("clas[")[1].split("]")[0];
+      const columnType = String(meta_item["type"]);
+      const classification = getMetadataTypeModifier(columnType, "clas");
+      if (!classification || hasMetadataTypeToken(columnType, "invisible")) return;
+      const curr_num = classification[0];
       if (!(curr_num in meta_defaults)) {
         meta_defaults[curr_num] = { default: "", custom: [] };
       }
-      let curr_tag = "default";
-      if (_type.includes("][")) {
-        curr_tag = _type.split("][")[1].split("]")[0];
-      }
+      const curr_tag = classification[1] ?? "default";
       if (curr_tag === "default") {
         meta_defaults[curr_num]["default"] = meta_item["column"];
       } else {
@@ -69,9 +71,10 @@ export function filterResponse(searchResponse: { [index: string]: any }) {
     });
 
     searchResponse["metadata"]?.forEach((meta_item: { [index: string]: any }) => {
-      const _type = meta_item["type"];
-      if (!_type.includes("default[") || _type.includes("invisible")) return;
-      const default_col = _type.split("default[")[1].split("]")[0];
+      const columnType = String(meta_item["type"]);
+      const defaultModifier = getMetadataTypeModifier(columnType, "default");
+      if (!defaultModifier || hasMetadataTypeToken(columnType, "invisible")) return;
+      const default_col = defaultModifier[0];
       if (!(default_col in meta_defaults)) {
         meta_defaults[default_col] = { default: default_col, custom: [] };
       }

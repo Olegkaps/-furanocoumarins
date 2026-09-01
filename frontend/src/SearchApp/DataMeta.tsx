@@ -2,6 +2,7 @@ import React from "react";
 import { ArrowUpRightFromSquare, Copy } from "@gravity-ui/icons";
 import { TruncatedText } from "../shared/ui/TruncatedText";
 import { CitationRefList } from "../shared/ui/CitationPopover";
+import { safeMetadataLink } from "../shared/metadataType";
 import "../shared/ui/CitationPopover.css";
 
 async function copyTextToClipboard(text: string) {
@@ -162,22 +163,31 @@ class DataMeta {
 
     return (
       <span className="meta-link-list">
-        {links.map((link, i) => (
-          <React.Fragment key={`${link.id}-${i}`}>
-            {i > 0 && <span>, </span>}
-            <a
-              className="meta-link"
-              href={this.additional_data.replace("%s", link.id)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <span className="meta-link__text">
-                <TruncatedText text={link.text} maxLength={70} />
-              </span>
-              <ArrowUpRightFromSquare className="meta-link__icon" width={14} height={14} aria-hidden />
-            </a>
-          </React.Fragment>
-        ))}
+        {links.map((link, i) => {
+          const href = safeMetadataLink(this.additional_data, link.id);
+          return (
+            <React.Fragment key={`${link.id}-${i}`}>
+              {i > 0 && <span>, </span>}
+              {href ? (
+                <a
+                  className="meta-link"
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <span className="meta-link__text">
+                    <TruncatedText text={link.text} maxLength={70} />
+                  </span>
+                  <ArrowUpRightFromSquare className="meta-link__icon" width={14} height={14} aria-hidden />
+                </a>
+              ) : (
+                <span className="meta-link__text">
+                  <TruncatedText text={link.text} maxLength={70} />
+                </span>
+              )}
+            </React.Fragment>
+          );
+        })}
       </span>
     );
   }
