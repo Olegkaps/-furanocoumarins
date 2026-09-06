@@ -100,7 +100,9 @@ func TestProductionAuthDeploymentContract(t *testing.T) {
 			Name     string `yaml:"name"`
 		} `yaml:"volumes"`
 	}
-	require.NoError(t, yaml.Unmarshal([]byte(readRepositoryFile(t, "deploy/swarm/stack.yaml")), &stack))
+	stackYAML := readRepositoryFile(t, "deploy/swarm/stack.yaml")
+	require.NotContains(t, stackYAML, ":?", "docker stack deploy does not support required-value Compose interpolation")
+	require.NoError(t, yaml.Unmarshal([]byte(stackYAML), &stack))
 
 	authd, ok := stack.Services["authd"]
 	require.True(t, ok)

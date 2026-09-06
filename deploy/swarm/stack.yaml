@@ -40,7 +40,7 @@ services:
   # authd as a Docker secret; no database credential appears in service env or
   # command metadata.
   auth-postgres:
-    image: "${AUTH_POSTGRES_IMAGE:?AUTH_POSTGRES_IMAGE must be a pinned digest or explicit non-latest version tag}"
+    image: "${AUTH_POSTGRES_IMAGE}"
     secrets:
       - auth_postgres_user
       - auth_postgres_password
@@ -74,7 +74,7 @@ services:
   # Private identity service. Browser traffic reaches it only through go-auth's
   # fixed /auth BFF; there is intentionally no ports section.
   authd:
-    image: "${AUTH_MASTER_IMAGE:?AUTH_MASTER_IMAGE must be a pinned digest or explicit non-latest version tag}"
+    image: "${AUTH_MASTER_IMAGE}"
     secrets:
       - auth_database_url
       - auth_password_history_key
@@ -91,9 +91,9 @@ services:
       REGISTRATION_INVITE_CALLBACK_URL_FILE: /run/secrets/auth_invite_callback_url
       SMTP_USER_FILE: /run/secrets/auth_smtp_user
       SMTP_PASSWORD_FILE: /run/secrets/auth_smtp_password
-      SMTP_HOST: "${AUTH_SMTP_HOST:?AUTH_SMTP_HOST must be set}"
+      SMTP_HOST: "${AUTH_SMTP_HOST}"
       SMTP_PORT: "${AUTH_SMTP_PORT:-587}"
-      MAIL_FROM: "${AUTH_MAIL_FROM:?AUTH_MAIL_FROM must be set}"
+      MAIL_FROM: "${AUTH_MAIL_FROM}"
       REFRESH_COOKIE_SECURE: "true"
       HTTP_ADDR: :8080
       GRPC_ADDR: :9090
@@ -285,7 +285,7 @@ services:
         condition: on-failure
 
   go-auth:
-    image: "${FURANO_BACKEND_IMAGE:?FURANO_BACKEND_IMAGE must be a pinned digest or explicit non-latest version tag}"
+    image: "${FURANO_BACKEND_IMAGE}"
     secrets:
       - go_auth_env
     entrypoint: /bin/sh
