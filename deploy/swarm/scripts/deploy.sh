@@ -63,12 +63,6 @@ validate_callback_secret() {
     echo "Swarm does not serve the SPA; create the secret with the exact externally hosted BrowserRouter route." >&2
     exit 1
   fi
-  local status
-  status="$(curl --silent --show-error --max-time 10 --output /dev/null --write-out '%{http_code}' "${value}" || true)"
-  if [[ ! "${status}" =~ ^2[0-9][0-9]$ ]]; then
-    echo "External BrowserRouter callback '${value}' is not ready (HTTP ${status:-unreachable})" >&2
-    exit 1
-  fi
   VALIDATED_CALLBACK_URL="${value}"
 }
 

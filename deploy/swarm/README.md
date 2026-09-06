@@ -46,6 +46,11 @@ callback files. The initializer also:
 - reads the SMTP password from `AUTH_SMTP_PASSWORD` or `MAIL_SECRET` in the
   already ignored `env/.env`.
 
+Deployment preflight validates the stored callback labels, HTTPS URL shape,
+exact paths, and origin consistency. It deliberately does not send HTTP
+requests to those URLs: external load-balancer readiness and response time are
+operator checks and cannot block `deploy.sh`.
+
 No secret value is passed in an environment variable or command line. Docker
 stores generated values directly from temporary mode-private files, which are
 removed when initialization exits.

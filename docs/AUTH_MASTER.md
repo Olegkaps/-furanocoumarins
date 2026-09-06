@@ -64,7 +64,9 @@ URL is mounted from a Docker secret file. The operator sets one
 `PUBLIC_APP_ORIGIN` in the ignored `deploy/swarm/production.conf`; secret
 initialization derives the exact `/admit` and `/register` callback routes.
 The Swarm stack has no frontend service, so those external BrowserRouter routes
-must serve the existing SPA with history fallback before deployment.
+must serve the existing SPA with history fallback. Deployment validates their
+secret labels, HTTPS shape, paths, and origin consistency without probing them
+through the external load balancer.
 `ALLOW_ORIGIN` must equal that one HTTPS origin exactly; `*` and comma-separated
 origin lists cannot carry credentialed refresh-cookie requests and are rejected.
 The initializer derives database DSNs, generates auth database and encryption
