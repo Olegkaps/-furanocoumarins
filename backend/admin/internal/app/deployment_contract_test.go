@@ -160,6 +160,11 @@ func TestProductionAuthDeploymentContract(t *testing.T) {
 
 	cassandra := stack.Services["cassandra"]
 	require.Equal(t, "cassandra:3.11.9", cassandra.Image)
+	require.Equal(t, "1024M", cassandra.Environment["MAX_HEAP_SIZE"])
+	require.Equal(t, "200M", cassandra.Environment["HEAP_NEWSIZE"])
+	require.Equal(t, map[string]any{
+		"limits": map[string]any{"cpus": "0.50", "memory": "2G"},
+	}, cassandra.Deploy["resources"])
 	require.Contains(t, cassandra.Volumes, "cassandra3_data:/var/lib/cassandra")
 	cassandraVolume, ok := stack.Volumes["cassandra3_data"]
 	require.True(t, ok)

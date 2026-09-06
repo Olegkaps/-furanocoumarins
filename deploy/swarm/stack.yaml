@@ -152,6 +152,9 @@ services:
   cassandra:
     image: cassandra:3.11.9
     hostname: cassandra
+    environment:
+      MAX_HEAP_SIZE: 1024M
+      HEAP_NEWSIZE: 200M
     volumes:
       - cassandra3_data:/var/lib/cassandra
     networks:
@@ -166,8 +169,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.25"
-          memory: 512M
+          cpus: "0.50"
+          memory: 2G
       restart_policy:
         condition: on-failure
 
