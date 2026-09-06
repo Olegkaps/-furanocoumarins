@@ -186,8 +186,7 @@ services:
       - metrics
     logging: *default-logging
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:9187/metrics"]
       interval: 30s
@@ -216,8 +215,7 @@ services:
       - metrics
     logging: *default-logging
     depends_on:
-      redis:
-        condition: service_healthy
+      - redis
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:9121/metrics"]
       interval: 30s
@@ -242,8 +240,7 @@ services:
       - metrics
     logging: *default-logging
     depends_on:
-      cassandra:
-        condition: service_healthy
+      - cassandra
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/metrics"]
       interval: 30s
@@ -300,8 +297,7 @@ services:
       - back
       - metrics
     depends_on:
-      authd:
-        condition: service_healthy
+      - authd
     logging: *default-logging
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/ping"]
@@ -334,10 +330,8 @@ services:
       - metrics
       - ingress
     depends_on:
-      go-auth:
-        condition: service_healthy
-      grafana:
-        condition: service_healthy
+      - go-auth
+      - grafana
     logging: *default-logging
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/nginx-health"]
@@ -366,8 +360,7 @@ services:
       - metrics
     logging: *default-logging
     depends_on:
-      nginx:
-        condition: service_started
+      - nginx
     deploy:
       resources:
         limits:
@@ -408,8 +401,7 @@ services:
     networks:
       - metrics
     depends_on:
-      prometheus:
-        condition: service_healthy
+      - prometheus
     logging: *default-logging
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
@@ -460,8 +452,7 @@ services:
       - metrics
     logging: *default-logging
     depends_on:
-      loki:
-        condition: service_healthy
+      - loki
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:9080/ready"]
       interval: 30s

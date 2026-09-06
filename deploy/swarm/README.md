@@ -95,7 +95,9 @@ image lacks a pinned digest or explicit non-latest version tag, a callback secre
 SPA origin, or SMTP settings are absent. After `docker stack deploy`, the script
 waits for local `authd` and `go-auth` health checks, so the following import
 command cannot race auth-master schema initialization on the documented
-single-VM Swarm.
+single-VM Swarm. The stack uses list-form `depends_on`, which is accepted by
+`docker stack deploy`; Swarm does not use dependency conditions for readiness,
+so application startup ordering remains the deploy script's responsibility.
 
 On every `go-auth` start, the backend idempotently creates the Cassandra
 `chemdb.table_activation` control table and migrates the single legacy
@@ -165,7 +167,7 @@ the backend stack, deploy the existing SPA at `PUBLIC_APP_ORIGIN` and configure
 its web server to fall back to `index.html` for the exact
 BrowserRouter routes `/admit` and `/register`. Verify both URLs from outside the
 cluster. Secret initialization derives and validates the two routes; deployment
-rechecks their labels and HTTP reachability before changing the stack.
+rechecks their labels and URL shape before changing the stack.
 
 {% endnote %}
 

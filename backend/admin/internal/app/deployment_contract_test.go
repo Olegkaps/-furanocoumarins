@@ -89,7 +89,7 @@ func TestProductionAuthDeploymentContract(t *testing.T) {
 			Ports       []any             `yaml:"ports"`
 			Secrets     []string          `yaml:"secrets"`
 			Networks    []string          `yaml:"networks"`
-			DependsOn   map[string]any    `yaml:"depends_on"`
+			DependsOn   []string          `yaml:"depends_on"`
 			Healthcheck map[string]any    `yaml:"healthcheck"`
 			Deploy      map[string]any    `yaml:"deploy"`
 			Volumes     []string          `yaml:"volumes"`
@@ -138,6 +138,13 @@ func TestProductionAuthDeploymentContract(t *testing.T) {
 	require.Contains(t, goAuth.DependsOn, "authd")
 	require.NotContains(t, goAuth.DependsOn, "postgres")
 	require.NotContains(t, goAuth.DependsOn, "redis")
+	require.ElementsMatch(t, []string{"postgres"}, stack.Services["postgres-exporter"].DependsOn)
+	require.ElementsMatch(t, []string{"redis"}, stack.Services["redis-exporter"].DependsOn)
+	require.ElementsMatch(t, []string{"cassandra"}, stack.Services["cassandra-exporter"].DependsOn)
+	require.ElementsMatch(t, []string{"go-auth", "grafana"}, stack.Services["nginx"].DependsOn)
+	require.ElementsMatch(t, []string{"nginx"}, stack.Services["nginx-exporter"].DependsOn)
+	require.ElementsMatch(t, []string{"prometheus"}, stack.Services["grafana"].DependsOn)
+	require.ElementsMatch(t, []string{"loki"}, stack.Services["promtail"].DependsOn)
 
 	for _, secret := range []string{
 		"auth_database_url",
