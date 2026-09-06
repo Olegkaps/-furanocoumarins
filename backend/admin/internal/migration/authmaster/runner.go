@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -97,9 +98,28 @@ func openDatabase(ctx context.Context, dsn, kind string) (*sql.DB, error) {
 	return db, nil
 }
 
+func legacySourceDatabaseURL(configured string) (string, error) {
+	parsed, err := url.Parse(configured)
+	if err != nil || (parsed.Scheme != "postgres" && parsed.Scheme != "postgresql") || parsed.Host == "" || parsed.User == nil || parsed.Fragment != "" {
+		return "", errors.New("legacy source database URL is malformed")
+	}
+	password, ok := parsed.User.Password()
+	if !ok {
+		return "", errors.New("legacy source database URL has no password")
+	}
+	parsed.User = url.UserPassword("postgres", password)
+	parsed.Path = "/mydb"
+	parsed.RawPath = ""
+	return parsed.String(), nil
+}
+
 func Run(ctx context.Context, settings Settings, output io.Writer) error {
 	_, _ = fmt.Fprintln(output, "auth-master import: connecting to legacy source database")
-	source, err := openDatabase(ctx, settings.SourceDatabaseURL, "source")
+	sourceURL, err := legacySourceDatabaseURL(settings.SourceDatabaseURL)
+	if err != nil {
+		return err
+	}
+	source, err := openDatabase(ctx, sourceURL, "source")
 	if err != nil {
 		return err
 	}

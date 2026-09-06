@@ -194,6 +194,10 @@ failure, interruption, or timeout. Import failures are never retried
 automatically. While the job runs, the wrapper follows its logs and periodically
 prints the Swarm task state; the importer reports database connection, source
 read, and target transaction stages without exposing credentials or identities.
+The importer rewrites only the legacy source username and database to the fixed
+production values `postgres` and `mydb`; it preserves the secret's host,
+password, and connection options. This requires rebuilding only the importer
+image, not rotating secrets or recreating persistent stack services.
 
 After verifying the imported users, selected superuser, and passwordless login flow,
 remove the migration-only secrets:
