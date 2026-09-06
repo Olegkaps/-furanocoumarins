@@ -235,6 +235,7 @@ func TestOneShotImportDeploymentContract(t *testing.T) {
 		`"${FURANO_IMPORT_IMAGE}"`, `"${GO_AUTH_SERVICE}=0"`,
 		`"${AUTHD_SERVICE}=0"`, "CurrentState",
 		"New|Pending|Assigned|Accepted|Preparing|Ready|Starting|Running", "restore_services",
+		"docker service logs --raw --follow", "Importer task state:", "IMPORT_LOG_PID",
 	} {
 		require.Contains(t, script, required)
 	}

@@ -98,20 +98,26 @@ func openDatabase(ctx context.Context, dsn, kind string) (*sql.DB, error) {
 }
 
 func Run(ctx context.Context, settings Settings, output io.Writer) error {
+	_, _ = fmt.Fprintln(output, "auth-master import: connecting to legacy source database")
 	source, err := openDatabase(ctx, settings.SourceDatabaseURL, "source")
 	if err != nil {
 		return err
 	}
 	defer source.Close()
+	_, _ = fmt.Fprintln(output, "auth-master import: connected to legacy source database")
+	_, _ = fmt.Fprintln(output, "auth-master import: connecting to auth-master target database")
 	target, err := openDatabase(ctx, settings.TargetDatabaseURL, "target")
 	if err != nil {
 		return err
 	}
 	defer target.Close()
+	_, _ = fmt.Fprintln(output, "auth-master import: connected to auth-master target database")
+	_, _ = fmt.Fprintln(output, "auth-master import: reading legacy users")
 	users, err := ReadSourceUsers(ctx, source)
 	if err != nil {
 		return err
 	}
+	_, _ = fmt.Fprintf(output, "auth-master import: read %d legacy users; importing in one transaction\n", len(users))
 	if err := ImportUsers(ctx, target, users, settings.SelectedSuperuser); err != nil {
 		return err
 	}

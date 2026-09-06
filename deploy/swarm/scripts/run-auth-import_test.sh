@@ -75,6 +75,8 @@ assert_restored_and_cleaned() {
 run_case success success
 assert_status zero
 assert_call "service create --name furanocoumarins_auth-import-once"
+assert_call "service logs --raw --follow furanocoumarins_auth-import-once"
+grep -Fq "Importer task state: Running" "${CASE_DIR}/output" || fail "missing live importer state"
 assert_restored_and_cleaned
 writer_check_line="$(grep -n 'service ps .*furanocoumarins_authd' "${CASE_DIR}/calls" | tail -n1 | cut -d: -f1)"
 create_line="$(grep -n 'service create ' "${CASE_DIR}/calls" | head -n1 | cut -d: -f1)"

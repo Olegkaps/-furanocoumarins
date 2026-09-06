@@ -49,8 +49,13 @@ done
 
 go_auth_replicas="$(docker service inspect --format '{{.Spec.Mode.Replicated.Replicas}}' "${GO_AUTH_SERVICE}")"
 authd_replicas="$(docker service inspect --format '{{.Spec.Mode.Replicated.Replicas}}' "${AUTHD_SERVICE}")"
+IMPORT_LOG_PID=""
 
 restore_services() {
+  if [[ -n "${IMPORT_LOG_PID}" ]]; then
+    kill "${IMPORT_LOG_PID}" >/dev/null 2>&1 || true
+    wait "${IMPORT_LOG_PID}" 2>/dev/null || true
+  fi
   docker service rm "${JOB_NAME}" >/dev/null 2>&1 || true
   docker service scale "${AUTHD_SERVICE}=${authd_replicas}" "${GO_AUTH_SERVICE}=${go_auth_replicas}" >/dev/null
 }
@@ -98,7 +103,9 @@ docker service create \
   "${FURANO_IMPORT_IMAGE}" >/dev/null
 
 echo "Waiting for one-shot importer..."
-for _ in $(seq 1 "${IMPORT_ATTEMPTS}"); do
+docker service logs --raw --follow "${JOB_NAME}" &
+IMPORT_LOG_PID=$!
+for attempt in $(seq 1 "${IMPORT_ATTEMPTS}"); do
 	if ! state="$(docker service ps --no-trunc --format '{{.CurrentState}}' "${JOB_NAME}" | head -n1)"; then
 		echo "Could not inspect the one-shot importer state" >&2
 		exit 1
@@ -115,6 +122,9 @@ for _ in $(seq 1 "${IMPORT_ATTEMPTS}"); do
       exit 1
       ;;
   esac
+  if [[ "${attempt}" -eq 1 || $((attempt % 5)) -eq 0 ]]; then
+    echo "Importer task state: ${state}"
+  fi
   sleep "${IMPORT_INTERVAL}"
 done
 
