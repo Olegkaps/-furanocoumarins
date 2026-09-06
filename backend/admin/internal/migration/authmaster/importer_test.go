@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
 
@@ -86,11 +87,25 @@ func TestReadSourceUsersQueryCannotReadLegacyPassword(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 	mock.ExpectBegin()
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT id, role, username, email FROM users ORDER BY id")).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "role", "username", "email"}).AddRow(7, "admin", "Mixed", "Mixed@Example.Test"))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT id, username, email FROM public.users ORDER BY id")).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email"}).AddRow(7, "Mixed", "Mixed@Example.Test"))
 	mock.ExpectCommit()
 	users, err := ReadSourceUsers(context.Background(), db)
 	require.NoError(t, err)
 	require.Equal(t, []SourceUser{{SourceID: 7, Role: "admin", Login: "Mixed", Email: "Mixed@Example.Test"}}, users)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestReadSourceUsersReportsSafePostgresCode(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT id, username, email FROM public.users ORDER BY id")).
+		WillReturnError(&pq.Error{Code: "42501", Message: "permission denied for private schema"})
+	mock.ExpectRollback()
+	_, err = ReadSourceUsers(context.Background(), db)
+	require.EqualError(t, err, "read source users failed during query (PostgreSQL code 42501)")
+	require.NotContains(t, err.Error(), "private schema")
 	require.NoError(t, mock.ExpectationsWereMet())
 }

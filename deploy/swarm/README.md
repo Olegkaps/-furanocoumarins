@@ -209,7 +209,11 @@ The importer uses a repeatable-read, read-only source transaction and an atomic
 target transaction. Reruns are idempotent, but selected-superuser or source
 fingerprint drift fails closed. Imported passwords remain unset unless the user
 optionally completes forgot-password reset. Magic-link login can be repeated
-indefinitely and grants normal role and superuser authority immediately.
+indefinitely and grants normal role and superuser authority immediately. The
+legacy production `role` column is ignored because all legacy accounts use the
+same admin role; every imported account receives the auth-master admin role,
+while only `FURANO_SUPERUSER` receives superuser authority. The source query
+never reads `hashed_password`.
 
 ## Verify deployment
 

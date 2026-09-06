@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 var migrationNamespace = uuid.MustParse("0a829b22-1746-50c1-89b1-fb43dd3dc0e3")
@@ -85,26 +85,34 @@ func ReadSourceUsers(ctx context.Context, source *sql.DB) ([]SourceUser, error) 
 		return nil, errors.New("read source users failed")
 	}
 	defer func() { _ = tx.Rollback() }()
-	rows, err := tx.QueryContext(ctx, `SELECT id, role, username, email FROM users ORDER BY id`)
+	rows, err := tx.QueryContext(ctx, `SELECT id, username, email FROM public.users ORDER BY id`)
 	if err != nil {
-		return nil, errors.New("read source users failed")
+		return nil, sourceReadError("query", err)
 	}
 	defer rows.Close()
 	users := make([]SourceUser, 0)
 	for rows.Next() {
-		var user SourceUser
-		if err := rows.Scan(&user.SourceID, &user.Role, &user.Login, &user.Email); err != nil {
-			return nil, errors.New("read source users failed")
+		user := SourceUser{Role: "admin"}
+		if err := rows.Scan(&user.SourceID, &user.Login, &user.Email); err != nil {
+			return nil, sourceReadError("row scan", err)
 		}
 		users = append(users, user)
 	}
-	if rows.Err() != nil {
-		return nil, errors.New("read source users failed")
+	if err := rows.Err(); err != nil {
+		return nil, sourceReadError("row iteration", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, errors.New("read source users failed")
 	}
 	return users, nil
+}
+
+func sourceReadError(stage string, err error) error {
+	var postgresError *pq.Error
+	if errors.As(err, &postgresError) {
+		return fmt.Errorf("read source users failed during %s (PostgreSQL code %s)", stage, postgresError.Code)
+	}
+	return fmt.Errorf("read source users failed during %s", stage)
 }
 
 // PreflightTargetSchema rejects an empty or incompatible target. Schema
