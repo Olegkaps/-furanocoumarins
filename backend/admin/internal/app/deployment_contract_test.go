@@ -3,6 +3,7 @@ package app_test
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -38,10 +39,42 @@ func TestCIUsesModuleGoVersionAndMountsRepositoryContracts(t *testing.T) {
 	require.GreaterOrEqual(t, strings.Count(workflow, "go-version-file: backend/admin/go.mod"), 2)
 	require.Contains(t, workflow, "cache-dependency-path: backend/admin/go.sum")
 	require.Contains(t, workflow, "make test-backend-container COMPOSE='docker compose'")
+	require.Contains(t, workflow, "args: --config=.golangci.yml")
 
 	compose := readRepositoryFile(t, "docker-compose.test.yaml")
 	require.Contains(t, compose, "FURANO_REPOSITORY_ROOT: /workspace")
 	require.Contains(t, compose, ".:/workspace:ro")
+}
+
+func TestGolangCILintExcludesOnlyDeferredCloseCallsFromErrcheck(t *testing.T) {
+	var config struct {
+		Version string `yaml:"version"`
+		Linters struct {
+			Exclusions struct {
+				Rules []struct {
+					Linters []string `yaml:"linters"`
+					Source  string   `yaml:"source"`
+				} `yaml:"rules"`
+			} `yaml:"exclusions"`
+		} `yaml:"linters"`
+	}
+	require.NoError(t, yaml.Unmarshal([]byte(readRepositoryFile(t, "backend/admin/.golangci.yml")), &config))
+	require.Equal(t, "2", config.Version)
+	require.Len(t, config.Linters.Exclusions.Rules, 1)
+	rule := config.Linters.Exclusions.Rules[0]
+	require.Equal(t, []string{"errcheck"}, rule.Linters)
+	require.Equal(t, `^\s*defer\s+.+\.Close\(\)\s*(?://.*|/\*.*)?\s*$`, rule.Source)
+
+	pattern := regexp.MustCompile(rule.Source)
+	require.True(t, pattern.MatchString("\tdefer resp.Body.Close()"))
+	require.True(t, pattern.MatchString("defer conn.Close()"))
+	require.True(t, pattern.MatchString("defer conn.Close() // cleanup"))
+	require.True(t, pattern.MatchString("defer getCloser().Close() /* cleanup */"))
+	require.True(t, pattern.MatchString("defer conn.Close() /* cleanup starts"), "golangci source matching sees only the first physical line of a block comment")
+	require.False(t, pattern.MatchString("resp.Body.Close()"), "direct Close calls must remain checked")
+	require.False(t, pattern.MatchString("defer fmt.Fprint(w, body)"), "other deferred results must remain checked")
+	require.False(t, pattern.MatchString("defer close(done)"), "only method Close calls are exempt")
+	require.False(t, pattern.MatchString("defer conn.Close(); report()"), "a trailing statement must remain checked")
 }
 
 func TestProductionAuthDeploymentContract(t *testing.T) {

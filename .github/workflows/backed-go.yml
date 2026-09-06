@@ -33,6 +33,7 @@ jobs:
         with:
           version: v2.10
           working-directory: backend/admin
+          args: --config=.golangci.yml
 
   build:
     runs-on: ubuntu-latest

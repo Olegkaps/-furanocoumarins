@@ -24,7 +24,7 @@ func TestClientRejectsRedirectAndForwardsOnlyExplicitCredentials(t *testing.T) {
 	client := New(server.URL)
 	resp, err := client.RequestWithCredentials(context.Background(), http.MethodPost, "/ok", "Bearer token", "refresh_token=x", "csrf", nil, "application/json")
 	require.NoError(t, err)
-	resp.Body.Close()
+	require.NoError(t, resp.Body.Close())
 	require.Equal(t, "Bearer token", got.Get("Authorization"))
 	require.Equal(t, "refresh_token=x", got.Get("Cookie"))
 	require.Equal(t, "csrf", got.Get("X-CSRF-Token"))
@@ -57,7 +57,9 @@ func TestClientMeAndHasRoleRejectMalformedOrAmbiguousJSON(t *testing.T) {
 					t.Fatalf("path=%s want=%s", r.URL.Path, test.path)
 				}
 				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprint(w, test.body)
+				if _, err := fmt.Fprint(w, test.body); err != nil {
+					t.Errorf("write auth-master fixture response: %v", err)
+				}
 			}))
 			defer server.Close()
 			require.Error(t, test.call(New(server.URL)))
@@ -69,10 +71,14 @@ func TestClientMeAndHasRoleAcceptCompleteSingleDocuments(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/v1/me" {
-			fmt.Fprint(w, `{"id":"00000000-0000-0000-0000-000000000001","login":"x","email":"x@example.test","kind":"human","superuser":false}`)
+			if _, err := fmt.Fprint(w, `{"id":"00000000-0000-0000-0000-000000000001","login":"x","email":"x@example.test","kind":"human","superuser":false}`); err != nil {
+				t.Errorf("write auth-master user fixture response: %v", err)
+			}
 			return
 		}
-		fmt.Fprint(w, `{"has_role":false}`)
+		if _, err := fmt.Fprint(w, `{"has_role":false}`); err != nil {
+			t.Errorf("write auth-master role fixture response: %v", err)
+		}
 	}))
 	defer server.Close()
 	client := New(server.URL)

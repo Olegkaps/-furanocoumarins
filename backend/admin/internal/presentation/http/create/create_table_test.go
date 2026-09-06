@@ -76,7 +76,7 @@ func TestCreateTableReturnsConflictWhileImportingAndAcceptsAfterCompletion(t *te
 	require.Equal(t, fiber.StatusOK, first.StatusCode)
 	var firstJob importJob
 	require.NoError(t, json.NewDecoder(first.Body).Decode(&firstJob))
-	first.Body.Close()
+	require.NoError(t, first.Body.Close())
 	<-started
 	require.Equal(t, int32(1), workbookOpens.Load())
 
@@ -87,7 +87,7 @@ func TestCreateTableReturnsConflictWhileImportingAndAcceptsAfterCompletion(t *te
 		Error string `json:"error"`
 	}
 	require.NoError(t, json.NewDecoder(second.Body).Decode(&conflict))
-	second.Body.Close()
+	require.NoError(t, second.Body.Close())
 	require.Equal(t, "another import is already running; wait and retry", conflict.Error)
 	require.Equal(t, int32(1), workbookOpens.Load(), "busy admission must not open or inflate another workbook")
 
@@ -100,7 +100,7 @@ func TestCreateTableReturnsConflictWhileImportingAndAcceptsAfterCompletion(t *te
 	third, err := application.Test(multipartWorkbookRequest(t))
 	require.NoError(t, err)
 	require.Equal(t, fiber.StatusOK, third.StatusCode)
-	third.Body.Close()
+	require.NoError(t, third.Body.Close())
 	<-started
 	require.Equal(t, int32(2), workbookOpens.Load())
 	release <- struct{}{}

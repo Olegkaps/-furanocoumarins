@@ -83,7 +83,7 @@ func validateColumnDefinitions(columnDefs, primaryKeys []string) ([]string, erro
 			return nil, err
 		}
 		if _, exists := seen[strings.ToLower(key)]; !exists {
-			return nil, fmt.Errorf("Cassandra primary key %q is not a declared column", key)
+			return nil, fmt.Errorf("cassandra primary key %q is not a declared column", key)
 		}
 	}
 	return columns, nil
