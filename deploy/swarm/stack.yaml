@@ -40,7 +40,7 @@ services:
   # authd as a Docker secret; no database credential appears in service env or
   # command metadata.
   auth-postgres:
-    image: "${AUTH_POSTGRES_IMAGE:?AUTH_POSTGRES_IMAGE must be an immutable digest}"
+    image: "${AUTH_POSTGRES_IMAGE:?AUTH_POSTGRES_IMAGE must be a pinned digest or explicit non-latest version tag}"
     secrets:
       - auth_postgres_user
       - auth_postgres_password
@@ -74,7 +74,7 @@ services:
   # Private identity service. Browser traffic reaches it only through go-auth's
   # fixed /auth BFF; there is intentionally no ports section.
   authd:
-    image: "${AUTH_MASTER_IMAGE:?AUTH_MASTER_IMAGE must be an immutable digest}"
+    image: "${AUTH_MASTER_IMAGE:?AUTH_MASTER_IMAGE must be a pinned digest or explicit non-latest version tag}"
     secrets:
       - auth_database_url
       - auth_password_history_key
@@ -288,7 +288,7 @@ services:
         condition: on-failure
 
   go-auth:
-    image: "${FURANO_BACKEND_IMAGE:?FURANO_BACKEND_IMAGE must be an immutable digest}"
+    image: "${FURANO_BACKEND_IMAGE:?FURANO_BACKEND_IMAGE must be a pinned digest or explicit non-latest version tag}"
     secrets:
       - go_auth_env
     entrypoint: /bin/sh

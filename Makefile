@@ -32,6 +32,7 @@ lint: frontend-deps
 
 test-unit: frontend-deps
 	bash deploy/swarm/scripts/production-config_test.sh
+	bash deploy/swarm/scripts/image-reference_test.sh
 	bash deploy/swarm/scripts/init-secrets_test.sh
 	bash deploy/swarm/scripts/migrate-cassandra-volume_test.sh
 	./deploy/swarm/scripts/callback-url_test.sh
@@ -66,5 +67,5 @@ compose-check:
 	AUTH_POSTGRES_IMAGE='postgres@sha256:0000000000000000000000000000000000000000000000000000000000000000' \
 	AUTH_SMTP_HOST='smtp.invalid' AUTH_MAIL_FROM='auth@invalid' \
 	$(COMPOSE) -f deploy/swarm/stack.yaml config
-	@bash -n deploy/swarm/scripts/production-config.sh deploy/swarm/scripts/production-config_test.sh deploy/swarm/scripts/callback-url.sh deploy/swarm/scripts/callback-url_test.sh deploy/swarm/scripts/callback-secret.sh deploy/swarm/scripts/callback-secret_test.sh deploy/swarm/scripts/deploy.sh deploy/swarm/scripts/deploy_test.sh deploy/swarm/scripts/init-secrets.sh deploy/swarm/scripts/init-secrets_test.sh deploy/swarm/scripts/migrate-cassandra-volume.sh deploy/swarm/scripts/migrate-cassandra-volume_test.sh deploy/swarm/scripts/run-auth-import.sh deploy/swarm/scripts/run-auth-import_test.sh deploy/swarm/scripts/testdata/docker
+	@bash -n deploy/swarm/scripts/production-config.sh deploy/swarm/scripts/production-config_test.sh deploy/swarm/scripts/callback-url.sh deploy/swarm/scripts/callback-url_test.sh deploy/swarm/scripts/callback-secret.sh deploy/swarm/scripts/callback-secret_test.sh deploy/swarm/scripts/image-reference.sh deploy/swarm/scripts/image-reference_test.sh deploy/swarm/scripts/deploy.sh deploy/swarm/scripts/deploy_test.sh deploy/swarm/scripts/init-secrets.sh deploy/swarm/scripts/init-secrets_test.sh deploy/swarm/scripts/migrate-cassandra-volume.sh deploy/swarm/scripts/migrate-cassandra-volume_test.sh deploy/swarm/scripts/run-auth-import.sh deploy/swarm/scripts/run-auth-import_test.sh deploy/swarm/scripts/testdata/docker
 	@test ! -e docker-compose.yaml || { echo 'obsolete docker-compose.yaml must remain deleted'; exit 1; }

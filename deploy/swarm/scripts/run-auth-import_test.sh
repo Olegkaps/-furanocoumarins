@@ -80,6 +80,12 @@ writer_check_line="$(grep -n 'service ps .*furanocoumarins_authd' "${CASE_DIR}/c
 create_line="$(grep -n 'service create ' "${CASE_DIR}/calls" | head -n1 | cut -d: -f1)"
 [[ "${create_line}" -gt "${writer_check_line}" ]] || fail "importer was created before writer shutdown checks"
 
+VERSION_TAG_IMAGE="registry.example.test/furan-import:v2.4.1"
+run_case version-tag success "${VERSION_TAG_IMAGE}"
+assert_status zero
+assert_call "${VERSION_TAG_IMAGE}"
+assert_restored_and_cleaned
+
 for scenario in failed rejected; do
   run_case "${scenario}" "${scenario}"
   assert_status nonzero
@@ -110,6 +116,6 @@ run_case mutable-image success "registry.example.test/furan-import:latest"
 assert_status nonzero
 assert_no_call "service scale"
 assert_no_call "service create"
-grep -Fq "immutable repository@sha256" "${CASE_DIR}/output" || fail "missing immutable-image explanation"
+grep -Fq "pinned digest or explicit non-latest version tag" "${CASE_DIR}/output" || fail "missing pinned-image explanation"
 
 echo "run-auth-import fake-Docker tests passed"

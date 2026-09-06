@@ -3,10 +3,12 @@
 
 PUBLIC_APP_ORIGIN=https://furan.example.com
 
-AUTH_MASTER_IMAGE=registry.example.com/auth-master@sha256:REPLACE_WITH_64_HEX_CHARACTERS
-FURANO_IMPORT_IMAGE=registry.example.com/furan-import@sha256:REPLACE_WITH_64_HEX_CHARACTERS
-FURANO_BACKEND_IMAGE=registry.example.com/furan-backend@sha256:REPLACE_WITH_64_HEX_CHARACTERS
-AUTH_POSTGRES_IMAGE=postgres@sha256:REPLACE_WITH_64_HEX_CHARACTERS
+# Use a pinned digest or an explicit non-latest version tag. Tags are safe only
+# when your registry enforces immutability; a tag is not a cryptographic pin.
+AUTH_MASTER_IMAGE=registry.example.com/auth-master:v1.2.3
+FURANO_IMPORT_IMAGE=registry.example.com/furan-import:v1.2.3
+FURANO_BACKEND_IMAGE=registry.example.com/furan-backend:v1.2.3
+AUTH_POSTGRES_IMAGE=postgres:17.6
 
 AUTH_SMTP_HOST=smtp.example.com
 AUTH_MAIL_FROM=auth@example.com

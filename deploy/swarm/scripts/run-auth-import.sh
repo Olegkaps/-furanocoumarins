@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 CONFIG_FILE="${ROOT_DIR}/deploy/swarm/production.conf"
 source "${ROOT_DIR}/deploy/swarm/scripts/production-config.sh"
+source "${ROOT_DIR}/deploy/swarm/scripts/image-reference.sh"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -27,10 +28,7 @@ for numeric in WRITER_STOP_ATTEMPTS WRITER_STOP_INTERVAL IMPORT_ATTEMPTS IMPORT_
   fi
 done
 
-if [[ ! "${FURANO_IMPORT_IMAGE:-}" =~ @sha256:[0-9a-fA-F]{64}$ ]]; then
-  echo "FURANO_IMPORT_IMAGE must be set to the immutable repository@sha256 digest of the furanocoumarins importer"
-  exit 1
-fi
+require_pinned_image_reference FURANO_IMPORT_IMAGE
 
 for secret in auth_source_database_url auth_database_url auth_selected_superuser; do
   if ! docker secret inspect "${secret}" >/dev/null 2>&1; then

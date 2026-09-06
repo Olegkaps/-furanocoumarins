@@ -215,7 +215,7 @@ func TestQAManualMatchesCurrentAuthAndTestContract(t *testing.T) {
 func TestOneShotImportDeploymentContract(t *testing.T) {
 	script := readRepositoryFile(t, "deploy/swarm/scripts/run-auth-import.sh")
 	for _, required := range []string{
-		"FURANO_IMPORT_IMAGE", "@sha256:", "auth_source_database_url",
+		"FURANO_IMPORT_IMAGE", "image-reference.sh", "require_pinned_image_reference FURANO_IMPORT_IMAGE", "auth_source_database_url",
 		"auth_database_url", "auth_selected_superuser", "FURANO_SOURCE_DATABASE_URL_FILE",
 		"DATABASE_URL_FILE", "FURANO_SUPERUSER_FILE", "--restart-condition none",
 		`"${FURANO_IMPORT_IMAGE}"`, `"${GO_AUTH_SERVICE}=0"`,
@@ -269,7 +269,14 @@ func TestOneShotImportDeploymentContract(t *testing.T) {
 	require.NotContains(t, swarmReadme, "AUTH_INVITE_CALLBACK_URL_FILE")
 	gitignore := readRepositoryFile(t, ".gitignore")
 	require.Contains(t, gitignore, "deploy/swarm/production.conf")
-	require.Contains(t, deploy, "require_digest_image FURANO_BACKEND_IMAGE")
+	require.Contains(t, deploy, "require_pinned_image_reference AUTH_MASTER_IMAGE")
+	require.Contains(t, deploy, "require_pinned_image_reference AUTH_POSTGRES_IMAGE")
+	require.Contains(t, deploy, "require_pinned_image_reference FURANO_BACKEND_IMAGE")
+	require.Contains(t, productionExample, "auth-master:v1.2.3")
+	require.Contains(t, productionExample, "furan-import:v1.2.3")
+	require.Contains(t, productionExample, "furan-backend:v1.2.3")
+	require.Contains(t, productionExample, "postgres:17.6")
+	require.Contains(t, swarmReadme, "explicit non-`latest` version tag")
 	require.NotContains(t, deploy, "auth_source_database_url")
 	require.NotContains(t, deploy, "auth_selected_superuser")
 	require.Contains(t, deploy, "validate_callback_secret auth_magic_callback_url /admit")

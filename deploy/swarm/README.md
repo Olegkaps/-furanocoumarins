@@ -13,8 +13,8 @@ For local development, use [docker-compose.local.yaml](../../docker-compose.loca
 - TLS certificates on the host (`/etc/letsencrypt`, managed by Certbot)
 - Environment files under `env/` (generate with `./cli init_env` from repo root)
 - `monitoring/grafana.ini` (also created by `./cli init_env`)
-- Immutable, pushed image digests for the furanocoumarins backend and importer,
-  auth-master, and PostgreSQL
+- Pushed images for the furanocoumarins backend and importer, auth-master, and
+  PostgreSQL, each using a pinned digest or explicit non-latest version tag
 - A production SMTP relay
 
 ## One production configuration file
@@ -26,8 +26,13 @@ nano deploy/swarm/production.conf
 
 This ignored file is the only deployment-specific input read by all
 production commands. Do not write `export`, shell quotes, or shell expressions in it. Put
-the public SPA origin, four immutable image digests, SMTP address, and selected
-legacy superuser in this file. Tags and `latest` are rejected.
+the public SPA origin, four pinned image references, SMTP address, and selected
+legacy superuser in this file. Each image may use a `repository@sha256:...`
+digest or an explicit non-`latest` version tag. Treating a version tag as
+immutable is an operator and registry policy; only a digest is cryptographically
+pinned. Floating `latest`, untagged images, and malformed references are rejected.
+This changes deployment preflight only; fake-Docker shell tests cover the policy,
+while application integration and browser behavior are unaffected.
 
 The callback URLs are derived automatically as
 `PUBLIC_APP_ORIGIN/admit` and `PUBLIC_APP_ORIGIN/register`; do not create
@@ -81,7 +86,7 @@ initializer is idempotent: it reports existing secrets instead of replacing
 them. Rotation is always explicit.
 
 The deployment fails before contacting Swarm when the config is missing, an
-image is not an immutable digest, a callback secret does not match the configured
+image lacks a pinned digest or explicit non-latest version tag, a callback secret does not match the configured
 SPA origin, or SMTP settings are absent. After `docker stack deploy`, the script
 waits for local `authd` and `go-auth` health checks, so the following import
 command cannot race auth-master schema initialization on the documented

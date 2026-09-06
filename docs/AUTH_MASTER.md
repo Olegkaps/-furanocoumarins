@@ -70,7 +70,9 @@ origin lists cannot carry credentialed refresh-cookie requests and are rejected.
 The initializer derives database DSNs, generates auth database and encryption
 credentials, and reads the existing protected mail value from `env/.env`; the
 operator does not create callback or credential files. All four images in
-`production.conf` must use immutable digest references.
+`production.conf` must use either pinned digest references or explicit
+non-`latest` version tags. Version-tag immutability is enforced by registry and
+operator policy; only digest references are cryptographically pinned.
 
 Follow [the Swarm deployment guide](../deploy/swarm/README.md) to create
 secrets, perform the offline Cassandra volume cutover, deploy the private

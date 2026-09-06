@@ -7,6 +7,7 @@ USE_LOCAL=false
 ALLOW_FRESH_CASSANDRA=false
 source "${ROOT_DIR}/deploy/swarm/scripts/production-config.sh"
 source "${ROOT_DIR}/deploy/swarm/scripts/callback-url.sh"
+source "${ROOT_DIR}/deploy/swarm/scripts/image-reference.sh"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,15 +39,6 @@ export SWARM_CASSANDRA_VOLUME
 
 cd "${ROOT_DIR}"
 
-require_digest_image() {
-  local variable="$1"
-  local value="${!variable:-}"
-  if [[ ! "${value}" =~ @sha256:[0-9a-fA-F]{64}$ ]]; then
-    echo "${variable} must be set to an immutable image digest (repository@sha256:...)"
-    exit 1
-  fi
-}
-
 require_nonsecret_setting() {
   local variable="$1"
   if [[ -z "${!variable:-}" ]]; then
@@ -55,9 +47,9 @@ require_nonsecret_setting() {
   fi
 }
 
-require_digest_image AUTH_MASTER_IMAGE
-require_digest_image AUTH_POSTGRES_IMAGE
-require_digest_image FURANO_BACKEND_IMAGE
+require_pinned_image_reference AUTH_MASTER_IMAGE
+require_pinned_image_reference AUTH_POSTGRES_IMAGE
+require_pinned_image_reference FURANO_BACKEND_IMAGE
 require_nonsecret_setting AUTH_SMTP_HOST
 require_nonsecret_setting AUTH_MAIL_FROM
 
