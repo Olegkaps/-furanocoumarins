@@ -191,7 +191,9 @@ have stopped, then creates a non-restarting one-shot importer service from
 reads the source DSN, target DSN, and explicitly selected superuser through
 Docker secret files. It restores the original replica counts on success,
 failure, interruption, or timeout. Import failures are never retried
-automatically.
+automatically. While the job runs, the wrapper follows its logs and periodically
+prints the Swarm task state; the importer reports database connection, source
+read, and target transaction stages without exposing credentials or identities.
 
 After verifying the imported users, selected superuser, and passwordless login flow,
 remove the migration-only secrets:
