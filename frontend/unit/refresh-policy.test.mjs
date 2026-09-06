@@ -172,6 +172,8 @@ test("metadata links allow HTTPS and safe relative destinations only", () => {
   assert.equal(safeMetadataLink("%s", "javascript:alert(1)"), null);
   assert.equal(safeMetadataLink("https://example.test/%s", "line\njavascript:alert(1)"), null);
   assert.equal(safeMetadataLink("https://example.test/%s", "tab\tvalue"), null);
+  assert.equal(safeMetadataLink("https://example.test/%s", "nul\u0000value"), null);
+  assert.equal(safeMetadataLink("https://example.test/%s", "delete\u007fvalue"), null);
   assert.equal(safeMetadataLink("https://example.test/%s", "control\u0085value"), null);
   assert.equal(safeMetadataLink("https://example.test/%s", "invalid\ud800value"), null);
   assert.equal(safeMetadataLink("https://example.test/%s", "ref\\evil"), null);

@@ -13,6 +13,13 @@ import (
 
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
+	if configured := os.Getenv("FURANO_REPOSITORY_ROOT"); configured != "" {
+		root, err := filepath.Abs(configured)
+		require.NoError(t, err)
+		_, err = os.Stat(filepath.Join(root, "backend", "admin", "go.mod"))
+		require.NoError(t, err, "FURANO_REPOSITORY_ROOT must point to the repository checkout")
+		return root
+	}
 	_, file, _, ok := runtime.Caller(0)
 	require.True(t, ok)
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../.."))
@@ -23,6 +30,18 @@ func readRepositoryFile(t *testing.T, name string) string {
 	data, err := os.ReadFile(filepath.Join(repositoryRoot(t), name))
 	require.NoError(t, err)
 	return string(data)
+}
+
+func TestCIUsesModuleGoVersionAndMountsRepositoryContracts(t *testing.T) {
+	workflow := readRepositoryFile(t, ".github/workflows/backed-go.yml")
+	require.NotContains(t, workflow, "go-version: stable", "stable can outrun the Go version used to build golangci-lint")
+	require.GreaterOrEqual(t, strings.Count(workflow, "go-version-file: backend/admin/go.mod"), 2)
+	require.Contains(t, workflow, "cache-dependency-path: backend/admin/go.sum")
+	require.Contains(t, workflow, "make test-backend-container COMPOSE='docker compose'")
+
+	compose := readRepositoryFile(t, "docker-compose.test.yaml")
+	require.Contains(t, compose, "FURANO_REPOSITORY_ROOT: /workspace")
+	require.Contains(t, compose, ".:/workspace:ro")
 }
 
 func TestProductionAuthDeploymentContract(t *testing.T) {
@@ -98,6 +117,7 @@ func TestProductionAuthDeploymentContract(t *testing.T) {
 	require.NotContains(t, stack.Secrets, "auth_selected_superuser", "migration identity must not be attached to the persistent stack")
 
 	cassandra := stack.Services["cassandra"]
+	require.Equal(t, "cassandra:3.11.9", cassandra.Image)
 	require.Contains(t, cassandra.Volumes, "cassandra3_data:/var/lib/cassandra")
 	cassandraVolume, ok := stack.Volumes["cassandra3_data"]
 	require.True(t, ok)
@@ -241,11 +261,14 @@ func TestOneShotImportDeploymentContract(t *testing.T) {
 	require.Contains(t, deploy, `"${STACK_NAME}_go-auth"`)
 	for _, required := range []string{
 		"nodetool drain", "tar --numeric-owner", "sha256sum", "cmp -s",
-		"docker volume rm", "restart cassandra", "up -d go-auth",
-		"furanocoumarins.cassandra-source", ".furanocoumarins-cassandra-migration-v1",
+		"docker volume rm", "docker start", "cassandra:3.11.9",
+		"furanocoumarins.cassandra-source",
+		".furanocoumarins-cassandra-migration-v1",
 	} {
 		require.Contains(t, cassandraMigration, required)
 	}
+	require.NotContains(t, cassandraMigration, "docker-compose.local.yaml")
+	require.NotContains(t, cassandraMigration, "docker compose")
 	require.Less(t, strings.Index(cassandraMigration, "nodetool drain"), strings.Index(cassandraMigration, "tar --numeric-owner"))
 	require.Contains(t, productionConfig, "LEGACY_CASSANDRA_VOLUME")
 	require.Contains(t, productionConfig, "SWARM_CASSANDRA_VOLUME")
@@ -263,6 +286,7 @@ func TestOneShotImportDeploymentContract(t *testing.T) {
 	require.Contains(t, makefile, "deploy/swarm/scripts/production-config_test.sh")
 	require.Contains(t, makefile, "deploy/swarm/scripts/init-secrets_test.sh")
 	require.Contains(t, makefile, "deploy/swarm/scripts/migrate-cassandra-volume_test.sh")
+	require.Contains(t, makefile, "test-backend-container:")
 
 	backendMain := readRepositoryFile(t, "backend/admin/main.go")
 	require.Contains(t, backendMain, "EnsureActivationSchema(startupCtx)")

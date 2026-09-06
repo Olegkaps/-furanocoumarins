@@ -91,11 +91,19 @@ export function hasMetadataTypeToken(columnType, expected) {
 }
 
 function hasUnsafeTemplateCharacters(value) {
-  return /[\s\u0000-\u001f\u007f-\u009f\\]/u.test(value);
+  return /\s/u.test(value) || value.includes("\\") || hasControlCharacters(value);
 }
 
 function hasUnsafeLinkValueCharacters(value) {
-  return /[\u0000-\u001f\u007f-\u009f\\]/u.test(value);
+  return value.includes("\\") || hasControlCharacters(value);
+}
+
+function hasControlCharacters(value) {
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit <= 0x1f || (codeUnit >= 0x7f && codeUnit <= 0x9f)) return true;
+  }
+  return false;
 }
 
 function isSafeMetadataLinkTemplate(template) {

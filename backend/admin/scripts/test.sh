@@ -7,13 +7,16 @@ echo "Running unit tests..."
 go test ./... -coverprofile=coverage.out "$@"
 
 echo "Checking business-logic coverage (application + domain)..."
-go test ./internal/application/... ./internal/domain/... -coverprofile=business.out
+business_packages='./internal/application/...,./internal/domain/...'
+go test -coverpkg="${business_packages}" ./internal/application/... ./internal/domain/... -coverprofile=business.out
 coverage="$(go tool cover -func=business.out | awk '/^total:/ {print $3}' | tr -d '%')"
 echo "Business logic coverage: ${coverage}%"
 
 min_coverage=95
 if [ "$(printf '%.0f' "$coverage")" -lt "$min_coverage" ]; then
   echo "Business logic coverage ${coverage}% is below ${min_coverage}%"
+  echo "Functions below 100% coverage:"
+  go tool cover -func=business.out | awk '$NF != "100.0%"'
   exit 1
 fi
 

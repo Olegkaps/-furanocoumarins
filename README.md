@@ -127,12 +127,13 @@ The scripts read the ignored `production.conf`; no deployment variables or
 callback files need to be exported. TLS certificates are managed by Certbot on
 the host and mounted into the nginx container.
 
-The Cassandra cutover command stops the legacy Compose writer, drains and stops
-Cassandra 3.11.9, copies the complete data directory into a separate Swarm
-volume, and verifies every file before marking the target usable. The source
-volume remains untouched for rollback. If the old Compose project used a
-non-default volume name, set `LEGACY_CASSANDRA_VOLUME` once in
-`production.conf`.
+The Cassandra cutover command finds the legacy containers from the source
+volume and Compose labels, stops the writer, drains and stops Cassandra, and
+uses the unchanged `cassandra:3.11.9` image to copy the complete data directory
+into a separate Swarm volume. It never reads `docker-compose.local.yaml`. Every
+file is verified before the target is marked usable, and the source remains
+untouched for rollback. If the old Compose project used a non-default volume
+name, set `LEGACY_CASSANDRA_VOLUME` once in `production.conf`.
 
 Full setup, certificate renewal, and secrets rotation: [deploy/swarm/README.md](deploy/swarm/README.md).
 

@@ -17,38 +17,67 @@ if [[ "${FAKE_SCENARIO}" == cassandra-* ]]; then
       printf 'active\n'
       exit 0
       ;;
-    compose)
-      case "$*" in
-        *" ps -q cassandra")
-          [[ "${FAKE_SCENARIO}" == "cassandra-stopped" ]] || printf 'legacy-cassandra\n'
-          exit 0
-          ;;
-        *" ps -q --all cassandra")
-          printf 'legacy-cassandra\n'
-          exit 0
-          ;;
-        *" ps -q go-auth")
-          [[ "${FAKE_SCENARIO}" == "cassandra-stopped" ]] || printf 'legacy-go-auth\n'
-          exit 0
-          ;;
-        *" exec -T cassandra nodetool drain")
-          exit 0
-          ;;
-        *" stop go-auth"|*" stop cassandra"|*" restart cassandra"|*" up -d go-auth")
-          exit 0
-          ;;
-        *" exec -T cassandra cqlsh -e DESCRIBE CLUSTER")
-          exit 0
-          ;;
-      esac
-      echo "unsupported Cassandra Compose fake call: $*" >&2
-      exit 80
-      ;;
     inspect)
-      printf '%s\n' "${source_volume}"
+      case "$*" in
+        *"{{range .Mounts}}"*) printf '%s\n' "${source_volume}" ;;
+        *"com.docker.compose.project"*) printf 'furanocoumarins\n' ;;
+        *"{{.State.Running}} legacy-cassandra")
+          if [[ "${FAKE_SCENARIO}" == "cassandra-stopped" || -f "${FAKE_DOCKER_STATE}/cassandra-stopped" ]]; then
+            printf 'false\n'
+          else
+            printf 'true\n'
+          fi
+          ;;
+        *) echo "unsupported Cassandra inspect fake call: $*" >&2; exit 80 ;;
+      esac
       exit 0
       ;;
     ps)
+      case "$*" in
+        "ps --all --quiet --filter volume=${source_volume}")
+          [[ "${FAKE_SCENARIO}" == "cassandra-container-removed" ]] || printf 'legacy-cassandra\n'
+          ;;
+        *"label=com.docker.compose.project=furanocoumarins"*"label=com.docker.compose.service=go-auth"*)
+          if [[ "${FAKE_SCENARIO}" != "cassandra-stopped" && ! -f "${FAKE_DOCKER_STATE}/writer-stopped" ]]; then
+            printf 'legacy-go-auth\n'
+          fi
+          ;;
+        *"--filter volume=${source_volume}"*)
+          if [[ "${FAKE_SCENARIO}" != "cassandra-stopped" && "${FAKE_SCENARIO}" != "cassandra-container-removed" && ! -f "${FAKE_DOCKER_STATE}/cassandra-stopped" ]]; then
+            printf 'legacy-cassandra legacy-cassandra\n'
+          fi
+          ;;
+        *) echo "unsupported Cassandra ps fake call: $*" >&2; exit 80 ;;
+      esac
+      exit 0
+      ;;
+    exec)
+      case "$*" in
+        "exec legacy-cassandra nodetool drain"|"exec legacy-cassandra cqlsh -e DESCRIBE CLUSTER") ;;
+        *) echo "unsupported Cassandra exec fake call: $*" >&2; exit 80 ;;
+      esac
+      exit 0
+      ;;
+    stop)
+      shift
+      for container in "$@"; do
+        case "${container}" in
+          legacy-cassandra) : >"${FAKE_DOCKER_STATE}/cassandra-stopped" ;;
+          legacy-go-auth) : >"${FAKE_DOCKER_STATE}/writer-stopped" ;;
+          *) echo "unsupported Cassandra stop target: ${container}" >&2; exit 80 ;;
+        esac
+      done
+      exit 0
+      ;;
+    start)
+      shift
+      for container in "$@"; do
+        case "${container}" in
+          legacy-cassandra) rm -f "${FAKE_DOCKER_STATE}/cassandra-stopped" ;;
+          legacy-go-auth) rm -f "${FAKE_DOCKER_STATE}/writer-stopped" ;;
+          *) echo "unsupported Cassandra start target: ${container}" >&2; exit 80 ;;
+        esac
+      done
       exit 0
       ;;
     volume)

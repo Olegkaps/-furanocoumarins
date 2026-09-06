@@ -3,12 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 CONFIG_FILE="${ROOT_DIR}/deploy/swarm/production.conf"
-COMPOSE_FILE="${ROOT_DIR}/docker-compose.local.yaml"
 CASSANDRA_IMAGE="cassandra:3.11.9"
 source "${ROOT_DIR}/deploy/swarm/scripts/production-config.sh"
 
 usage() {
-  echo "Usage: $0 [--config FILE] [--compose-file FILE]" >&2
+  echo "Usage: $0 [--config FILE]" >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -16,11 +15,6 @@ while [[ $# -gt 0 ]]; do
     --config)
       [[ $# -ge 2 ]] || { usage; exit 1; }
       CONFIG_FILE="$2"
-      shift 2
-      ;;
-    --compose-file)
-      [[ $# -ge 2 ]] || { usage; exit 1; }
-      COMPOSE_FILE="$2"
       shift 2
       ;;
     *)
@@ -33,10 +27,6 @@ done
 
 load_production_config "${CONFIG_FILE}"
 
-if [[ ! -r "${COMPOSE_FILE}" ]]; then
-  echo "Legacy Compose file is not readable: ${COMPOSE_FILE}" >&2
-  exit 1
-fi
 if ! docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null | grep -qE 'active|manager'; then
   echo "Docker Swarm is not initialized. Run: docker swarm init" >&2
   exit 1
@@ -45,7 +35,6 @@ fi
 SOURCE_VOLUME="${LEGACY_CASSANDRA_VOLUME}"
 TARGET_VOLUME="${SWARM_CASSANDRA_VOLUME}"
 MARKER_PATH="/.furanocoumarins-cassandra-migration-v1"
-COMPOSE=(docker compose -f "${COMPOSE_FILE}")
 
 volume_exists() {
   docker volume inspect "$1" >/dev/null 2>&1
@@ -74,6 +63,38 @@ if ! volume_exists "${SOURCE_VOLUME}"; then
   exit 1
 fi
 
+legacy_cassandra_ids=()
+while IFS= read -r container_id; do
+  [[ -n "${container_id}" ]] && legacy_cassandra_ids+=("${container_id}")
+done < <(docker ps --all --quiet --filter "volume=${SOURCE_VOLUME}")
+if [[ "${#legacy_cassandra_ids[@]}" -gt 1 ]]; then
+  echo "More than one legacy container mounts Cassandra volume '${SOURCE_VOLUME}'." >&2
+  printf '  %s\n' "${legacy_cassandra_ids[@]}" >&2
+  exit 1
+fi
+legacy_cassandra_id="${legacy_cassandra_ids[0]:-}"
+legacy_compose_project=""
+legacy_writer_ids=()
+if [[ -n "${legacy_cassandra_id}" ]]; then
+  detected_volume="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/lib/cassandra"}}{{.Name}}{{end}}{{end}}' "${legacy_cassandra_id}")"
+  if [[ -z "${detected_volume}" ]]; then
+    echo "The legacy Cassandra container has no named volume at /var/lib/cassandra." >&2
+    exit 1
+  fi
+  if [[ "${detected_volume}" != "${SOURCE_VOLUME}" ]]; then
+    echo "Legacy Cassandra uses '${detected_volume}', not configured '${SOURCE_VOLUME}'." >&2
+    echo "Set LEGACY_CASSANDRA_VOLUME=${detected_volume} in production.conf and rerun." >&2
+    exit 1
+  fi
+  legacy_compose_project="$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "${legacy_cassandra_id}" 2>/dev/null || true)"
+  if [[ -n "${legacy_compose_project}" ]]; then
+    while IFS= read -r container_id; do
+      [[ -n "${container_id}" ]] && legacy_writer_ids+=("${container_id}")
+    done < <(docker ps --quiet \
+      --filter "label=com.docker.compose.project=${legacy_compose_project}" \
+      --filter "label=com.docker.compose.service=go-auth")
+  fi
+fi
 if volume_exists "${TARGET_VOLUME}"; then
   if target_is_complete; then
     echo "Cassandra volume migration is already complete: ${SOURCE_VOLUME} -> ${TARGET_VOLUME}"
@@ -84,23 +105,9 @@ if volume_exists "${TARGET_VOLUME}"; then
   exit 1
 fi
 
-running_cassandra_id="$("${COMPOSE[@]}" ps -q cassandra 2>/dev/null || true)"
-legacy_cassandra_id="${running_cassandra_id}"
-if [[ -z "${legacy_cassandra_id}" ]]; then
-  legacy_cassandra_id="$("${COMPOSE[@]}" ps -q --all cassandra 2>/dev/null || true)"
-fi
-if [[ -n "${legacy_cassandra_id}" ]]; then
-  detected_volume="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/lib/cassandra"}}{{.Name}}{{end}}{{end}}' "${legacy_cassandra_id}")"
-  if [[ -z "${detected_volume}" ]]; then
-    echo "The legacy Cassandra container has no named volume at /var/lib/cassandra." >&2
-    exit 1
-  fi
-  if [[ "${detected_volume}" != "${SOURCE_VOLUME}" ]]; then
-    echo "Compose Cassandra uses '${detected_volume}', not configured '${SOURCE_VOLUME}'." >&2
-    echo "Set LEGACY_CASSANDRA_VOLUME=${detected_volume} in production.conf and rerun." >&2
-    exit 1
-  fi
-fi
+container_is_running() {
+  [[ "$(docker inspect --format '{{.State.Running}}' "$1" 2>/dev/null || true)" == "true" ]]
+}
 
 writer_was_running=false
 cassandra_was_running=false
@@ -110,10 +117,10 @@ cassandra_drained=false
 target_created=false
 migration_complete=false
 
-if [[ -n "$("${COMPOSE[@]}" ps -q go-auth 2>/dev/null || true)" ]]; then
+if [[ "${#legacy_writer_ids[@]}" -gt 0 ]]; then
   writer_was_running=true
 fi
-if [[ -n "${running_cassandra_id}" ]]; then
+if [[ -n "${legacy_cassandra_id}" ]] && container_is_running "${legacy_cassandra_id}"; then
   cassandra_was_running=true
 fi
 
@@ -131,9 +138,9 @@ restore_after_failure() {
   fi
   if [[ "${cassandra_was_running}" == true && ( "${cassandra_drained}" == true || "${cassandra_stopped}" == true ) ]]; then
     cassandra_ready=false
-    if "${COMPOSE[@]}" restart cassandra >/dev/null; then
+    if docker start "${legacy_cassandra_id}" >/dev/null; then
       for _ in $(seq 1 60); do
-        if "${COMPOSE[@]}" exec -T cassandra cqlsh -e 'DESCRIBE CLUSTER' >/dev/null 2>&1; then
+        if docker exec "${legacy_cassandra_id}" cqlsh -e 'DESCRIBE CLUSTER' >/dev/null 2>&1; then
           cassandra_ready=true
           break
         fi
@@ -146,7 +153,7 @@ restore_after_failure() {
   fi
   if [[ "${writer_stopped}" == true && "${writer_was_running}" == true ]]; then
     if [[ "${cassandra_was_running}" != true || "${cassandra_ready}" == true ]]; then
-      "${COMPOSE[@]}" up -d go-auth >/dev/null
+      docker start "${legacy_writer_ids[@]}" >/dev/null
     fi
   fi
   echo "Cassandra migration failed; legacy-service restoration and partial-target cleanup were attempted." >&2
@@ -160,14 +167,14 @@ trap 'exit 143' TERM
 if [[ "${writer_was_running}" == true ]]; then
   echo "Stopping the legacy application writer..."
   writer_stopped=true
-  "${COMPOSE[@]}" stop go-auth
+  docker stop "${legacy_writer_ids[@]}"
 fi
 if [[ "${cassandra_was_running}" == true ]]; then
   echo "Draining and stopping legacy Cassandra..."
-  "${COMPOSE[@]}" exec -T cassandra nodetool drain
+  docker exec "${legacy_cassandra_id}" nodetool drain
   cassandra_drained=true
   cassandra_stopped=true
-  "${COMPOSE[@]}" stop cassandra
+  docker stop "${legacy_cassandra_id}"
 fi
 
 mounted_by="$(docker ps --filter "volume=${SOURCE_VOLUME}" --format '{{.ID}} {{.Names}}')"

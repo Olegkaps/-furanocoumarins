@@ -258,16 +258,6 @@ func ParseExternalSheet(columnType string) (string, bool, error) {
 	return modifiers.external, modifiers.hasExternal, err
 }
 
-func parseDefaultColumn(columnType string) (string, bool, error) {
-	modifiers, err := parseColumnType(columnType)
-	return modifiers.defaultColumn, modifiers.hasDefaultColumn, err
-}
-
-func validateColumnTypeSyntax(columnType string) error {
-	_, err := parseColumnType(columnType)
-	return err
-}
-
 type VirtualSheet struct {
 	ArrangeOfExternals []string // shows how to join data from different sheets
 	RealSheetNames     []string

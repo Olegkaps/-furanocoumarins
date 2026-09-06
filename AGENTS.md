@@ -67,10 +67,12 @@ For local Compose use direct `FURANO_SOURCE_DATABASE_URL` and
 the side-owned importer job.
 
 Before the first Swarm deploy, run `migrate-cassandra-volume.sh` on the same
-single Docker host as the legacy Compose volume. It must quiesce `go-auth`,
-drain and stop Cassandra 3.11.9, clone the complete data directory into a
-different externally named Swarm volume, verify every file checksum, and write
-the completion marker. Never let `deploy.sh` substitute a fresh Cassandra
+single Docker host as the legacy Compose volume. It discovers the actual legacy
+containers from the volume and Compose labels instead of reading the mutable
+local Compose file, quiesces `go-auth`, drains and stops Cassandra, and uses the
+unchanged `cassandra:3.11.9` image to clone the complete data directory into a
+different externally named Swarm volume. It verifies every file checksum and
+writes the completion marker. Never let `deploy.sh` substitute a fresh Cassandra
 volume while the legacy source exists. Keep the source volume untouched until
 the migrated application has been verified and backed up.
 
@@ -80,6 +82,7 @@ Run tests through the root `Makefile`:
 
 - `make lint` — Go vet plus frontend lint.
 - `make test-unit` — backend unit/regression suite and frontend production build.
+- `make test-backend-container` — CI-equivalent backend coverage/integration container.
 - `make test-integration` — isolated Compose-backed auth/migration integration.
 - `make test-e2e` — Playwright business journeys against the isolated stack.
 - `make test` — complete gate.

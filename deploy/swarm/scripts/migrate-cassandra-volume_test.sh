@@ -54,29 +54,37 @@ assert_no_call() {
 
 run_case success cassandra-success
 [[ "${CASE_STATUS}" -eq 0 ]] || { cat "${CASE_DIR}/output" >&2; fail "copy should succeed"; }
-assert_call "stop go-auth"
-assert_call "exec -T cassandra nodetool drain"
-assert_call "stop cassandra"
+assert_call "stop legacy-go-auth"
+assert_call "exec legacy-cassandra nodetool drain"
+assert_call "stop legacy-cassandra"
 assert_call "volume create --label furanocoumarins.cassandra-volume=migration-v1"
 assert_call "src=furanocoumarins_cassandra3_data,dst=/source,readonly"
 assert_call "src=furanocoumarins_swarm_cassandra3_data,dst=/target"
-assert_no_call "up -d cassandra"
-assert_no_call "up -d go-auth"
+assert_call "cassandra:3.11.9 bash"
+if grep -q '^compose ' "${CASE_DIR}/calls"; then
+  fail "migration invoked Docker Compose"
+fi
 
-stop_line="$(grep -n 'stop cassandra' "${CASE_DIR}/calls" | head -n1 | cut -d: -f1)"
+stop_line="$(grep -n 'stop legacy-cassandra' "${CASE_DIR}/calls" | head -n1 | cut -d: -f1)"
 copy_line="$(grep -n '^run ' "${CASE_DIR}/calls" | tail -n1 | cut -d: -f1)"
 [[ "${copy_line}" -gt "${stop_line}" ]] || fail "copy began before Cassandra stopped"
 
 run_case failure cassandra-copy-failure
 [[ "${CASE_STATUS}" -ne 0 ]] || fail "copy failure was ignored"
 assert_call "volume rm furanocoumarins_swarm_cassandra3_data"
-assert_call "restart cassandra"
-assert_call "up -d go-auth"
+assert_call "start legacy-cassandra"
+assert_call "start legacy-go-auth"
 
 run_case missing cassandra-source-missing
 [[ "${CASE_STATUS}" -ne 0 ]] || fail "missing source volume was accepted"
-assert_no_call "stop go-auth"
+assert_no_call "stop legacy-go-auth"
 assert_no_call "volume create"
+
+run_case removed cassandra-container-removed
+[[ "${CASE_STATUS}" -eq 0 ]] || { cat "${CASE_DIR}/output" >&2; fail "fixed Cassandra image should work without a legacy container"; }
+assert_call "cassandra:3.11.9 bash"
+assert_no_call "stop legacy-cassandra"
+assert_no_call "stop legacy-go-auth"
 
 run_case idempotent cassandra-success
 : >"${CASE_DIR}/target-exists"
@@ -94,6 +102,9 @@ copy_runs="$(grep -c 'src=furanocoumarins_cassandra3_data,dst=/source,readonly' 
 grep -Fq 'nodetool drain' "${RUNNER}" || fail "migration does not drain Cassandra"
 grep -Fq 'sha256sum' "${RUNNER}" || fail "migration does not checksum copied files"
 grep -Fq 'tar --numeric-owner' "${RUNNER}" || fail "migration does not preserve filesystem ownership"
+if grep -Fq 'docker-compose.local.yaml' "${RUNNER}"; then
+  fail "migration still depends on the mutable local Compose definition"
+fi
 
 CASE_DIR="${TEST_ROOT}/deploy-guard"
 mkdir -p "${CASE_DIR}"

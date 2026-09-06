@@ -1,4 +1,4 @@
-.PHONY: test install install-e2e frontend-deps auth-import test-unit test-race test-integration test-e2e lint compose-check
+.PHONY: test install install-e2e frontend-deps auth-import test-unit test-race test-integration test-e2e test-backend-container lint compose-check
 
 COMPOSE ?= $(shell if command -v podman >/dev/null 2>&1; then echo podman compose; else echo docker compose; fi)
 
@@ -44,6 +44,9 @@ test-unit: frontend-deps
 
 test-race: frontend-deps
 	cd backend/admin && ENV_TYPE=TEST go test -race ./... -count=1
+
+test-backend-container:
+	$(COMPOSE) -f docker-compose.test.yaml run --rm --build test
 
 # The browser journey is also the real-service integration gate: it provisions
 # source/target PostgreSQL, runs the offline importer, starts private authd and

@@ -106,13 +106,16 @@ Swarm deploy:
 ```
 
 This is an offline physical migration on the documented single Docker host. It
-stops the legacy Compose `go-auth` writer, runs `nodetool drain`, stops
-Cassandra, and copies the entire Cassandra 3.11.9 volume—not only the currently
-known `chemdb` tables—to a distinct Swarm-owned volume. It then compares sorted
-filesystem metadata and SHA-256 checksums for every regular file before writing
-a completion marker. Commit logs, saved caches, hints, system keyspaces, schema,
-indexes, dynamically created data tables, and application keyspaces therefore
-move together.
+finds the actual legacy Cassandra container from the source volume and the
+running `go-auth` writer from the container's Compose project labels. It then
+stops the writer, runs `nodetool drain`, stops Cassandra, and uses the unchanged
+`cassandra:3.11.9` image to copy the entire volume—not only the currently known
+`chemdb` tables—to a distinct Swarm-owned volume. The script does not read or
+execute `docker-compose.local.yaml`, whose current services may differ from the
+legacy deployment. It compares sorted filesystem metadata and SHA-256 checksums
+for every regular file before writing a completion marker. Commit logs, saved
+caches, hints, system keyspaces, schema, indexes, dynamically created data tables,
+and application keyspaces therefore move together.
 
 The default source is `furanocoumarins_cassandra3_data`; the default target is
 `furanocoumarins_swarm_cassandra3_data`. If the legacy Compose project used a
@@ -123,26 +126,27 @@ configuration file:
 LEGACY_CASSANDRA_VOLUME=actual_compose_cassandra3_data
 ```
 
-No environment export is needed. `--compose-file PATH` is available only when
-the old deployment used a Compose file other than `docker-compose.local.yaml`.
-On copy or verification failure, the script removes only the partial target it
-created and restores whichever legacy services were running. On success it
-keeps the source volume stopped and untouched for rollback; remove that source
-only after application-level verification and a separate backup.
+No environment export or legacy Compose file is needed. On copy or verification
+failure, the script removes only the partial target it created and directly
+restarts whichever legacy containers it stopped. On success it keeps the source
+volume stopped and untouched for rollback; remove that source only after
+application-level verification and a separate backup.
 
 `deploy.sh` mounts only the explicit target volume. It refuses to deploy when
 the target has not been prepared, and rejects migrated volumes without the
-source label and completed checksum marker. Only a confirmed installation with
-no legacy Cassandra data may create an empty labeled volume, using
-`./deploy/swarm/scripts/deploy.sh --fresh-cassandra`; that flag still fails if
-the configured legacy source exists.
+source label and completed checksum marker. It continues to use
+`cassandra:3.11.9` for both marker validation and the Swarm service. Only a
+confirmed installation with no legacy Cassandra data may create an empty
+labeled volume using `./deploy/swarm/scripts/deploy.sh --fresh-cassandra`; that
+flag still fails if the configured legacy source exists.
 
-The fake-Docker regression test covers drain/stop/copy ordering, idempotency,
-failure cleanup, and legacy-service restoration. Compose rendering verifies the
-external-volume wiring. A browser-only E2E cannot exercise a host-volume
-cutover; the existing live-Cassandra import/search journey verifies the migrated
-data at the application layer, while the final production copy remains an
-operator-run maintenance step.
+The fake-Docker regression test covers the fixed image, drain/stop/copy
+ordering, idempotency, failure cleanup, and legacy-container restoration.
+Compose rendering verifies the external-volume wiring. A
+browser-only E2E cannot exercise a host-volume cutover; the existing
+live-Cassandra import/search journey verifies the migrated data at the
+application layer, while the final production copy remains an operator-run
+maintenance step.
 
 {% note alert %}
 

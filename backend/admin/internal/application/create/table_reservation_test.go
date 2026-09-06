@@ -84,3 +84,16 @@ func TestReserveUniqueTableStopsAfterUncertainCASError(t *testing.T) {
 	require.Equal(t, base.Add(time.Millisecond), table.Timestamp)
 	require.Len(t, imp.reserved, 1)
 }
+
+func TestReserveUniqueTableReportsExhaustedTimestampWindow(t *testing.T) {
+	base := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+	reserved := make(map[time.Time]cassandra.Table, tableReservationAttempts)
+	for attempt := 0; attempt < tableReservationAttempts; attempt++ {
+		timestamp := base.Add(time.Duration(attempt) * time.Millisecond)
+		reserved[timestamp] = cassandra.Table{Timestamp: timestamp}
+	}
+	imp := &reservationImporter{reserved: reserved}
+	err := reserveUniqueTable(imp, &cassandra.Table{Name: "full-window", Version: "v2"}, base)
+	require.ErrorContains(t, err, "cannot reserve a unique table timestamp")
+	require.Equal(t, tableReservationAttempts, imp.calls)
+}
