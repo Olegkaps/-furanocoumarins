@@ -1,7 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-STACK_NAME="${STACK_NAME:-furanocoumarins}"
+ROOT_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+CONFIG_FILE="${ROOT_DIR}/deploy/swarm/production.conf"
+source "${ROOT_DIR}/deploy/swarm/scripts/production-config.sh"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config) [[ $# -ge 2 ]] || { echo "Usage: $0 [--config FILE]" >&2; exit 1; }; CONFIG_FILE="$2"; shift 2 ;;
+    -h|--help) echo "Usage: $0 [--config FILE]"; exit 0 ;;
+    *) echo "Unknown option: $1" >&2; echo "Usage: $0 [--config FILE]" >&2; exit 1 ;;
+  esac
+done
+
+load_production_config "${CONFIG_FILE}"
 JOB_NAME="${STACK_NAME}_auth-import-once"
 WRITER_STOP_ATTEMPTS="${WRITER_STOP_ATTEMPTS:-60}"
 WRITER_STOP_INTERVAL="${WRITER_STOP_INTERVAL:-1}"

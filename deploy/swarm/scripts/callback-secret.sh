@@ -57,6 +57,6 @@ create_normalized_callback_secret() {
     echo "Secret '${name}' already exists (remove manually to rotate)"
     return 0
   fi
-  docker secret create --label "furanocoumarins.callback-url=${value}" "${name}" "${file}"
+  docker secret create --label "furanocoumarins.callback-url=${value}" "${name}" "${file}" >/dev/null
   echo "Created secret: ${name}"
 }

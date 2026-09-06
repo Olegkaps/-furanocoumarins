@@ -514,6 +514,8 @@ volumes:
   auth_postgres_data:
   redis-data:
   cassandra3_data:
+    external: true
+    name: "${SWARM_CASSANDRA_VOLUME:-furanocoumarins_swarm_cassandra3_data}"
   grafanadata:
   prometheusdata:
 

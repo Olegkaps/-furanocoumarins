@@ -13,87 +13,79 @@ For local development, use [docker-compose.local.yaml](../../docker-compose.loca
 - TLS certificates on the host (`/etc/letsencrypt`, managed by Certbot)
 - Environment files under `env/` (generate with `./cli init_env` from repo root)
 - `monitoring/grafana.ini` (also created by `./cli init_env`)
-- Backend and importer images built and pushed
-- Immutable furanocoumarins backend, auth-master, importer, and PostgreSQL image
-  digests
+- Immutable, pushed image digests for the furanocoumarins backend and importer,
+  auth-master, and PostgreSQL
 - A production SMTP relay
 
-Set the non-secret deployment inputs. Every image variable must use an
-immutable digest; tags and `latest` are rejected before the image can be used.
-The deployment script validates the three persistent-service images, while the
-one-shot import script independently validates its importer image.
+## One production configuration file
 
 ```bash
-export AUTH_MASTER_IMAGE='registry.example/auth-master@sha256:...'
-export FURANO_IMPORT_IMAGE='registry.example/furan-import@sha256:...'
-export FURANO_BACKEND_IMAGE='registry.example/furan-backend@sha256:...'
-export AUTH_POSTGRES_IMAGE='postgres@sha256:...'
-export AUTH_SMTP_HOST='smtp.example.test'
-export AUTH_SMTP_PORT='587'
-export AUTH_MAIL_FROM='auth@example.test'
+cp deploy/swarm/production.conf.example deploy/swarm/production.conf
+nano deploy/swarm/production.conf
 ```
 
-Prepare these readable, non-empty files before initializing secrets:
+This ignored file is the only deployment-specific input read by all
+production commands. Do not write `export`, shell quotes, or shell expressions in it. Put
+the public SPA origin, four immutable image digests, SMTP address, and selected
+legacy superuser in this file. Tags and `latest` are rejected.
 
-- `AUTH_POSTGRES_USER_FILE`, `AUTH_POSTGRES_PASSWORD_FILE`, and
-  `AUTH_POSTGRES_DB_FILE`: credentials for auth-master's dedicated database.
-- `AUTH_DATABASE_URL_FILE`: the complete auth-master target PostgreSQL DSN. Its
-  Swarm-network hostname must be `auth-postgres`, for example
-  `postgres://USER:PASSWORD@auth-postgres:5432/DB?sslmode=disable`.
-- `FURANO_SOURCE_DATABASE_URL_FILE`: the complete DSN for the existing
-  furanocoumarins PostgreSQL database containing the legacy `users` table. Its
-  Swarm-network hostname must be `postgres`, for example
-  `postgres://USER:PASSWORD@postgres:5432/DB?sslmode=disable`.
-- `FURANO_SUPERUSER_FILE`: exactly one selected legacy login or email.
-- `AUTH_PASSWORD_HISTORY_KEY_FILE` and `AUTH_SIGNING_KEY_FILE`: independent
-  production encryption keys.
-- `AUTH_MAGIC_CALLBACK_URL_FILE` and `AUTH_INVITE_CALLBACK_URL_FILE`: exact
-  external BrowserRouter routes `https://<frontend>/admit` and
-  `https://<frontend>/register`, respectively. No fragments, query strings, or
-  alternate paths are accepted. Each file must contain exactly one URL; a
-  conventional final LF or CRLF is removed before the normalized bytes are
-  stored in Docker. Embedded line endings, multiple lines, and NUL bytes fail
-  secret initialization.
-- `AUTH_SMTP_USER_FILE` and `AUTH_SMTP_PASSWORD_FILE`: SMTP credentials.
+The callback URLs are derived automatically as
+`PUBLIC_APP_ORIGIN/admit` and `PUBLIC_APP_ORIGIN/register`; do not create
+callback files. The initializer also:
 
-Set `ALLOW_ORIGIN` in `env/.env` to the single exact HTTPS SPA origin used by
-both callback URLs, for example `https://frontend.example`. Wildcards, multiple
-origins, paths, userinfo, HTTP origins, and callback-origin mismatches are
-rejected because the browser uses credentialed requests and refresh cookies.
-The non-secret validated origin is copied to a Docker secret label so ordinary
-deployment can repeat this preflight without exposing the rest of `go_auth_env`.
+- reads the existing PostgreSQL and Redis credentials from `env/*.env`;
+- derives the legacy source DSN using the Swarm service name `postgres`;
+- generates the auth-master database password and both encryption keys;
+- forces `ALLOW_ORIGIN`, `DOMAIN_PREF`, and `ENV_TYPE=PROD` in the protected
+  `go_auth_env` Docker secret;
+- reads the SMTP password from `AUTH_SMTP_PASSWORD` or `MAIL_SECRET` in the
+  already ignored `env/.env`.
 
-The scripts receive only file paths and image digests. Secret contents are not
-placed in service environment variables, commands, or image arguments.
+No secret value is passed in an environment variable or command line. Docker
+stores generated values directly from temporary mode-private files, which are
+removed when initialization exits.
 
-## First-time setup
+## First production deployment
 
-From the repository root:
+After cloning the repository, run this block from its root. These commands do
+not require any exported deployment variables or hand-made secret files.
 
 ```bash
-# 1. Initialize Swarm (once per VM)
 docker swarm init
-
-# 2. Create env files and grafana.ini
+go build -o cli ./cli
 ./cli init_env
+cp deploy/swarm/production.conf.example deploy/swarm/production.conf
+nano deploy/swarm/production.conf
+nano env/.env
+nano deploy/swarm/configs/nginx.conf
 
-# 3. Edit env/.env for production (cloud S3, DOMAIN_PREF, etc.)
+# Obtain TLS certificates for the API and Grafana hosts in nginx.conf.
+sudo certbot certonly --standalone -d api.furan.example.com -d grafana.furan.example.com
 
-# 4. Export every *_FILE path listed above and create Docker secrets
-chmod +x deploy/swarm/scripts/*.sh
 ./deploy/swarm/scripts/init-secrets.sh
-
-# 5. Obtain TLS certificates (if not already present)
-sudo certbot certonly --nginx -d 176.108.251.108.nip.io -d 176.108.251.108.sslip.io
-
-# 6. Deploy the stack
+./deploy/swarm/scripts/migrate-cassandra-volume.sh
 ./deploy/swarm/scripts/deploy.sh
+
+# Run once after the first stack deploy to move legacy identities.
+./deploy/swarm/scripts/run-auth-import.sh
+
+docker stack ps furanocoumarins
+docker service ls
 ```
 
-The deployment fails before contacting Swarm when a persistent-service image is
-not a digest, a callback secret is missing, or the SMTP host/from address is
-absent. `run-auth-import.sh` applies the same fail-fast digest check to
-`FURANO_IMPORT_IMAGE`.
+`PUBLIC_APP_ORIGIN` is the separately hosted React SPA. The nginx configuration
+uses the API and Grafana hosts instead; replace both example certificate names
+with those nginx hosts. In `env/.env`, configure the production S3 and domain
+mail values and set `MAIL_SECRET` (or add `AUTH_SMTP_PASSWORD`). The
+initializer is idempotent: it reports existing secrets instead of replacing
+them. Rotation is always explicit.
+
+The deployment fails before contacting Swarm when the config is missing, an
+image is not an immutable digest, a callback secret does not match the configured
+SPA origin, or SMTP settings are absent. After `docker stack deploy`, the script
+waits for local `authd` and `go-auth` health checks, so the following import
+command cannot race auth-master schema initialization on the documented
+single-VM Swarm.
 
 On every `go-auth` start, the backend idempotently creates the Cassandra
 `chemdb.table_activation` control table and migrates the single legacy
@@ -104,15 +96,62 @@ schema agreement fails or legacy data contains more than one active row. The
 Cassandra principal used by `go-auth` therefore needs permission to create this
 one table during the rollout.
 
+## One-shot legacy Cassandra cutover
+
+Run the Cassandra migration after secret initialization and before the first
+Swarm deploy:
+
+```bash
+./deploy/swarm/scripts/migrate-cassandra-volume.sh
+```
+
+This is an offline physical migration on the documented single Docker host. It
+stops the legacy Compose `go-auth` writer, runs `nodetool drain`, stops
+Cassandra, and copies the entire Cassandra 3.11.9 volume—not only the currently
+known `chemdb` tables—to a distinct Swarm-owned volume. It then compares sorted
+filesystem metadata and SHA-256 checksums for every regular file before writing
+a completion marker. Commit logs, saved caches, hints, system keyspaces, schema,
+indexes, dynamically created data tables, and application keyspaces therefore
+move together.
+
+The default source is `furanocoumarins_cassandra3_data`; the default target is
+`furanocoumarins_swarm_cassandra3_data`. If the legacy Compose project used a
+different project name, add its actual source volume once to the same ignored
+configuration file:
+
+```text
+LEGACY_CASSANDRA_VOLUME=actual_compose_cassandra3_data
+```
+
+No environment export is needed. `--compose-file PATH` is available only when
+the old deployment used a Compose file other than `docker-compose.local.yaml`.
+On copy or verification failure, the script removes only the partial target it
+created and restores whichever legacy services were running. On success it
+keeps the source volume stopped and untouched for rollback; remove that source
+only after application-level verification and a separate backup.
+
+`deploy.sh` mounts only the explicit target volume. It refuses to deploy when
+the target has not been prepared, and rejects migrated volumes without the
+source label and completed checksum marker. Only a confirmed installation with
+no legacy Cassandra data may create an empty labeled volume, using
+`./deploy/swarm/scripts/deploy.sh --fresh-cassandra`; that flag still fails if
+the configured legacy source exists.
+
+The fake-Docker regression test covers drain/stop/copy ordering, idempotency,
+failure cleanup, and legacy-service restoration. Compose rendering verifies the
+external-volume wiring. A browser-only E2E cannot exercise a host-volume
+cutover; the existing live-Cassandra import/search journey verifies the migrated
+data at the application layer, while the final production copy remains an
+operator-run maintenance step.
+
 {% note alert %}
 
-This Swarm stack does not contain or serve the React frontend. Before creating
-the callback secrets, deploy the existing SPA at the HTTPS origin used in both
-files and configure its web server to fall back to `index.html` for the exact
+This Swarm stack does not contain or serve the React frontend. Before deploying
+the backend stack, deploy the existing SPA at `PUBLIC_APP_ORIGIN` and configure
+its web server to fall back to `index.html` for the exact
 BrowserRouter routes `/admit` and `/register`. Verify both URLs from outside the
-cluster. Secret initialization validates their syntax and stores the expected
-route in a non-secret Docker label; ordinary deployment rechecks those labels
-and fails closed when either external route contract is absent or malformed.
+cluster. Secret initialization derives and validates the two routes; deployment
+rechecks their labels and HTTP reachability before changing the stack.
 
 {% endnote %}
 
@@ -123,11 +162,10 @@ source of legacy identities; `auth-postgres` is the target. Do not copy legacy
 password hashes.
 
 Deploying authd first is mandatory: its exact image initializes and verifies
-the target schema. After the stack is healthy and all migration secrets have
-been created, run the separate side-owned importer image:
+the target schema. After the stack is healthy, run the side-owned importer. It
+reads its image and stack name from `production.conf`:
 
 ```bash
-export FURANO_IMPORT_IMAGE='registry.example/furan-import@sha256:...'
 ./deploy/swarm/scripts/run-auth-import.sh
 ```
 
@@ -185,8 +223,9 @@ Example cron entry (`crontab -e`):
 Docker secrets are immutable. To rotate:
 
 ```bash
-docker secret rm go_auth_env   # only after removing from running stack
 docker stack rm furanocoumarins
+# Wait until `docker stack ps furanocoumarins` reports no stack.
+docker secret rm go_auth_env
 ./deploy/swarm/scripts/init-secrets.sh
 ./deploy/swarm/scripts/deploy.sh
 ```
@@ -214,9 +253,12 @@ To disable Loki/Promtail and reduce load, comment out those services in `stack.y
 ```
 deploy/swarm/
 ├── stack.yaml           # production stack, including private authd services
+├── production.conf.example # copy to ignored production.conf and edit once
 ├── configs/nginx.conf   # reverse proxy (Swarm service DNS)
 └── scripts/
+    ├── production-config.sh
     ├── init-secrets.sh
+    ├── migrate-cassandra-volume.sh
     ├── deploy.sh
     └── run-auth-import.sh
 ```

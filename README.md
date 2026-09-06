@@ -106,14 +106,33 @@ Production runs on a cloud VM via **Docker Swarm** ([deploy/swarm/](deploy/swarm
 
 ```bash
 docker swarm init
+go build -o cli ./cli
 ./cli init_env
-# edit env/.env: cloud S3, DOMAIN_PREF, production secrets
-chmod +x deploy/swarm/scripts/*.sh
+cp deploy/swarm/production.conf.example deploy/swarm/production.conf
+nano deploy/swarm/production.conf
+nano env/.env
+nano deploy/swarm/configs/nginx.conf
+sudo certbot certonly --standalone -d api.furan.example.com -d grafana.furan.example.com
 ./deploy/swarm/scripts/init-secrets.sh
+./deploy/swarm/scripts/migrate-cassandra-volume.sh
 ./deploy/swarm/scripts/deploy.sh
+./deploy/swarm/scripts/run-auth-import.sh
+docker stack ps furanocoumarins
 ```
 
-Configure `env/.env` for cloud S3 (not MinIO). TLS certificates are managed by Certbot on the host and mounted into the nginx container.
+Deploy the React SPA separately at `PUBLIC_APP_ORIGIN`. Replace the API and
+Grafana host names in nginx and the Certbot command.
+Configure `env/.env` for cloud S3 (not MinIO) and its existing mail secret.
+The scripts read the ignored `production.conf`; no deployment variables or
+callback files need to be exported. TLS certificates are managed by Certbot on
+the host and mounted into the nginx container.
+
+The Cassandra cutover command stops the legacy Compose writer, drains and stops
+Cassandra 3.11.9, copies the complete data directory into a separate Swarm
+volume, and verifies every file before marking the target usable. The source
+volume remains untouched for rollback. If the old Compose project used a
+non-default volume name, set `LEGACY_CASSANDRA_VOLUME` once in
+`production.conf`.
 
 Full setup, certificate renewal, and secrets rotation: [deploy/swarm/README.md](deploy/swarm/README.md).
 

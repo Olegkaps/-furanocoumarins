@@ -22,13 +22,26 @@ run_case() {
   local deployed_image="${4:-${IMAGE}}"
   CASE_DIR="${TEST_ROOT}/${name}"
   mkdir -p "${CASE_DIR}"
+  cat >"${CASE_DIR}/production.conf" <<CONFIG
+STACK_NAME=furanocoumarins
+PUBLIC_APP_ORIGIN=https://front.example.test
+AUTH_MASTER_IMAGE=registry.example.test/auth@${DIGEST}
+FURANO_IMPORT_IMAGE=${configured_image}
+FURANO_BACKEND_IMAGE=registry.example.test/backend@${DIGEST}
+AUTH_POSTGRES_IMAGE=postgres@${DIGEST}
+AUTH_SMTP_HOST=smtp.example.test
+AUTH_SMTP_PORT=587
+AUTH_MAIL_FROM=auth@example.test
+AUTH_SMTP_USER=auth@example.test
+FURANO_SUPERUSER=admin@example.test
+CONFIG
   set +e
   PATH="${FAKE_BIN}:${PATH}" \
     FAKE_DOCKER_STATE="${CASE_DIR}" FAKE_SCENARIO="${scenario}" \
     FAKE_DEPLOYED_IMAGE="${deployed_image}" FAKE_GO_AUTH_REPLICAS=4 FAKE_AUTHD_REPLICAS=3 \
-    FAKE_WRITER_ACTIVE_CALLS=2 FURANO_IMPORT_IMAGE="${configured_image}" \
+    FAKE_WRITER_ACTIVE_CALLS=2 \
     WRITER_STOP_ATTEMPTS=2 WRITER_STOP_INTERVAL=0 IMPORT_ATTEMPTS=2 IMPORT_INTERVAL=0 \
-    "${RUNNER}" >"${CASE_DIR}/output" 2>&1
+    "${RUNNER}" --config "${CASE_DIR}/production.conf" >"${CASE_DIR}/output" 2>&1
   CASE_STATUS=$?
   set -e
 }

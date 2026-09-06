@@ -60,20 +60,23 @@ Redis magic-link store at runtime. Cassandra, S3, and the in-process search
 cache remain unchanged.
 
 Every credential, DSN, selected superuser, encryption key, and browser callback
-URL is mounted from a Docker secret file. Both callback URLs must be supplied
-explicitly as `https://<frontend>/admit` and
-`https://<frontend>/register`; deployment does not guess a frontend origin.
+URL is mounted from a Docker secret file. The operator sets one
+`PUBLIC_APP_ORIGIN` in the ignored `deploy/swarm/production.conf`; secret
+initialization derives the exact `/admit` and `/register` callback routes.
 The Swarm stack has no frontend service, so those external BrowserRouter routes
 must serve the existing SPA with history fallback before deployment.
 `ALLOW_ORIGIN` must equal that one HTTPS origin exactly; `*` and comma-separated
 origin lists cannot carry credentialed refresh-cookie requests and are rejected.
-`AUTH_MASTER_IMAGE`, `AUTH_POSTGRES_IMAGE`, and the one-shot
-`FURANO_IMPORT_IMAGE` must be immutable digest references.
+The initializer derives database DSNs, generates auth database and encryption
+credentials, and reads the existing protected mail value from `env/.env`; the
+operator does not create callback or credential files. All four images in
+`production.conf` must use immutable digest references.
 
 Follow [the Swarm deployment guide](../deploy/swarm/README.md) to create
-secrets, deploy the private services, stop application writers, and execute the
-non-restarting one-shot migration job. Never run the importer while `go-auth`
-or `authd` can write identity data.
+secrets, perform the offline Cassandra volume cutover, deploy the private
+services, stop application writers, and execute the non-restarting identity
+migration job. Never run the importer while `go-auth` or `authd` can write
+identity data.
 
 Delete the migration-only source DSN and selected-superuser secrets after the
 import is verified. Persistent services never mount them; recreate them only

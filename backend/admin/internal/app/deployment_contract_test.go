@@ -43,6 +43,10 @@ func TestProductionAuthDeploymentContract(t *testing.T) {
 			Volumes     []string          `yaml:"volumes"`
 		} `yaml:"services"`
 		Secrets map[string]any `yaml:"secrets"`
+		Volumes map[string]struct {
+			External bool   `yaml:"external"`
+			Name     string `yaml:"name"`
+		} `yaml:"volumes"`
 	}
 	require.NoError(t, yaml.Unmarshal([]byte(readRepositoryFile(t, "deploy/swarm/stack.yaml")), &stack))
 
@@ -92,6 +96,13 @@ func TestProductionAuthDeploymentContract(t *testing.T) {
 	}
 	require.NotContains(t, stack.Secrets, "auth_source_database_url", "migration source must not be attached to the persistent stack")
 	require.NotContains(t, stack.Secrets, "auth_selected_superuser", "migration identity must not be attached to the persistent stack")
+
+	cassandra := stack.Services["cassandra"]
+	require.Contains(t, cassandra.Volumes, "cassandra3_data:/var/lib/cassandra")
+	cassandraVolume, ok := stack.Volumes["cassandra3_data"]
+	require.True(t, ok)
+	require.True(t, cassandraVolume.External, "Swarm must mount only the explicitly prepared Cassandra target")
+	require.Contains(t, cassandraVolume.Name, "SWARM_CASSANDRA_VOLUME")
 }
 
 func TestLocalRuntimeDoesNotDependOnLegacyIdentityStores(t *testing.T) {
@@ -168,13 +179,43 @@ func TestOneShotImportDeploymentContract(t *testing.T) {
 	require.Greater(t, createOffset, waitOffset, "writer-stop polling must precede importer creation")
 
 	initSecrets := readRepositoryFile(t, "deploy/swarm/scripts/init-secrets.sh")
-	for _, variable := range []string{
+	productionConfig := readRepositoryFile(t, "deploy/swarm/scripts/production-config.sh")
+	productionExample := readRepositoryFile(t, "deploy/swarm/production.conf.example")
+	swarmReadme := readRepositoryFile(t, "deploy/swarm/README.md")
+	rootReadme := readRepositoryFile(t, "README.md")
+	deploy := readRepositoryFile(t, "deploy/swarm/scripts/deploy.sh")
+	cassandraMigration := readRepositoryFile(t, "deploy/swarm/scripts/migrate-cassandra-volume.sh")
+	for _, script := range []string{initSecrets, deploy, cassandraMigration, readRepositoryFile(t, "deploy/swarm/scripts/run-auth-import.sh")} {
+		require.Contains(t, script, "production-config.sh")
+		require.Contains(t, script, "load_production_config")
+	}
+	for _, required := range []string{
+		"PUBLIC_APP_ORIGIN", "AUTH_MASTER_IMAGE", "FURANO_IMPORT_IMAGE",
+		"FURANO_BACKEND_IMAGE", "AUTH_POSTGRES_IMAGE", "FURANO_SUPERUSER",
+	} {
+		require.Contains(t, productionConfig, required)
+		require.Contains(t, productionExample, required)
+	}
+	for _, removed := range []string{
 		"AUTH_DATABASE_URL_FILE", "FURANO_SOURCE_DATABASE_URL_FILE", "FURANO_SUPERUSER_FILE",
 		"AUTH_MAGIC_CALLBACK_URL_FILE", "AUTH_INVITE_CALLBACK_URL_FILE",
 	} {
-		require.Contains(t, initSecrets, variable)
+		require.NotContains(t, initSecrets, removed)
 	}
-	deploy := readRepositoryFile(t, "deploy/swarm/scripts/deploy.sh")
+	for _, command := range []string{
+		"docker swarm init", "cp deploy/swarm/production.conf.example deploy/swarm/production.conf",
+		"./deploy/swarm/scripts/init-secrets.sh", "./deploy/swarm/scripts/migrate-cassandra-volume.sh",
+		"./deploy/swarm/scripts/deploy.sh",
+		"./deploy/swarm/scripts/run-auth-import.sh",
+	} {
+		require.Contains(t, swarmReadme, command)
+		require.Contains(t, rootReadme, command)
+	}
+	require.NotContains(t, swarmReadme, "export AUTH_MASTER_IMAGE")
+	require.NotContains(t, swarmReadme, "AUTH_MAGIC_CALLBACK_URL_FILE")
+	require.NotContains(t, swarmReadme, "AUTH_INVITE_CALLBACK_URL_FILE")
+	gitignore := readRepositoryFile(t, ".gitignore")
+	require.Contains(t, gitignore, "deploy/swarm/production.conf")
 	require.Contains(t, deploy, "require_digest_image FURANO_BACKEND_IMAGE")
 	require.NotContains(t, deploy, "auth_source_database_url")
 	require.NotContains(t, deploy, "auth_selected_superuser")
@@ -182,13 +223,34 @@ func TestOneShotImportDeploymentContract(t *testing.T) {
 	require.Contains(t, deploy, "validate_callback_secret auth_invite_callback_url /register")
 	require.Contains(t, deploy, "External BrowserRouter callback")
 	require.Contains(t, deploy, "--write-out '%{http_code}'")
-	require.Contains(t, initSecrets, `normalize_callback_secret_file "${AUTH_MAGIC_CALLBACK_URL_FILE:-}"`)
-	require.Contains(t, initSecrets, `normalize_callback_secret_file "${AUTH_INVITE_CALLBACK_URL_FILE:-}"`)
+	require.Contains(t, initSecrets, `MAGIC_CALLBACK_URL="${PUBLIC_APP_ORIGIN}/admit"`)
+	require.Contains(t, initSecrets, `INVITE_CALLBACK_URL="${PUBLIC_APP_ORIGIN}/register"`)
 	require.Contains(t, initSecrets, "create_normalized_callback_secret auth_magic_callback_url")
 	require.Contains(t, initSecrets, "create_normalized_callback_secret auth_invite_callback_url")
 	require.Contains(t, initSecrets, "validate_spa_origin_contract")
 	require.Contains(t, initSecrets, "furanocoumarins.allow-origin")
+	require.Contains(t, initSecrets, "openssl rand -hex")
+	require.Contains(t, initSecrets, "@postgres:5432/")
 	require.Contains(t, deploy, "validate_go_auth_origin")
+	require.Contains(t, deploy, "wait_for_local_service_health")
+	require.Contains(t, deploy, "prepare_cassandra_volume")
+	require.Contains(t, deploy, "--fresh-cassandra")
+	require.Contains(t, deploy, "furanocoumarins.cassandra-volume")
+	require.Contains(t, deploy, ".furanocoumarins-cassandra-migration-v1")
+	require.Contains(t, deploy, `"${STACK_NAME}_authd"`)
+	require.Contains(t, deploy, `"${STACK_NAME}_go-auth"`)
+	for _, required := range []string{
+		"nodetool drain", "tar --numeric-owner", "sha256sum", "cmp -s",
+		"docker volume rm", "restart cassandra", "up -d go-auth",
+		"furanocoumarins.cassandra-source", ".furanocoumarins-cassandra-migration-v1",
+	} {
+		require.Contains(t, cassandraMigration, required)
+	}
+	require.Less(t, strings.Index(cassandraMigration, "nodetool drain"), strings.Index(cassandraMigration, "tar --numeric-owner"))
+	require.Contains(t, productionConfig, "LEGACY_CASSANDRA_VOLUME")
+	require.Contains(t, productionConfig, "SWARM_CASSANDRA_VOLUME")
+	require.Contains(t, productionExample, "LEGACY_CASSANDRA_VOLUME")
+	require.Contains(t, productionExample, "SWARM_CASSANDRA_VOLUME")
 
 	makefile := readRepositoryFile(t, "Makefile")
 	require.Contains(t, makefile, "test: compose-check")
@@ -198,6 +260,9 @@ func TestOneShotImportDeploymentContract(t *testing.T) {
 	require.True(t, strings.Contains(makefile, "bash -n deploy/swarm/scripts"))
 	require.Contains(t, makefile, "./deploy/swarm/scripts/callback-url_test.sh")
 	require.Contains(t, makefile, "./deploy/swarm/scripts/callback-secret_test.sh")
+	require.Contains(t, makefile, "deploy/swarm/scripts/production-config_test.sh")
+	require.Contains(t, makefile, "deploy/swarm/scripts/init-secrets_test.sh")
+	require.Contains(t, makefile, "deploy/swarm/scripts/migrate-cassandra-volume_test.sh")
 
 	backendMain := readRepositoryFile(t, "backend/admin/main.go")
 	require.Contains(t, backendMain, "EnsureActivationSchema(startupCtx)")

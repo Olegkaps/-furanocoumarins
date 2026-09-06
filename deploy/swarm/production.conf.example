@@ -1,0 +1,22 @@
+# Copy this file to production.conf and replace every example value.
+# Values are literal: do not add shell quotes or export statements.
+
+PUBLIC_APP_ORIGIN=https://furan.example.com
+
+AUTH_MASTER_IMAGE=registry.example.com/auth-master@sha256:REPLACE_WITH_64_HEX_CHARACTERS
+FURANO_IMPORT_IMAGE=registry.example.com/furan-import@sha256:REPLACE_WITH_64_HEX_CHARACTERS
+FURANO_BACKEND_IMAGE=registry.example.com/furan-backend@sha256:REPLACE_WITH_64_HEX_CHARACTERS
+AUTH_POSTGRES_IMAGE=postgres@sha256:REPLACE_WITH_64_HEX_CHARACTERS
+
+AUTH_SMTP_HOST=smtp.example.com
+AUTH_MAIL_FROM=auth@example.com
+
+# Existing legacy login or email that the one-shot import promotes.
+FURANO_SUPERUSER=admin@example.com
+
+# Optional defaults:
+# STACK_NAME=furanocoumarins
+# AUTH_SMTP_PORT=587
+# AUTH_SMTP_USER uses MAIL from env/.env when omitted.
+# LEGACY_CASSANDRA_VOLUME=furanocoumarins_cassandra3_data
+# SWARM_CASSANDRA_VOLUME defaults to STACK_NAME_swarm_cassandra3_data.

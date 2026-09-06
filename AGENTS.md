@@ -66,6 +66,14 @@ For local Compose use direct `FURANO_SOURCE_DATABASE_URL` and
 `FURANO_SUPERUSER` values. Production Swarm mounts their `_FILE` variants into
 the side-owned importer job.
 
+Before the first Swarm deploy, run `migrate-cassandra-volume.sh` on the same
+single Docker host as the legacy Compose volume. It must quiesce `go-auth`,
+drain and stop Cassandra 3.11.9, clone the complete data directory into a
+different externally named Swarm volume, verify every file checksum, and write
+the completion marker. Never let `deploy.sh` substitute a fresh Cassandra
+volume while the legacy source exists. Keep the source volume untouched until
+the migrated application has been verified and backed up.
+
 ## Testing
 
 Run tests through the root `Makefile`:

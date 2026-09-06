@@ -3,9 +3,128 @@ set -euo pipefail
 
 : "${FAKE_DOCKER_STATE:?}"
 : "${FAKE_SCENARIO:?}"
-: "${FAKE_DEPLOYED_IMAGE:?}"
+if [[ "${FAKE_SCENARIO}" != "init-secrets" && "${FAKE_SCENARIO}" != cassandra-* ]]; then
+  : "${FAKE_DEPLOYED_IMAGE:?}"
+fi
 
 printf '%s\n' "$*" >>"${FAKE_DOCKER_STATE}/calls"
+
+if [[ "${FAKE_SCENARIO}" == cassandra-* ]]; then
+  source_volume="${FAKE_LEGACY_VOLUME:-furanocoumarins_cassandra3_data}"
+  target_volume="${FAKE_SWARM_VOLUME:-furanocoumarins_swarm_cassandra3_data}"
+  case "$1" in
+    info)
+      printf 'active\n'
+      exit 0
+      ;;
+    compose)
+      case "$*" in
+        *" ps -q cassandra")
+          [[ "${FAKE_SCENARIO}" == "cassandra-stopped" ]] || printf 'legacy-cassandra\n'
+          exit 0
+          ;;
+        *" ps -q --all cassandra")
+          printf 'legacy-cassandra\n'
+          exit 0
+          ;;
+        *" ps -q go-auth")
+          [[ "${FAKE_SCENARIO}" == "cassandra-stopped" ]] || printf 'legacy-go-auth\n'
+          exit 0
+          ;;
+        *" exec -T cassandra nodetool drain")
+          exit 0
+          ;;
+        *" stop go-auth"|*" stop cassandra"|*" restart cassandra"|*" up -d go-auth")
+          exit 0
+          ;;
+        *" exec -T cassandra cqlsh -e DESCRIBE CLUSTER")
+          exit 0
+          ;;
+      esac
+      echo "unsupported Cassandra Compose fake call: $*" >&2
+      exit 80
+      ;;
+    inspect)
+      printf '%s\n' "${source_volume}"
+      exit 0
+      ;;
+    ps)
+      exit 0
+      ;;
+    volume)
+      action="$2"
+      volume="${*: -1}"
+      case "${action}" in
+        inspect)
+          if [[ "${volume}" == "${source_volume}" ]]; then
+            [[ "${FAKE_SCENARIO}" != "cassandra-source-missing" ]]
+            exit
+          fi
+          if [[ "${volume}" != "${target_volume}" || ! -f "${FAKE_DOCKER_STATE}/target-exists" ]]; then
+            exit 1
+          fi
+          if [[ "$*" == *'furanocoumarins.cassandra-volume'* ]]; then
+            printf 'migration-v1\n'
+          elif [[ "$*" == *'furanocoumarins.cassandra-source'* ]]; then
+            printf '%s\n' "${source_volume}"
+          fi
+          exit 0
+          ;;
+        create)
+          : >"${FAKE_DOCKER_STATE}/target-exists"
+          printf '%s\n' "${target_volume}"
+          exit 0
+          ;;
+        rm)
+          rm -f "${FAKE_DOCKER_STATE}/target-exists"
+          exit 0
+          ;;
+      esac
+      ;;
+    run)
+      if [[ "$*" == *'cat /target/.furanocoumarins-cassandra-migration-v1'* ]]; then
+        [[ -f "${FAKE_DOCKER_STATE}/target-ready" ]] || exit 1
+        printf 'version=1\nsource=%s\nmanifest=sha256:%064d\n' "${source_volume}" 0
+        exit 0
+      fi
+      if [[ "${FAKE_SCENARIO}" == "cassandra-copy-failure" ]]; then
+        exit 81
+      fi
+      : >"${FAKE_DOCKER_STATE}/target-ready"
+      exit 0
+      ;;
+  esac
+  echo "unsupported Cassandra fake Docker call: $*" >&2
+  exit 82
+fi
+
+if [[ "${FAKE_SCENARIO}" == "init-secrets" ]]; then
+  if [[ "$1" == "info" ]]; then
+    printf 'active\n'
+    exit 0
+  fi
+  if [[ "$1" == "secret" && "$2" == "inspect" ]]; then
+    [[ -f "${FAKE_DOCKER_STATE}/exists-$3" ]]
+    exit
+  fi
+  if [[ "$1" == "secret" && "$2" == "create" ]]; then
+    if [[ "$3" == "--label" ]]; then
+      label="$4"
+      name="$5"
+      file="$6"
+      printf '%s' "${label}" >"${FAKE_DOCKER_STATE}/label-${name}"
+    else
+      name="$3"
+      file="$4"
+    fi
+    cp "${file}" "${FAKE_DOCKER_STATE}/secret-${name}"
+    : >"${FAKE_DOCKER_STATE}/exists-${name}"
+    printf '%s\n' "fake-${name}"
+    exit 0
+  fi
+  echo "unsupported init-secrets fake docker call: $*" >&2
+  exit 89
+fi
 
 next_count() {
   local name="$1"
