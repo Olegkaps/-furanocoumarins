@@ -1,5 +1,6 @@
-.PHONY: test install install-e2e frontend-deps auth-import test-unit test-race test-integration test-e2e test-backend-container lint compose-check
+.PHONY: test install install-e2e frontend-deps auth-import test-unit test-race test-integration test-e2e test-backend-container test-frontend-container lint compose-check
 
+CONTAINER_ENGINE ?= $(shell if command -v podman >/dev/null 2>&1; then echo podman; else echo docker; fi)
 COMPOSE ?= $(shell if command -v podman >/dev/null 2>&1; then echo podman compose; else echo docker compose; fi)
 
 install: frontend-deps install-e2e
@@ -24,7 +25,7 @@ auth-import:
 	$(COMPOSE) -f docker-compose.local.yaml stop go-auth authd; \
 	$(COMPOSE) -f docker-compose.local.yaml --profile migration run --rm --no-deps auth-import
 
-test: compose-check lint test-unit test-race test-integration test-e2e test-monitoring-config test-monitoring-smoke
+test: compose-check lint test-unit test-race test-integration test-e2e test-frontend-container test-monitoring-config test-monitoring-smoke
 
 lint: frontend-deps
 	cd backend/admin && go vet ./...
@@ -48,6 +49,21 @@ test-race: frontend-deps
 
 test-backend-container:
 	$(COMPOSE) -f docker-compose.test.yaml run --rm --build test
+
+test-frontend-container:
+	@set -eu; \
+	image=furanocoumarins-frontend-test:local; \
+	name=furanocoumarins-frontend-test-$$$$; \
+	cleanup() { $(CONTAINER_ENGINE) rm -f "$$name" >/dev/null 2>&1 || true; }; \
+	trap cleanup EXIT; \
+	$(CONTAINER_ENGINE) build -t "$$image" ./frontend; \
+	$(CONTAINER_ENGINE) run -d --name "$$name" "$$image" >/dev/null; \
+	for _ in $$(seq 1 20); do \
+		$(CONTAINER_ENGINE) exec "$$name" wget -qO- http://127.0.0.1:8080/ >/dev/null 2>&1 && exit 0; \
+		sleep 1; \
+	done; \
+	$(CONTAINER_ENGINE) logs "$$name" >&2; \
+	exit 1
 
 # The browser journey is also the real-service integration gate: it provisions
 # source/target PostgreSQL, runs the offline importer, starts private authd and
