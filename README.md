@@ -94,8 +94,8 @@ For local work use [docker-compose.local.yaml](docker-compose.local.yaml): go-au
 5. Frontend (optional):
 
    ```bash
-   docker build -t furanocoumarins-frontend ./frontend
-   docker run -p 5173:80 furanocoumarins-frontend
+   podman build --pull=always -t furanocoumarins-frontend ./frontend
+   podman run -p 5173:8080 furanocoumarins-frontend
    ```
 
 Backend API is available at `http://localhost:8081`. MinIO console — `http://localhost:9001`.

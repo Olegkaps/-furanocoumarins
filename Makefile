@@ -57,7 +57,7 @@ test-frontend-container:
 	cleanup() { $(CONTAINER_ENGINE) rm -f "$$name" >/dev/null 2>&1 || true; }; \
 	trap cleanup EXIT; \
 	$(CONTAINER_ENGINE) build -t "$$image" ./frontend; \
-	$(CONTAINER_ENGINE) run -d --name "$$name" "$$image" >/dev/null; \
+	$(CONTAINER_ENGINE) run -d --user 65532:65532 --name "$$name" "$$image" >/dev/null; \
 	for _ in $$(seq 1 20); do \
 		$(CONTAINER_ENGINE) exec "$$name" wget -qO- http://127.0.0.1:8080/ >/dev/null 2>&1 && exit 0; \
 		sleep 1; \
