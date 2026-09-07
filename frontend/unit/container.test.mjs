@@ -3,20 +3,17 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const dockerfile = readFileSync(new URL("../Dockerfile", import.meta.url), "utf8");
-const nginxMainConfig = readFileSync(new URL("../nginx-main.conf", import.meta.url), "utf8");
-const nginxConfig = readFileSync(new URL("../nginx.conf", import.meta.url), "utf8");
+const caddyfile = readFileSync(new URL("../Caddyfile", import.meta.url), "utf8");
 
-test("frontend container runs nginx without root-only runtime paths", () => {
-  assert.match(dockerfile, /^FROM nginxinc\/nginx-unprivileged:stable-alpine AS production$/m);
+test("frontend container serves the SPA without nginx PID files", () => {
+  assert.match(dockerfile, /^FROM caddy:2\.10\.2-alpine AS production$/m);
   assert.match(dockerfile, /^EXPOSE 8080$/m);
-  assert.match(dockerfile, /^COPY nginx-main\.conf \/etc\/nginx\/nginx\.conf$/m);
-  assert.doesNotMatch(dockerfile, /^FROM nginx:stable-alpine AS production$/m);
-  assert.match(nginxMainConfig, /^pid \/tmp\/nginx\.pid;$/m);
-  assert.doesNotMatch(nginxMainConfig, /(?:^|\s)\/run\/nginx\.pid/);
-  for (const path of ["client_body", "proxy", "fastcgi", "uwsgi", "scgi"]) {
-    assert.match(nginxMainConfig, new RegExp(`^\\s*${path}_temp_path /tmp/`, "m"));
-  }
-  assert.match(nginxConfig, /^\s*listen\s+8080;$/m);
-  assert.match(nginxConfig, /^\s*listen\s+\[::\]:8080;$/m);
-  assert.doesNotMatch(nginxConfig, /^\s*listen\s+(?:\[::\]:)?80;$/m);
+  assert.match(dockerfile, /^USER 65532:65532$/m);
+  assert.match(dockerfile, /^ENV XDG_CONFIG_HOME=\/tmp\/caddy-config \\$/m);
+  assert.match(dockerfile, /^\s*XDG_DATA_HOME=\/tmp\/caddy-data$/m);
+  assert.doesNotMatch(dockerfile, /nginx/i);
+  assert.match(caddyfile, /^:8080 \{$/m);
+  assert.match(caddyfile, /^\s*root \* \/srv$/m);
+  assert.match(caddyfile, /^\s*try_files \{path\} \/index\.html$/m);
+  assert.match(caddyfile, /^\s*file_server$/m);
 });

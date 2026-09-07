@@ -7,9 +7,11 @@ COPY . .
 RUN npm run build
 
 
-FROM nginxinc/nginx-unprivileged:stable-alpine AS production
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx-main.conf /etc/nginx/nginx.conf
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+FROM caddy:2.10.2-alpine AS production
+ENV XDG_CONFIG_HOME=/tmp/caddy-config \
+    XDG_DATA_HOME=/tmp/caddy-data
+COPY --from=build /app/dist /srv
+COPY Caddyfile /etc/caddy/Caddyfile
+USER 65532:65532
 EXPOSE 8080
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
