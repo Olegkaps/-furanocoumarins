@@ -167,6 +167,27 @@ next_count() {
   printf '%s' "${value}"
 }
 
+if [[ "$1" == "inspect" ]]; then
+  if [[ "$*" == *".State.Running"* ]]; then
+    printf 'true\n'
+  elif [[ "$*" == *".NetworkSettings.Networks"* && -f "${FAKE_DOCKER_STATE}/legacy-network-attached" ]]; then
+    printf 'true\n'
+  fi
+  exit 0
+fi
+
+if [[ "$1" == "network" ]]; then
+  case "$2" in
+    inspect) [[ -f "${FAKE_DOCKER_STATE}/import-network" ]] || exit 1 ;;
+    create) : >"${FAKE_DOCKER_STATE}/import-network" ;;
+    connect) : >"${FAKE_DOCKER_STATE}/legacy-network-attached" ;;
+    disconnect) rm -f "${FAKE_DOCKER_STATE}/legacy-network-attached" ;;
+    rm) rm -f "${FAKE_DOCKER_STATE}/import-network" ;;
+    *) exit 94 ;;
+  esac
+  exit 0
+fi
+
 if [[ "$1" == "secret" && "$2" == "inspect" ]]; then
   exit 0
 fi

@@ -108,6 +108,7 @@ func legacySourceDatabaseURL(configured string) (string, error) {
 		return "", errors.New("legacy source database URL has no password")
 	}
 	parsed.User = url.UserPassword("postgres", password)
+	parsed.Host = "legacy-postgres:5432"
 	parsed.Path = "/mydb"
 	parsed.RawPath = ""
 	return parsed.String(), nil

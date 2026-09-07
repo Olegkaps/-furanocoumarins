@@ -194,10 +194,14 @@ failure, interruption, or timeout. Import failures are never retried
 automatically. While the job runs, the wrapper follows its logs and periodically
 prints the Swarm task state; the importer reports database connection, source
 read, and target transaction stages without exposing credentials or identities.
-The importer rewrites only the legacy source username and database to the fixed
-production values `postgres` and `mydb`; it preserves the secret's host,
-password, and connection options. This requires rebuilding only the importer
-image, not rotating secrets or recreating persistent stack services.
+`LEGACY_POSTGRES_CONTAINER_ID` identifies the already-running standalone source
+container. The script creates a temporary attachable overlay, connects that
+container as `legacy-postgres`, and attaches the importer to both the temporary
+network and the stack's private network. Cleanup disconnects the source and
+removes the temporary network. The importer uses `postgres`, database `mydb`,
+and `legacy-postgres:5432`, while preserving the source secret's password and
+connection options. This requires rebuilding only the importer image, not
+rotating secrets or recreating persistent stack services.
 
 After verifying the imported users, selected superuser, and passwordless login flow,
 remove the migration-only secrets:

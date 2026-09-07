@@ -16,6 +16,8 @@ done
 
 load_production_config "${CONFIG_FILE}"
 JOB_NAME="${STACK_NAME}_auth-import-once"
+IMPORT_NETWORK="${STACK_NAME}_auth-import-network"
+LEGACY_POSTGRES_ALIAS=legacy-postgres
 WRITER_STOP_ATTEMPTS="${WRITER_STOP_ATTEMPTS:-60}"
 WRITER_STOP_INTERVAL="${WRITER_STOP_INTERVAL:-1}"
 IMPORT_ATTEMPTS="${IMPORT_ATTEMPTS:-120}"
@@ -29,6 +31,14 @@ for numeric in WRITER_STOP_ATTEMPTS WRITER_STOP_INTERVAL IMPORT_ATTEMPTS IMPORT_
 done
 
 require_pinned_image_reference FURANO_IMPORT_IMAGE
+if [[ -z "${LEGACY_POSTGRES_CONTAINER_ID}" ]]; then
+  echo "production.conf: LEGACY_POSTGRES_CONTAINER_ID must identify the running legacy PostgreSQL container" >&2
+  exit 1
+fi
+if [[ "$(docker inspect --format '{{.State.Running}}' "${LEGACY_POSTGRES_CONTAINER_ID}" 2>/dev/null || true)" != true ]]; then
+  echo "Legacy PostgreSQL container '${LEGACY_POSTGRES_CONTAINER_ID}' is missing or not running" >&2
+  exit 1
+fi
 
 for secret in auth_source_database_url auth_database_url auth_selected_superuser; do
   if ! docker secret inspect "${secret}" >/dev/null 2>&1; then
@@ -50,6 +60,8 @@ done
 go_auth_replicas="$(docker service inspect --format '{{.Spec.Mode.Replicated.Replicas}}' "${GO_AUTH_SERVICE}")"
 authd_replicas="$(docker service inspect --format '{{.Spec.Mode.Replicated.Replicas}}' "${AUTHD_SERVICE}")"
 IMPORT_LOG_PID=""
+IMPORT_NETWORK_CREATED=false
+LEGACY_POSTGRES_ATTACHED=false
 
 restore_services() {
   if [[ -n "${IMPORT_LOG_PID}" ]]; then
@@ -58,8 +70,26 @@ restore_services() {
   fi
   docker service rm "${JOB_NAME}" >/dev/null 2>&1 || true
   docker service scale "${AUTHD_SERVICE}=${authd_replicas}" "${GO_AUTH_SERVICE}=${go_auth_replicas}" >/dev/null
+  if [[ "${LEGACY_POSTGRES_ATTACHED}" == true ]]; then
+    docker network disconnect "${IMPORT_NETWORK}" "${LEGACY_POSTGRES_CONTAINER_ID}" >/dev/null 2>&1 || true
+  fi
+  if [[ "${IMPORT_NETWORK_CREATED}" == true ]]; then
+    for _ in $(seq 1 20); do
+      docker network rm "${IMPORT_NETWORK}" >/dev/null 2>&1 && break
+      sleep 1
+    done
+  fi
 }
 trap restore_services EXIT
+
+if ! docker network inspect "${IMPORT_NETWORK}" >/dev/null 2>&1; then
+  docker network create --driver overlay --attachable "${IMPORT_NETWORK}" >/dev/null
+  IMPORT_NETWORK_CREATED=true
+fi
+if [[ "$(docker inspect --format "{{if index .NetworkSettings.Networks \"${IMPORT_NETWORK}\"}}true{{end}}" "${LEGACY_POSTGRES_CONTAINER_ID}" 2>/dev/null || true)" != true ]]; then
+  docker network connect --alias "${LEGACY_POSTGRES_ALIAS}" "${IMPORT_NETWORK}" "${LEGACY_POSTGRES_CONTAINER_ID}"
+  LEGACY_POSTGRES_ATTACHED=true
+fi
 
 echo "Stopping application and auth writes before the atomic offline import..."
 docker service scale "${GO_AUTH_SERVICE}=0" "${AUTHD_SERVICE}=0" >/dev/null
@@ -93,6 +123,7 @@ docker service rm "${JOB_NAME}" >/dev/null 2>&1 || true
 docker service create \
   --name "${JOB_NAME}" \
   --network "${NETWORK}" \
+  --network "${IMPORT_NETWORK}" \
   --secret source=auth_source_database_url,target=auth_source_database_url \
   --secret source=auth_database_url,target=auth_database_url \
   --secret source=auth_selected_superuser,target=auth_selected_superuser \

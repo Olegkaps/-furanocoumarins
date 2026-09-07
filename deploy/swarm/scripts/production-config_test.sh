@@ -22,6 +22,7 @@ AUTH_POSTGRES_IMAGE=postgres@sha256:dddddddddddddddddddddddddddddddddddddddddddd
 AUTH_SMTP_HOST=smtp.example.test
 AUTH_MAIL_FROM=auth@example.test
 FURANO_SUPERUSER=Admin@Example.Test
+LEGACY_POSTGRES_CONTAINER_ID=0123456789ab
 CONFIG
 }
 
@@ -36,6 +37,7 @@ load_production_config "${TEST_DIR}/valid.conf"
 [[ "${SWARM_CASSANDRA_VOLUME}" == "furanocoumarins_swarm_cassandra3_data" ]] || fail "Swarm Cassandra volume default changed"
 [[ "${AUTH_MASTER_IMAGE}" == registry.example.test/auth@sha256:* ]] || fail "environment overrode the file"
 [[ "${FURANO_SUPERUSER}" == "Admin@Example.Test" ]] || fail "selector casing changed"
+[[ "${LEGACY_POSTGRES_CONTAINER_ID}" == "0123456789ab" ]] || fail "legacy PostgreSQL container ID was not loaded"
 
 cp "${TEST_DIR}/valid.conf" "${TEST_DIR}/unknown.conf"
 printf 'SURPRISE=value\n' >>"${TEST_DIR}/unknown.conf"

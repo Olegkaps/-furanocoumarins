@@ -15,6 +15,9 @@ AUTH_MAIL_FROM=auth@example.com
 
 # Existing legacy login or email that the one-shot import promotes.
 FURANO_SUPERUSER=admin@example.com
+# Running standalone legacy PostgreSQL container. It is attached temporarily
+# to an isolated migration overlay; it is not recreated or added to the stack.
+LEGACY_POSTGRES_CONTAINER_ID=0123456789ab
 
 # Optional defaults:
 # STACK_NAME=furanocoumarins

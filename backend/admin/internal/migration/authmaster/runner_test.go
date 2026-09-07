@@ -98,7 +98,7 @@ func TestLoadSettingsMissingAndDatabaseErrorsAreRedacted(t *testing.T) {
 func TestLegacySourceDatabaseURLHardcodesOnlyUserAndDatabase(t *testing.T) {
 	got, err := legacySourceDatabaseURL("postgres://legacy%20user:p%40ss%20word@postgres:5432/legacy%2Fdb?sslmode=disable&connect_timeout=7")
 	require.NoError(t, err)
-	require.Equal(t, "postgres://postgres:p%40ss%20word@postgres:5432/mydb?sslmode=disable&connect_timeout=7", got)
+	require.Equal(t, "postgres://postgres:p%40ss%20word@legacy-postgres:5432/mydb?sslmode=disable&connect_timeout=7", got)
 }
 
 func TestLegacySourceDatabaseURLRejectsMalformedInputWithoutLeakingIt(t *testing.T) {

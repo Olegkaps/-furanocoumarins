@@ -147,6 +147,12 @@ func TestProductionAuthDeploymentContract(t *testing.T) {
 	require.ElementsMatch(t, []string{"nginx"}, stack.Services["nginx-exporter"].DependsOn)
 	require.ElementsMatch(t, []string{"prometheus"}, stack.Services["grafana"].DependsOn)
 	require.ElementsMatch(t, []string{"loki"}, stack.Services["promtail"].DependsOn)
+	require.Contains(t, goAuth.Networks, "metrics")
+	require.Contains(t, stack.Services["nginx"].Networks, "metrics")
+	nginxConfig := readRepositoryFile(t, "deploy/swarm/configs/nginx.conf")
+	require.Contains(t, nginxConfig, "resolver 127.0.0.11")
+	require.Contains(t, nginxConfig, "set $backend_upstream http://go-auth:80")
+	require.Contains(t, nginxConfig, "error_log /dev/stderr")
 
 	for _, secret := range []string{
 		"auth_database_url",
@@ -230,6 +236,7 @@ func TestOneShotImportDeploymentContract(t *testing.T) {
 	script := readRepositoryFile(t, "deploy/swarm/scripts/run-auth-import.sh")
 	for _, required := range []string{
 		"FURANO_IMPORT_IMAGE", "image-reference.sh", "require_pinned_image_reference FURANO_IMPORT_IMAGE", "auth_source_database_url",
+		"LEGACY_POSTGRES_CONTAINER_ID", "auth-import-network", "legacy-postgres", "docker network connect",
 		"auth_database_url", "auth_selected_superuser", "FURANO_SOURCE_DATABASE_URL_FILE",
 		"DATABASE_URL_FILE", "FURANO_SUPERUSER_FILE", "--restart-condition none",
 		`"${FURANO_IMPORT_IMAGE}"`, `"${GO_AUTH_SERVICE}=0"`,

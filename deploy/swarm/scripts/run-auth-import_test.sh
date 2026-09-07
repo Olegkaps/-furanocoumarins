@@ -34,6 +34,7 @@ AUTH_SMTP_PORT=587
 AUTH_MAIL_FROM=auth@example.test
 AUTH_SMTP_USER=auth@example.test
 FURANO_SUPERUSER=admin@example.test
+LEGACY_POSTGRES_CONTAINER_ID=0123456789ab
 CONFIG
   set +e
   PATH="${FAKE_BIN}:${PATH}" \
@@ -75,9 +76,14 @@ assert_restored_and_cleaned() {
 run_case success success
 assert_status zero
 assert_call "service create --name furanocoumarins_auth-import-once"
+assert_call "network create --driver overlay --attachable furanocoumarins_auth-import-network"
+assert_call "network connect --alias legacy-postgres furanocoumarins_auth-import-network 0123456789ab"
+assert_call "--network furanocoumarins_auth-import-network"
 assert_call "service logs --raw --follow furanocoumarins_auth-import-once"
 grep -Fq "Importer task state: Running" "${CASE_DIR}/output" || fail "missing live importer state"
 assert_restored_and_cleaned
+assert_call "network disconnect furanocoumarins_auth-import-network 0123456789ab"
+assert_call "network rm furanocoumarins_auth-import-network"
 writer_check_line="$(grep -n 'service ps .*furanocoumarins_authd' "${CASE_DIR}/calls" | tail -n1 | cut -d: -f1)"
 create_line="$(grep -n 'service create ' "${CASE_DIR}/calls" | head -n1 | cut -d: -f1)"
 [[ "${create_line}" -gt "${writer_check_line}" ]] || fail "importer was created before writer shutdown checks"
