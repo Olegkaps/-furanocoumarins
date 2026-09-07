@@ -28,7 +28,7 @@ func TestMetricsIncludeRuntimeAndRecoveredEndpointErrors(t *testing.T) {
 	for _, id := range []string{"panic", "private-id"} {
 		response, callErr := application.Test(httptest.NewRequest(fiber.MethodGet, "/metric-regression/"+id+"?token=private-token", nil))
 		require.NoError(t, callErr)
-		response.Body.Close()
+		require.NoError(t, response.Body.Close())
 		require.Equal(t, fiber.StatusInternalServerError, response.StatusCode)
 	}
 	response, err := application.Test(httptest.NewRequest(fiber.MethodGet, "/metrics", nil))
@@ -51,11 +51,11 @@ func TestMetricsRegistriesAreIsolated(t *testing.T) {
 		application := presentation.NewApp(container)
 		response, err := application.Test(httptest.NewRequest(fiber.MethodGet, "/ping", nil))
 		require.NoError(t, err)
-		response.Body.Close()
+		require.NoError(t, response.Body.Close())
 		response, err = application.Test(httptest.NewRequest(fiber.MethodGet, "/metrics", nil))
 		require.NoError(t, err)
 		body, err := io.ReadAll(response.Body)
-		response.Body.Close()
+		require.NoError(t, response.Body.Close())
 		require.NoError(t, err)
 		require.Contains(t, string(body), `http_requests_total{method="GET",path="/ping",service="fuco-backend",status_code="200"} 1`)
 	}
@@ -73,7 +73,7 @@ func TestMetricsRecordAuthorizationOutageAtEndpoint(t *testing.T) {
 	application := presentation.NewApp(container)
 	response, err := application.Test(httptest.NewRequest(fiber.MethodGet, "/auth/admin/users", nil))
 	require.NoError(t, err)
-	response.Body.Close()
+	require.NoError(t, response.Body.Close())
 	require.Equal(t, fiber.StatusServiceUnavailable, response.StatusCode)
 	response, err = application.Test(httptest.NewRequest(fiber.MethodGet, "/metrics", nil))
 	require.NoError(t, err)
