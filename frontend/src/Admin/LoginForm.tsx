@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { Navigate, useNavigate, Link } from "react-router-dom";
 import { api, setToken, deviceID } from "./utils";
 import "./Admin.css";
@@ -113,32 +113,40 @@ export default LoginForm;
 
 export const MailAdmit: React.FC<{ word: string }> = (props) => {
   const word = props.word;
-	const [result, setResult] = useState<"pending" | "ok" | "error">("pending");
+	const [result, setResult] = useState<"ready" | "pending" | "ok" | "error">("ready");
 	const confirmationStarted = useRef(false);
 
-  useEffect(() => {
-	if (confirmationStarted.current) return;
-	confirmationStarted.current = true;
-    async function confirm() {
-      const bodyFormData = new FormData();
-      bodyFormData.append("word", word);
-      bodyFormData.append("device_id", deviceID());
-      const response = await api
-        .post("/auth/confirm-login-mail", bodyFormData)
-        .catch((err) => err.response);
-      if (response?.status > 199 && response?.status < 400) {
-		setToken(response.data.access_token, response.data.refresh_token, response.data.csrf_token);
-        setResult("ok");
-	  } else {
-		setResult("error");
-      }
-    }
-    void confirm();
-  }, [word]);
+	const confirm = async () => {
+		if (confirmationStarted.current) return;
+		confirmationStarted.current = true;
+		setResult("pending");
+		const bodyFormData = new FormData();
+		bodyFormData.append("word", word);
+		bodyFormData.append("device_id", deviceID());
+		const response = await api
+			.post("/auth/confirm-login-mail", bodyFormData)
+			.catch((err) => err.response);
+		if (response?.status > 199 && response?.status < 400) {
+			setToken(response.data.access_token, response.data.refresh_token, response.data.csrf_token);
+			setResult("ok");
+		} else {
+			setResult("error");
+		}
+	};
 
-  if (result === "ok") {
-	return <Navigate to="/admin" />;
-  }
+	if (result === "ok") {
+		return <Navigate to="/admin" />;
+	}
+	if (result === "ready") {
+		return (
+			<div className="empty-state">
+				<p>Continue to sign in with this one-time link.</p>
+				<button type="button" className="btn btn-primary" onClick={() => void confirm()}>
+					Sign in
+				</button>
+			</div>
+		);
+	}
 	if (result === "pending") {
 		return <p className="empty-state" role="status">Signing you in…</p>;
 	}

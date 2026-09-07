@@ -143,6 +143,10 @@ test("metadata labels use exact tokens outside modifier arguments", () => {
   assert.equal(hasMetadataTypeToken("table_specie", "table_"), true);
   assert.equal(hasMetadataTypeToken("table_chemical", "chemical"), true);
   assert.equal(hasMetadataTypeToken("table_chemical", "table_"), true);
+  assert.equal(hasMetadataTypeToken("table_0 keycolumn chemical", "table_"), true);
+  assert.equal(hasMetadataTypeToken("table_12 keycolumn specie", "table_"), true);
+  assert.equal(hasMetadataTypeToken("table_name chemical", "table_"), false);
+  assert.equal(hasMetadataTypeToken("default[table_0] chemical", "table_"), false);
   assert.equal(hasMetadataTypeToken("link[https://example.test/table_specie/%s]", "specie"), false);
   assert.equal(hasMetadataTypeToken("table_chemical SMILES", "SMILES"), true);
   assert.equal(hasMetadataTypeToken("table_chemical smiles", "SMILES"), true);

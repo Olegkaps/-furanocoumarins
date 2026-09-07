@@ -87,6 +87,12 @@ export function hasMetadataTypeToken(columnType, expected) {
   if ((expected === "table_" || expected === "chemical") && parsed.tokens.has("table_chemical")) {
     return true;
   }
+  // Production tables imported by the legacy pipeline use numbered display
+  // positions (table_0, table_1, ...). They are complete tokens, not prefixes
+  // or modifier contents, so recognizing them preserves exact-token safety.
+  if (expected === "table_") {
+    return [...parsed.tokens].some((token) => /^table_[0-9]+$/.test(token));
+  }
   return false;
 }
 

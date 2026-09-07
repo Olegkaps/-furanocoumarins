@@ -33,9 +33,10 @@ async function signInByMagic(page: Page, request: APIRequestContext, identity: s
   await page.getByRole("button", { name: "Send login link" }).click();
 	await expect(page.getByText("If the account exists, a sign-in link was requested. If it does not arrive, wait briefly and request another link.")).toBeVisible();
 	const loginMail = await latestMail(request, "Your login link", recipient, beforeMail);
-  const link = String(loginMail.Text).match(/https?:\/\/[^\s]+/)?.[0];
+	const link = String(loginMail.Text).match(/https?:\/\/[^\s]+/)?.[0];
 	expect(link).toBeTruthy();
 	await page.goto(link!);
+	await page.getByRole("button", { name: "Sign in", exact: true }).click();
 	await expect(page).toHaveURL(/admin/);
 }
 
@@ -621,15 +622,20 @@ test("legacy access-only storage is cleared into a usable login page", async ({ 
 });
 
 test("magic callback shows progress and actionable invalid-link recovery", async ({ page }) => {
+	let confirmationRequests = 0;
 	let releaseConfirmation!: () => void;
 	const confirmationGate = new Promise<void>((resolve) => {
 		releaseConfirmation = resolve;
 	});
 	await page.route("**/auth/confirm-login-mail", async (route) => {
+		confirmationRequests += 1;
 		await confirmationGate;
 		await route.fulfill({ status: 401, contentType: "application/json", body: '{"error":"invalid"}' });
 	});
 	await page.goto("/admit?token=invalid-token");
+	await expect(page.getByText("Continue to sign in with this one-time link.")).toBeVisible();
+	await expect.poll(() => confirmationRequests).toBe(0);
+	await page.getByRole("button", { name: "Sign in", exact: true }).click();
 	await expect(page.getByRole("status")).toHaveText("Signing you in…");
 	releaseConfirmation();
 	await expect(page.getByText("This sign-in link is invalid or has already been used.")).toBeVisible();
@@ -674,9 +680,9 @@ test("repaired imported memberships restore browser authority", async ({ page, r
 
 test("public scientific search builds queries, groups domain results, and anonymous mutations are denied", async ({ page, request }) => {
 	const metadata = [
-		{ column: "species", name: "Species", description: "Scientific species", type: "table_specie keycolumn search" },
-		{ column: "chemical", name: "Chemical", description: "Furanocoumarin", type: "table_chemical keycolumn search" },
-		{ column: "smiles", name: "SMILES", description: "Structure", type: "table_chemical smiles" },
+		{ column: "species", name: "Species", description: "Scientific species", type: "table_0 keycolumn search specie" },
+		{ column: "chemical", name: "Chemical", description: "Furanocoumarin", type: "table_0 keycolumn search chemical" },
+		{ column: "smiles", name: "SMILES", description: "Structure", type: "table_1 smiles chemical" },
 		{ column: "safe_source", name: "Safe source", description: "Safe link", type: "table_chemical link[https://example.test/articles/%s]" },
 		{ column: "dangerous_source", name: "Dangerous source", description: "Unsafe legacy link", type: "table_chemical link[javascript:%s]" },
 		{ column: "authority_source", name: "Authority source", description: "Unsafe variable authority", type: "table_chemical link[https://%s.example.test/path]" },
