@@ -364,7 +364,7 @@ services:
       - "443:443"
     volumes:
       - ${FURANO_REPOSITORY_ROOT}/monitoring/nginx-metrics.conf:/etc/nginx/monitoring/nginx-metrics.conf:ro
-      - ${FURANO_REPOSITORY_ROOT}/deploy/swarm/configs/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${FURANO_REPOSITORY_ROOT}/configs/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
       - metrics
