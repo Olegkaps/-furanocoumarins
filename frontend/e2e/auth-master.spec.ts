@@ -642,6 +642,72 @@ test("magic callback shows progress and actionable invalid-link recovery", async
 	await expect(page.getByRole("link", { name: "Request a fresh sign-in link" })).toHaveAttribute("href", "/login");
 });
 
+test("cookie-only magic session enters admin and refreshes without exposing the refresh token", async ({ page }) => {
+	const jwt = (login: string) => {
+		const payload = Buffer.from(JSON.stringify({ login, exp: 4_102_444_800 })).toString("base64url");
+		return "eyJhbGciOiJub25lIn0." + payload + ".signature";
+	};
+	const initialAccess = jwt("cookie-user");
+	const rotatedAccess = jwt("cookie-user-rotated");
+	let refreshBody: Record<string, unknown> | undefined;
+	let refreshCSRF = "";
+	let tableCalls = 0;
+	await page.context().addCookies([{ name: "csrf_token", value: "cookie-csrf", url: "http://localhost:5173", sameSite: "Lax" }]);
+
+	await page.route("**/auth/confirm-login-mail", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		headers: { "Set-Cookie": "refresh_token=http-only-refresh; Path=/; HttpOnly; SameSite=Lax" },
+		body: JSON.stringify({ access_token: initialAccess }),
+	}));
+	await page.route("**/auth/refresh", (route) => {
+		refreshBody = route.request().postDataJSON();
+		refreshCSRF = route.request().headers()["x-csrf-token"] ?? "";
+		return route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			headers: { "Set-Cookie": "refresh_token=rotated-http-only-refresh; Path=/; HttpOnly; SameSite=Lax" },
+			body: JSON.stringify({ access_token: rotatedAccess, csrf_token: "rotated-csrf" }),
+		});
+	});
+	await page.route("**/get-tables-list", (route) => {
+		tableCalls += 1;
+		return route.fulfill({
+			status: tableCalls === 1 ? 401 : 200,
+			contentType: "application/json",
+			body: tableCalls === 1 ? '{"error":"stale"}' : "[]",
+		});
+	});
+	await page.route("**/auth/me", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: '{"id":"11111111-1111-4111-8111-111111111111","login":"cookie-user","kind":"human","superuser":false}',
+	}));
+	await page.route("**/auth/sessions", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: "[]",
+	}));
+
+	await page.goto("/admit?token=cookie-only-token");
+	await page.getByRole("button", { name: "Sign in", exact: true }).click();
+	await expect(page).toHaveURL(/admin/);
+	await expect.poll(() => tableCalls).toBeGreaterThanOrEqual(2);
+	expect(refreshBody).toEqual({ device_id: expect.any(String) });
+	expect(refreshCSRF).toBe("cookie-csrf");
+	await expect.poll(() => page.evaluate(() => ({
+		access: localStorage.getItem("auth-token"),
+		refresh: localStorage.getItem("auth-refresh-token"),
+		cookieSession: localStorage.getItem("auth-cookie-session"),
+		csrf: localStorage.getItem("auth-csrf-token"),
+	}))).toEqual({
+		access: rotatedAccess,
+		refresh: null,
+		cookieSession: "1",
+		csrf: "rotated-csrf",
+	});
+});
+
 test("magic start hides delivery failure for known and unknown identities", async ({ page }) => {
 	test.skip(process.env.VERIFY_SMTP_FAILURE !== "1", "runs with Mailpit stopped by the Make-managed E2E harness");
 	await page.goto("/login");

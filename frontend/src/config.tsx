@@ -1,6 +1,10 @@
 const config = {
     "FONT_SIZE": "1rem",
-    "BASE_URL": import.meta.env.VITE_REACT_APP_BACKEND_SOURCE || "http://localhost:8081",
+    // Production uses Caddy as a same-origin BFF so HttpOnly refresh cookies
+    // remain first-party. Vite development still calls its configured backend.
+    "BASE_URL": import.meta.env.PROD
+        ? window.location.origin
+        : import.meta.env.VITE_REACT_APP_BACKEND_SOURCE || "http://localhost:8081",
     "MAX_TABLES_COUNT": 15,
     /** Auto-pick tree “to” rank so drawn leaf clades stay at most this many (when URL has no `to`). */
     "TREE_MAX_VISIBLE_CLADES": 40,

@@ -20,6 +20,7 @@ const TOKEN = "auth-token";
 const NAME = "name";
 const REFRESH = "auth-refresh-token";
 const CSRF = "auth-csrf-token";
+const COOKIE_SESSION = "auth-cookie-session";
 
 export const api = axios.create({
   baseURL: config["BASE_URL"],
@@ -36,7 +37,7 @@ const accessTokenRecovery = createAccessTokenRecovery(
   refreshAccessToken,
 );
 api.interceptors.request.use((request) => {
-	const csrf = localStorage.getItem(CSRF);
+	const csrf = csrfCredential();
 	if (csrf) request.headers.set("X-CSRF-Token", csrf);
 	return request;
 });
@@ -110,20 +111,28 @@ api.interceptors.response.use(
 async function refreshAccessToken(): Promise<string> {
 	const capturedEpoch = sessionEpoch.capture();
 	const refresh_token = localStorage.getItem(REFRESH);
-	if (!refresh_token) throw new Error("missing refresh token");
-  const response = await refreshClient.post("/auth/refresh", { refresh_token, device_id: deviceID() });
-  if (!response.data?.access_token || !response.data?.refresh_token) throw new Error("incomplete refresh response");
+	const csrf = csrfCredential();
+	const cookieSession = localStorage.getItem(COOKIE_SESSION) === "1";
+	if (!refresh_token && (!cookieSession || !csrf)) throw new Error("missing refresh credential");
+  const response = await refreshClient.post(
+		"/auth/refresh",
+		refresh_token ? { refresh_token, device_id: deviceID() } : { device_id: deviceID() },
+		{ headers: csrf ? { "X-CSRF-Token": csrf } : {} },
+	);
+  if (!hasCoherentCredential(response.data?.access_token, response.data?.refresh_token, response.data?.csrf_token ?? csrf)) {
+		throw new Error("incomplete refresh response");
+	}
   const credential: RotatedCredential = {
 	accessToken: response.data.access_token,
-	refreshToken: response.data.refresh_token,
-	csrfToken: response.data.csrf_token,
+	refreshToken: response.data.refresh_token || undefined,
+	csrfToken: response.data.csrf_token ?? csrf ?? undefined,
   };
   return finalizeRotatedCredential(
 	sessionEpoch,
 	capturedEpoch,
 	credential,
 	(next) => storeToken(next.accessToken, next.refreshToken, next.csrfToken),
-	(next) => revokeRefreshCredential(next.refreshToken, next.csrfToken),
+	(next) => revokeRefreshCredential(next.refreshToken ?? null, next.csrfToken),
   );
 }
 
@@ -132,12 +141,13 @@ export function isTokenExists() {
 }
 
 export function getToken() {
-  const token = localStorage.getItem(TOKEN);
+	const token = localStorage.getItem(TOKEN);
 	const refreshToken = localStorage.getItem(REFRESH);
-	if (!token || !refreshToken) {
-		// Pre-refresh deployments stored only an access token. Treat every
-		// incomplete pair as logged out and remove all session-derived state so
-		// /login cannot redirect into an unrecoverable 401 loop.
+	const csrf = localStorage.getItem(CSRF);
+	const cookieSession = localStorage.getItem(COOKIE_SESSION) === "1";
+	if (!token || !hasCoherentCredential(token, refreshToken, cookieSession ? csrf : null)) {
+		// Reject unmarked legacy access-only storage, while retaining an
+		// explicitly established HttpOnly-cookie session.
 		if (token !== null || refreshToken !== null || localStorage.getItem(NAME) !== null || localStorage.getItem(CSRF) !== null) {
 			delToken();
 		}
@@ -160,12 +170,14 @@ export function delToken() {
   accessTokenRecovery.reset();
   localStorage.removeItem(TOKEN);
   localStorage.removeItem(NAME);
-  localStorage.removeItem(REFRESH);
+ localStorage.removeItem(REFRESH);
 	localStorage.removeItem(CSRF);
+	localStorage.removeItem(COOKIE_SESSION);
 }
 
 export function setToken(token_value: string, refreshToken?: string, csrfToken?: string) {
-	if (!hasCoherentCredential(token_value, refreshToken)) {
+	csrfToken ||= csrfCookie();
+	if (!hasCoherentCredential(token_value, refreshToken, csrfToken)) {
 		delToken();
 		throw new Error("incomplete session credential");
 	}
@@ -175,12 +187,33 @@ export function setToken(token_value: string, refreshToken?: string, csrfToken?:
   logoutInProgress = false;
 }
 
-function storeToken(token_value: string, refreshToken: string, csrfToken?: string) {
-  localStorage.setItem(TOKEN, token_value);
+function storeToken(token_value: string, refreshToken?: string, csrfToken?: string) {
   const decoded = jwtDecode<JwtPayload>(token_value);
+  localStorage.setItem(TOKEN, token_value);
 	localStorage.setItem(NAME, decoded.login ?? decoded.name ?? "");
-	localStorage.setItem(REFRESH, refreshToken);
+	if (refreshToken) {
+		localStorage.setItem(REFRESH, refreshToken);
+		localStorage.removeItem(COOKIE_SESSION);
+	} else {
+		localStorage.removeItem(REFRESH);
+		localStorage.setItem(COOKIE_SESSION, "1");
+	}
 	if (csrfToken) localStorage.setItem(CSRF, csrfToken);
+}
+
+function csrfCredential() {
+	return localStorage.getItem(CSRF) || csrfCookie();
+}
+
+function csrfCookie() {
+	const prefix = "csrf_token=";
+	const raw = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(prefix));
+	if (!raw) return undefined;
+	try {
+		return decodeURIComponent(raw.slice(prefix.length));
+	} catch {
+		return undefined;
+	}
 }
 
 async function revokeRefreshCredential(refreshToken: string | null, csrf?: string | null): Promise<void> {
@@ -197,7 +230,7 @@ async function revokeRefreshCredential(refreshToken: string | null, csrf?: strin
 export async function logoutSession(): Promise<void> {
 	if (logoutInFlight) return logoutInFlight;
 	const refresh_token = localStorage.getItem(REFRESH);
-	const csrf = localStorage.getItem(CSRF);
+	const csrf = csrfCredential();
 	// Explicit logout is locally immediate, but StrictMode and repeated clicks
 	// share the same server revocation before the route navigates to login.
 	delToken();

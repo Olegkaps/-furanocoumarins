@@ -11,10 +11,12 @@ export function newerAccessTokenForRetry(failedAuthorization, currentAccessToken
   return currentAccessToken;
 }
 
-/** A browser session is recoverable only when both rotating credentials exist. */
-export function hasCoherentCredential(accessToken, refreshToken) {
-  return typeof accessToken === "string" && accessToken.length > 0 &&
-    typeof refreshToken === "string" && refreshToken.length > 0;
+/** A session uses an explicit refresh token or an HttpOnly cookie plus CSRF. */
+export function hasCoherentCredential(accessToken, refreshToken, csrfToken) {
+  const hasAccess = typeof accessToken === "string" && accessToken.length > 0;
+  const hasBodyRefresh = typeof refreshToken === "string" && refreshToken.length > 0;
+  const hasCookieRefresh = typeof csrfToken === "string" && csrfToken.length > 0;
+  return hasAccess && (hasBodyRefresh || hasCookieRefresh);
 }
 
 function failedAccessTokenFromAuthorization(failedAuthorization) {

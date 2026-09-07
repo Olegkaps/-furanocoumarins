@@ -6,7 +6,7 @@ export type SessionEpoch = {
 
 export type RotatedCredential = {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
   csrfToken?: string;
 };
 

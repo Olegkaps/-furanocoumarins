@@ -6,6 +6,7 @@ export function newerAccessTokenForRetry(
 export function hasCoherentCredential(
   accessToken: string | null | undefined,
   refreshToken: string | null | undefined,
+  csrfToken?: string | null,
 ): boolean;
 
 export type AccessTokenRecovery = {

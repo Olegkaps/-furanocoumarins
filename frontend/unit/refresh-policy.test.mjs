@@ -29,10 +29,12 @@ test("the current token generation still requires the single refresh winner", ()
   assert.equal(newerAccessTokenForRetry("Bearer access-v1", null), null);
 });
 
-test("authenticated routing requires a coherent access and refresh pair", () => {
+test("authenticated routing accepts body-token and cookie-backed sessions", () => {
   assert.equal(hasCoherentCredential("access", "refresh"), true);
+  assert.equal(hasCoherentCredential("access", null, "csrf"), true);
   assert.equal(hasCoherentCredential("access", null), false);
   assert.equal(hasCoherentCredential(null, "refresh"), false);
+  assert.equal(hasCoherentCredential(null, null, "csrf"), false);
   assert.equal(hasCoherentCredential("", "refresh"), false);
   assert.equal(hasCoherentCredential("access", ""), false);
 });

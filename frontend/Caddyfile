@@ -1,5 +1,29 @@
 :8080 {
-    root * /srv
-    try_files {path} /index.html
-    file_server
+    @backend path \
+        /metadata \
+        /autocomplete/* \
+        /search \
+        /article/* \
+        /pages/* \
+        /ping \
+        /auth/* \
+        /get-tables-list \
+        /create-table \
+        /table-imports/* \
+        /make-table-active/* \
+        /table/* \
+        /tables \
+        /bibtex
+
+    handle @backend {
+        reverse_proxy {$FURANO_BACKEND_ORIGIN:https://176.108.251.108.nip.io} {
+            header_up Host {upstream_hostport}
+        }
+    }
+
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
 }
