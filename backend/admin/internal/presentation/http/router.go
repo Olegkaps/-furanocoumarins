@@ -7,6 +7,9 @@ import (
 	"github.com/gofiber/contrib/swagger"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	promclient "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/sirupsen/logrus"
 
 	"admin/internal/app"
@@ -28,9 +31,15 @@ func NewApp(container *app.Container) *fiber.App {
 		BodyLimit:               10 * 1024 * 1024,
 	})
 
-	prometheus := fiberprometheus.New("fuco-backend")
+	// One app-local registry exposes HTTP and runtime metrics together and keeps
+	// independent application instances isolated (including in tests).
+	registry := promclient.NewRegistry()
+	registry.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	prometheus := fiberprometheus.NewWithRegistry(registry, "fuco-backend", "http", "", nil)
 	prometheus.RegisterAt(app, "/metrics")
 	app.Use(prometheus.Middleware)
+	// Recover inside instrumentation so a panic contributes a 500 observation.
+	app.Use(recover.New())
 	app.Use(cors.New(settings.C.Cors()))
 	if container.EnvType != "TEST" && container.EnvType != "AUTOTEST" {
 		app.Use(swagger.New(swagger.Config{
@@ -75,15 +84,16 @@ func NewApp(container *app.Container) *fiber.App {
 	app.Post("/auth/sessions/revoke-otp", externalAuth.Forward(fiber.MethodPost, "/v1/sessions/revoke-otp"))
 	app.Post("/auth/sessions/:sessionID/revoke", externalAuth.ForwardPath(fiber.MethodPost, func(c *fiber.Ctx) string { return "/v1/sessions/" + c.Params("sessionID") + "/revoke" }))
 
-	super := app.Group("/auth/admin", authmasterhandler.RequireSuperuser(container))
-	super.Post("/invitations", externalAuth.Forward(fiber.MethodPost, "/v1/admin/registration-invites"))
-	super.Get("/users", externalAuth.ForwardQuery(fiber.MethodGet, "/v1/admin/users", "q", "cursor", "page_size"))
-	super.Post("/users/:userID/ban", externalAuth.ForwardPath(fiber.MethodPost, func(c *fiber.Ctx) string { return "/v1/admin/users/" + c.Params("userID") + "/ban" }))
-	super.Delete("/users/:userID/ban", externalAuth.ForwardPath(fiber.MethodDelete, func(c *fiber.Ctx) string { return "/v1/admin/users/" + c.Params("userID") + "/ban" }))
-	super.Post("/signing-keys/rotate", externalAuth.Forward(fiber.MethodPost, "/v1/admin/signing-keys/rotate"))
-	super.Get("/roles", externalAuth.ForwardRoles(fiber.MethodGet, "/v1/roles", "q", "cursor", "page_size"))
-	super.Post("/roles/:roleID/members", externalAuth.ForwardPath(fiber.MethodPost, func(c *fiber.Ctx) string { return "/v1/roles/" + c.Params("roleID") + "/members" }))
-	super.Delete("/roles/:roleID/members/:userID", externalAuth.ForwardPath(fiber.MethodDelete, func(c *fiber.Ctx) string { return "/v1/roles/" + c.Params("roleID") + "/members/" + c.Params("userID") }))
+	super := app.Group("/auth/admin")
+	superuser := authmasterhandler.RequireSuperuser(container)
+	super.Post("/invitations", superuser, externalAuth.Forward(fiber.MethodPost, "/v1/admin/registration-invites"))
+	super.Get("/users", superuser, externalAuth.ForwardQuery(fiber.MethodGet, "/v1/admin/users", "q", "cursor", "page_size"))
+	super.Post("/users/:userID/ban", superuser, externalAuth.ForwardPath(fiber.MethodPost, func(c *fiber.Ctx) string { return "/v1/admin/users/" + c.Params("userID") + "/ban" }))
+	super.Delete("/users/:userID/ban", superuser, externalAuth.ForwardPath(fiber.MethodDelete, func(c *fiber.Ctx) string { return "/v1/admin/users/" + c.Params("userID") + "/ban" }))
+	super.Post("/signing-keys/rotate", superuser, externalAuth.Forward(fiber.MethodPost, "/v1/admin/signing-keys/rotate"))
+	super.Get("/roles", superuser, externalAuth.ForwardRoles(fiber.MethodGet, "/v1/roles", "q", "cursor", "page_size"))
+	super.Post("/roles/:roleID/members", superuser, externalAuth.ForwardPath(fiber.MethodPost, func(c *fiber.Ctx) string { return "/v1/roles/" + c.Params("roleID") + "/members" }))
+	super.Delete("/roles/:roleID/members/:userID", superuser, externalAuth.ForwardPath(fiber.MethodDelete, func(c *fiber.Ctx) string { return "/v1/roles/" + c.Params("roleID") + "/members/" + c.Params("userID") }))
 
 	app.Post("/get-tables-list", authmasterhandler.RequireUser(container), tables.GetTablesList)
 	admin := authmasterhandler.RequireAdmin(container)

@@ -1,0 +1,36 @@
+services:
+  fixture:
+    image: python:3.12.9-alpine
+    command: [python, /fixture.py]
+    volumes: [./fixture.py:/fixture.py:ro]
+  nginx:
+    image: nginx:1.27.4-alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../nginx-metrics.conf:/etc/nginx/monitoring/nginx-metrics.conf:ro
+    depends_on: [fixture, nginxlog-exporter]
+  nginxlog-exporter:
+    image: quay.io/martinhelmich/prometheus-nginxlog-exporter:v1.11.0
+    command: [-config-file, /etc/nginxlog.yml]
+    volumes: [../nginxlog.yml:/etc/nginxlog.yml:ro]
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../alerts.yml:/etc/prometheus/alerts.yml:ro
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    volumes: [../alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro]
+  grafana:
+    image: grafana/grafana:11.6.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: fixture-local-only
+    volumes:
+      - ../datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ../dashboards:/etc/grafana/provisioning/dashboards:ro
+  check:
+    image: python:3.12.9-alpine
+    command: [python, /smoke.py]
+    volumes:
+      - ./smoke.py:/smoke.py:ro
+      - ../dashboards/furanocoumarins.json:/dashboard.json:ro

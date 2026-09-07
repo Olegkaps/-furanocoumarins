@@ -1,0 +1,16 @@
+host: cassandra:7199
+ssl: false
+user: ''
+password: ''
+listenAddress: 0.0.0.0
+listenPort: 8080
+blacklist:
+- org:apache:cassandra:db:.*
+- org:apache:cassandra:metrics:columnfamily:.*
+- com:criteo:nosql:cassandra:exporter:.*
+maxScrapFrequencyInSec:
+  30:
+  - java:lang:memory:heapmemoryusage:(used|max)
+  - org:apache:cassandra:metrics:clientrequest:(read|write):(latency|timeouts|unavailables|failures):(count|99thpercentile)
+  - org:apache:cassandra:metrics:compaction:pendingtasks:value
+  - org:apache:cassandra:metrics:storage:(load|exceptions):count

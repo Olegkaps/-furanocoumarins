@@ -1,0 +1,334 @@
+groups:
+- name: auth-master
+  rules:
+  - alert: MonitoringTargetDown
+    expr: up == 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: A monitored target is unreachable
+      description: Check the target process, network and exporter logs.
+  - alert: HTTPProbeFailed
+    expr: probe_success{job="http-probe"} == 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: HTTP liveness probe failed
+      description: Check nginx /nginx-health, go-auth /ping or authd /healthz. These
+        are liveness checks, not database query readiness.
+  - alert: Backend5xx
+    expr: sum by (job, instance, method, route) (rate(auth_http_request_duration_seconds_count{job="authd",status=~"5.."}[5m]))
+      > 0
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: HTTP 5xx responses detected
+      description: Inspect failing endpoint logs and dependencies; even low-volume
+        sustained failures alert.
+  - alert: Nginx5xx
+    expr: sum by (job, instance, method, route) (rate(nginx_http_response_count_total{job="nginxlog",status=~"5.."}[5m]))
+      > 0
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: HTTP 5xx responses detected
+      description: Inspect failing endpoint logs and dependencies; even low-volume
+        sustained failures alert.
+  - alert: BackendHighLatency
+    expr: histogram_quantile(0.95, sum by (le, job, instance, method, route) (rate(auth_http_request_duration_seconds_bucket{job="authd",route!~"/metrics|/healthz"}[5m])))
+      > 1
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: Endpoint p95 latency exceeds one second
+      description: Inspect endpoint latency, load and dependency timings; tune this
+        starter threshold to your SLO.
+  - alert: NginxHighLatency
+    expr: histogram_quantile(0.95, sum by (le, job, instance, method, route) (rate(nginx_http_response_time_seconds_hist_bucket{job="nginxlog",route!~"/metrics|/healthz"}[5m])))
+      > 1
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: Endpoint p95 latency exceeds one second
+      description: Inspect endpoint latency, load and dependency timings; tune this
+        starter threshold to your SLO.
+  - alert: PostgresDown
+    expr: pg_up{job=~"postgres|auth-postgres"} == 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: PostgreSQL is unavailable to its exporter
+      description: Verify PostgreSQL health, connection settings and exporter credentials.
+  - alert: PostgresConnectionsHigh
+    expr: sum by (instance) (pg_stat_database_numbackends{job=~"postgres|auth-postgres"})
+      / on(instance) pg_settings_max_connections{job=~"postgres|auth-postgres"} >
+      0.8
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: PostgreSQL connections above 80%
+      description: Inspect active/idle connections and application pool limits.
+  - alert: PostgresDeadlocks
+    expr: sum by(instance,datname) (increase(pg_stat_database_deadlocks{job=~"postgres|auth-postgres"}[5m]))
+      > 0
+    for: 0m
+    labels:
+      severity: warning
+    annotations:
+      summary: PostgreSQL deadlocks detected
+      description: Inspect PostgreSQL deadlock logs and transaction lock ordering.
+  - alert: VMOOMKill
+    expr: increase(node_vmstat_oom_kill{job="node"}[5m]) > 0
+    for: 0m
+    labels:
+      severity: critical
+    annotations:
+      summary: Kernel OOM kill detected
+      description: Inspect kernel logs and container limits on the monitored Linux
+        VM; this is a VM-wide event.
+  - alert: VMDiskSpaceLow
+    expr: node_filesystem_avail_bytes{job="node",fstype!~"tmpfs|overlay|squashfs|nsfs|proc|sysfs|devtmpfs"}
+      / node_filesystem_size_bytes{job="node",fstype!~"tmpfs|overlay|squashfs|nsfs|proc|sysfs|devtmpfs"}
+      < 0.1 and on(instance,device,mountpoint) node_filesystem_readonly{job="node"}
+      == 0
+    for: 10m
+    labels:
+      severity: critical
+    annotations:
+      summary: VM filesystem free space below 10%
+      description: Free space/inodes or expand the filesystem. Do not delete database
+        files.
+  - alert: VMInodesLow
+    expr: node_filesystem_files_free{job="node",fstype!~"tmpfs|overlay|squashfs|nsfs|proc|sysfs|devtmpfs"}
+      / node_filesystem_files{job="node",fstype!~"tmpfs|overlay|squashfs|nsfs|proc|sysfs|devtmpfs"}
+      < 0.1 and on(instance,device,mountpoint) node_filesystem_readonly{job="node"}
+      == 0
+    for: 10m
+    labels:
+      severity: critical
+    annotations:
+      summary: VM filesystem free inodes below 10%
+      description: Free space/inodes or expand the filesystem. Do not delete database
+        files.
+  - alert: VMMemoryLow
+    expr: node_memory_MemAvailable_bytes{job="node"} / node_memory_MemTotal_bytes{job="node"}
+      < 0.1
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: VM available memory below 10%
+      description: Inspect resident memory, cache, limits and workload growth.
+  - alert: VMCPUHigh
+    expr: 1 - avg by (instance) (rate(node_cpu_seconds_total{job="node",mode="idle"}[5m]))
+      > 0.9
+    for: 15m
+    labels:
+      severity: warning
+    annotations:
+      summary: VM CPU utilization above 90%
+      description: Inspect CPU consumers, request volume and load average.
+  - alert: BackendRestarted
+    expr: changes(process_start_time_seconds{job="authd"}[15m]) > 0
+    for: 0m
+    labels:
+      severity: warning
+    annotations:
+      summary: Backend process restarted
+      description: Check deployment history and crash logs; planned deployments also
+        trigger this alert.
+  - alert: NginxLogParseErrors
+    expr: increase(nginx_parse_errors_total{job="nginxlog"}[5m]) > 0
+    for: 0m
+    labels:
+      severity: warning
+    annotations:
+      summary: Nginx access-log exporter cannot parse logs
+      description: Check that nginx log_format and nginxlog exporter format agree.
+  - alert: FuranoBackend5xx
+    expr: sum by (job, instance, method, route) (rate(http_requests_total{job="go-auth",status=~"5.."}[5m]))
+      > 0
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: HTTP 5xx responses detected
+      description: Inspect failing endpoint logs and dependencies; even low-volume
+        sustained failures alert.
+  - alert: FuranoBackendHighLatency
+    expr: histogram_quantile(0.95, sum by (le, job, instance, method, route) (rate(http_request_duration_seconds_bucket{job="go-auth",route!~"/metrics|/healthz"}[5m])))
+      > 1
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: Endpoint p95 latency exceeds one second
+      description: Inspect endpoint latency, load and dependency timings; tune this
+        starter threshold to your SLO.
+  - alert: FuranoBackendRestarted
+    expr: changes(process_start_time_seconds{job="go-auth"}[15m]) > 0
+    for: 0m
+    labels:
+      severity: warning
+    annotations:
+      summary: Backend process restarted
+      description: Check deployment history and crash logs; planned deployments also
+        trigger this alert.
+  - alert: RedisDown
+    expr: redis_up{job="redis"} == 0
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Redis is unavailable
+      description: Inspect Redis service and exporter credentials.
+  - alert: RedisMemoryHigh
+    expr: redis_memory_used_bytes{job="redis"} / redis_memory_max_bytes{job="redis"}
+      > 0.9 and redis_memory_max_bytes{job="redis"} > 0
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: Redis memory exceeds 90% of maxmemory
+      description: Inspect memory growth and eviction policy.
+  - alert: RedisEvictions
+    expr: increase(redis_evicted_keys_total{job="redis"}[5m]) > 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: Redis is evicting keys
+      description: Inspect cache sizing and eviction policy.
+  - alert: CassandraJMXUnavailable
+    expr: absent(cassandra_stats{job="cassandra"})
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: Cassandra JMX metrics are unavailable
+      description: CQL TCP probes are separate. Detailed JMX metrics require authenticated
+        remote JMX setup; see monitoring/README.md.
+  - alert: NginxUnavailable
+    expr: nginx_up{job="nginx"} == 0
+    for: 2m
+    labels:
+      severity: warning
+    annotations:
+      summary: Nginx stub status is unavailable
+      description: Check nginx and its private stub_status endpoint.
+  - alert: CassandraTCPProbeFailed
+    expr: probe_success{job="tcp-probe",instance="cassandra:9042"} == 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: Cassandra CQL TCP port is unreachable
+      description: Check Cassandra service and networking. A successful TCP probe
+        does not authenticate or execute a CQL query.
+  - alert: MissingScrapeTargetsGoAuth
+    expr: absent(up{job="go-auth"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: No scrape targets discovered for go-auth
+      description: Check Swarm replicas and tasks DNS discovery. A removed last task
+        produces no up series and must not appear healthy.
+  - alert: MissingScrapeTargetsAuthd
+    expr: absent(up{job="authd"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: No scrape targets discovered for authd
+      description: Check Swarm replicas and tasks DNS discovery. A removed last task
+        produces no up series and must not appear healthy.
+  - alert: MissingScrapeTargetsNode
+    expr: absent(up{job="node"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: No scrape targets discovered for node
+      description: Check Swarm replicas and tasks DNS discovery. A removed last task
+        produces no up series and must not appear healthy.
+  - alert: MissingScrapeTargetsPostgres
+    expr: absent(up{job="postgres"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: No scrape targets discovered for postgres
+      description: Check Swarm replicas and tasks DNS discovery. A removed last task
+        produces no up series and must not appear healthy.
+  - alert: MissingScrapeTargetsAuthPostgres
+    expr: absent(up{job="auth-postgres"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: No scrape targets discovered for auth-postgres
+      description: Check Swarm replicas and tasks DNS discovery. A removed last task
+        produces no up series and must not appear healthy.
+  - alert: MissingScrapeTargetsRedis
+    expr: absent(up{job="redis"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: No scrape targets discovered for redis
+      description: Check Swarm replicas and tasks DNS discovery. A removed last task
+        produces no up series and must not appear healthy.
+  - alert: MissingScrapeTargetsNginx
+    expr: absent(up{job="nginx"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: No scrape targets discovered for nginx
+      description: Check Swarm replicas and tasks DNS discovery. A removed last task
+        produces no up series and must not appear healthy.
+  - alert: MissingScrapeTargetsNginxlog
+    expr: absent(up{job="nginxlog"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: No scrape targets discovered for nginxlog
+      description: Check Swarm replicas and tasks DNS discovery. A removed last task
+        produces no up series and must not appear healthy.
+  - alert: MissingScrapeTargetsBlackbox
+    expr: absent(up{job="blackbox"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: No scrape targets discovered for blackbox
+      description: Check Swarm replicas and tasks DNS discovery. A removed last task
+        produces no up series and must not appear healthy.
+  - alert: MissingScrapeTargetsCassandra
+    expr: absent(up{job="cassandra"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: No scrape targets discovered for cassandra
+      description: Check Swarm replicas and tasks DNS discovery. A removed last task
+        produces no up series and must not appear healthy.
+  - alert: MissingScrapeTargetsAlertmanager
+    expr: absent(up{job="alertmanager"})
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: No scrape targets discovered for alertmanager
+      description: Check Swarm replicas and tasks DNS discovery. A removed last task
+        produces no up series and must not appear healthy.

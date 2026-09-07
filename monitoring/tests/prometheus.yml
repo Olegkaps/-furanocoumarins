@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 1s
+  evaluation_interval: 1s
+rule_files: [/etc/prometheus/alerts.yml]
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: [alertmanager:9093]
+scrape_configs:
+  - job_name: go-auth
+    static_configs:
+      - targets: [fixture:8080]
+    metric_relabel_configs:
+      - source_labels: [path]
+        target_label: route
+        regex: (.+)
+      - source_labels: [status_code]
+        target_label: status
+        regex: (.+)
+      - action: labeldrop
+        regex: path|status_code
+  - job_name: nginxlog
+    static_configs:
+      - targets: [nginxlog-exporter:4040]

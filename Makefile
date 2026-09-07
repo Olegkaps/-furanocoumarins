@@ -24,7 +24,7 @@ auth-import:
 	$(COMPOSE) -f docker-compose.local.yaml stop go-auth authd; \
 	$(COMPOSE) -f docker-compose.local.yaml --profile migration run --rm --no-deps auth-import
 
-test: compose-check lint test-unit test-race test-integration test-e2e
+test: compose-check lint test-unit test-race test-integration test-e2e test-monitoring-config test-monitoring-smoke
 
 lint: frontend-deps
 	cd backend/admin && go vet ./...
@@ -69,3 +69,24 @@ compose-check:
 	$(COMPOSE) -f deploy/swarm/stack.yaml config
 	@bash -n deploy/swarm/scripts/production-config.sh deploy/swarm/scripts/production-config_test.sh deploy/swarm/scripts/callback-url.sh deploy/swarm/scripts/callback-url_test.sh deploy/swarm/scripts/callback-secret.sh deploy/swarm/scripts/callback-secret_test.sh deploy/swarm/scripts/image-reference.sh deploy/swarm/scripts/image-reference_test.sh deploy/swarm/scripts/deploy.sh deploy/swarm/scripts/deploy_test.sh deploy/swarm/scripts/init-secrets.sh deploy/swarm/scripts/init-secrets_test.sh deploy/swarm/scripts/migrate-cassandra-volume.sh deploy/swarm/scripts/migrate-cassandra-volume_test.sh deploy/swarm/scripts/run-auth-import.sh deploy/swarm/scripts/run-auth-import_test.sh deploy/swarm/scripts/testdata/docker
 	@test ! -e docker-compose.yaml || { echo 'obsolete docker-compose.yaml must remain deleted'; exit 1; }
+
+# Monitoring validation is isolated from deployed services and volumes.
+.PHONY: test-monitoring test-monitoring-config test-monitoring-backend test-monitoring-smoke
+MONITORING_TEST_COMPOSE = $(COMPOSE) -p furano-monitoring-validation -f monitoring/compose.test.yaml
+
+test-monitoring-backend:
+	cd backend/admin && ENV_TYPE=TEST go test ./internal/presentation/http/... -count=1
+
+test-monitoring-config:
+	python3 scripts/monitoring-check.py
+	$(MONITORING_TEST_COMPOSE) run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
+	$(MONITORING_TEST_COMPOSE) run --rm --no-deps --entrypoint promtool prometheus test rules /etc/prometheus/tests/alerts.test.yml
+	$(MONITORING_TEST_COMPOSE) run --rm --no-deps nginxlog -config-file /etc/nginxlog.yml -verify-config
+	$(MONITORING_TEST_COMPOSE) run --rm --no-deps --entrypoint amtool alertmanager check-config /etc/alertmanager/alertmanager.yml
+	@echo 'PASS: monitoring contracts, Prometheus alert tests and exporter configuration'
+
+test-monitoring: test-monitoring-backend test-monitoring-config
+
+# Runs a temporary stack with synthetic metrics and no production resources.
+test-monitoring-smoke:
+	COMPOSE='$(COMPOSE)' bash scripts/monitoring-smoke.sh
