@@ -13,7 +13,7 @@ interface JwtPayload {
   login?: string;
   created?: number;
   iat?: number;
-  exp: number;
+  exp?: number;
 }
 
 const TOKEN = "auth-token";
@@ -153,16 +153,9 @@ export function getToken() {
 		}
 		return undefined;
 	}
-  try {
-    const decoded = jwtDecode<JwtPayload>(token);
-    // Keep an expired access token long enough for the response interceptor to
-    // exchange the independent refresh credential and retry the request.
-    if (!decoded.exp) return undefined;
-  } catch {
-    delToken();
-    return undefined;
-  }
-  return localStorage.getItem(TOKEN) ?? undefined;
+	// Access credentials are opaque to the SPA. The backend is authoritative
+	// for their format and validity; a 401 drives refresh and one retry.
+	return token;
 }
 
 export function delToken() {
@@ -188,9 +181,16 @@ export function setToken(token_value: string, refreshToken?: string, csrfToken?:
 }
 
 function storeToken(token_value: string, refreshToken?: string, csrfToken?: string) {
-  const decoded = jwtDecode<JwtPayload>(token_value);
+	let displayName = "";
+	try {
+		const decoded = jwtDecode<JwtPayload>(token_value);
+		displayName = decoded.login ?? decoded.name ?? "";
+	} catch {
+		// Display metadata is optional. Never discard a server-issued session
+		// merely because its access credential is not a browser-decodable JWT.
+	}
   localStorage.setItem(TOKEN, token_value);
-	localStorage.setItem(NAME, decoded.login ?? decoded.name ?? "");
+	localStorage.setItem(NAME, displayName);
 	if (refreshToken) {
 		localStorage.setItem(REFRESH, refreshToken);
 		localStorage.removeItem(COOKIE_SESSION);

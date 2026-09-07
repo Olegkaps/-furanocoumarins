@@ -647,7 +647,7 @@ test("cookie-only magic session enters admin and refreshes without exposing the 
 		const payload = Buffer.from(JSON.stringify({ login, exp: 4_102_444_800 })).toString("base64url");
 		return "eyJhbGciOiJub25lIn0." + payload + ".signature";
 	};
-	const initialAccess = jwt("cookie-user");
+	const initialAccess = "opaque-access-token";
 	const rotatedAccess = jwt("cookie-user-rotated");
 	let refreshBody: Record<string, unknown> | undefined;
 	let refreshCSRF = "";
@@ -693,7 +693,7 @@ test("cookie-only magic session enters admin and refreshes without exposing the 
 	await page.getByRole("button", { name: "Sign in", exact: true }).click();
 	await expect(page).toHaveURL(/admin/);
 	await expect.poll(() => tableCalls).toBeGreaterThanOrEqual(2);
-	expect(refreshBody).toEqual({ device_id: expect.any(String) });
+	await expect.poll(() => refreshBody).toEqual({ device_id: expect.any(String) });
 	expect(refreshCSRF).toBe("cookie-csrf");
 	await expect.poll(() => page.evaluate(() => ({
 		access: localStorage.getItem("auth-token"),
