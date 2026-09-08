@@ -144,7 +144,7 @@ func TestProductionAuthDeploymentContract(t *testing.T) {
 	require.ElementsMatch(t, []string{"redis"}, stack.Services["redis-exporter"].DependsOn)
 	require.Equal(t, "oliver006/redis_exporter:v1.62.0-alpine", stack.Services["redis-exporter"].Image, "the secret-reading wrapper requires /bin/sh")
 	require.ElementsMatch(t, []string{"cassandra"}, stack.Services["cassandra-exporter"].DependsOn)
-	require.ElementsMatch(t, []string{"go-auth", "grafana"}, stack.Services["nginx"].DependsOn)
+	require.ElementsMatch(t, []string{"go-auth"}, stack.Services["nginx"].DependsOn)
 	require.ElementsMatch(t, []string{"nginx"}, stack.Services["nginx-exporter"].DependsOn)
 	require.ElementsMatch(t, []string{"prometheus"}, stack.Services["grafana"].DependsOn)
 	require.ElementsMatch(t, []string{"loki"}, stack.Services["promtail"].DependsOn)
@@ -154,6 +154,14 @@ func TestProductionAuthDeploymentContract(t *testing.T) {
 	require.Contains(t, stack.Services["nginx"].Volumes, "${FURANO_REPOSITORY_ROOT}/monitoring/nginx-metrics.conf:/etc/nginx/monitoring/nginx-metrics.conf:ro")
 	require.Contains(t, stack.Services["promtail"].Volumes, "../../monitoring/promtail-config.yaml:/etc/promtail/config.yaml:ro")
 	require.Equal(t, "256M", stack.Services["grafana"].Deploy["resources"].(map[string]any)["limits"].(map[string]any)["memory"])
+	require.Equal(t, "512M", goAuth.Deploy["resources"].(map[string]any)["limits"].(map[string]any)["memory"])
+	for _, serviceName := range []string{
+		"postgres-exporter", "auth-postgres-exporter", "redis-exporter", "cassandra-exporter",
+		"node-exporter", "nginx-exporter", "prometheus", "grafana", "loki", "promtail",
+		"nginxlog-exporter", "blackbox-exporter", "alertmanager",
+	} {
+		require.Equal(t, 0, stack.Services[serviceName].Deploy["replicas"], "%s must remain disabled while the host is memory constrained", serviceName)
+	}
 	nginxConfig := readRepositoryFile(t, "deploy/swarm/configs/nginx.conf")
 	require.Contains(t, nginxConfig, "resolver 127.0.0.11")
 	require.Contains(t, nginxConfig, "set $backend_upstream http://go-auth:80")
