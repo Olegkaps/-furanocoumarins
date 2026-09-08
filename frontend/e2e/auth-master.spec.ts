@@ -652,6 +652,37 @@ test("magic callback shows progress and actionable invalid-link recovery", async
 	await expect(page.getByRole("link", { name: "Request a fresh sign-in link" })).toHaveAttribute("href", "/login");
 });
 
+test("magic login survives immediate local credential eviction", async ({ page }) => {
+	await page.addInitScript(() => {
+		const persistent = window.localStorage;
+		const setItem = Storage.prototype.setItem;
+		const removeItem = Storage.prototype.removeItem;
+		Storage.prototype.setItem = function (key: string, value: string) {
+			setItem.call(this, key, value);
+			if (this === persistent && ["auth-token", "auth-refresh-token", "auth-csrf-token", "name"].includes(key)) {
+				removeItem.call(this, key);
+			}
+		};
+	});
+	await page.route("**/auth/confirm-login-mail", (route) => route.fulfill({
+		status: 200,
+		contentType: "application/json",
+		body: JSON.stringify({ access_token: "opaque-access", refresh_token: "refresh", csrf_token: "csrf" }),
+	}));
+	await page.route("**/get-tables-list", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+	await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: '{"login":"storage-user","superuser":false}' }));
+	await page.route("**/auth/sessions", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+
+	await page.goto("/admit?token=storage-eviction-token");
+	await page.getByRole("button", { name: "Sign in", exact: true }).click();
+	await expect(page).toHaveURL(/admin/);
+	await expect(page.getByRole("heading", { name: "Administration" })).toBeVisible();
+	await expect.poll(() => page.evaluate(() => ({
+		persistent: localStorage.getItem("auth-token"),
+		inTab: sessionStorage.getItem("auth-session-auth-token"),
+	}))).toEqual({ persistent: null, inTab: "opaque-access" });
+});
+
 test("cookie-only magic session enters admin and refreshes without exposing the refresh token", async ({ page }) => {
 	const jwt = (login: string) => {
 		const payload = Buffer.from(JSON.stringify({ login, exp: 4_102_444_800 })).toString("base64url");

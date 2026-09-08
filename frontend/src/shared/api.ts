@@ -22,6 +22,7 @@ const REFRESH = "auth-refresh-token";
 const CSRF = "auth-csrf-token";
 const COOKIE_SESSION = "auth-cookie-session";
 const AUTH_DEBUG_KEY = "auth-debug-events";
+const SESSION_CREDENTIAL_PREFIX = "auth-session-";
 
 type AuthDebugEvent = {
   event: string;
@@ -52,9 +53,27 @@ const sessionEpoch = createSessionEpoch();
 let logoutInProgress = false;
 let logoutInFlight: Promise<void> | null = null;
 const accessTokenRecovery = createAccessTokenRecovery(
-  () => localStorage.getItem(TOKEN),
+  () => credentialGet(TOKEN),
   refreshAccessToken,
 );
+
+// Some privacy-focused browsers can evict localStorage while preserving the
+// current tab's sessionStorage. Keep an in-tab copy so completing a magic link
+// cannot race that eviction. localStorage remains the durable store for normal
+// browsers; closing the tab still drops this fallback.
+function credentialGet(key: string) {
+  return localStorage.getItem(key) ?? sessionStorage.getItem(`${SESSION_CREDENTIAL_PREFIX}${key}`);
+}
+
+function credentialSet(key: string, value: string) {
+  sessionStorage.setItem(`${SESSION_CREDENTIAL_PREFIX}${key}`, value);
+  localStorage.setItem(key, value);
+}
+
+function credentialRemove(key: string) {
+  sessionStorage.removeItem(`${SESSION_CREDENTIAL_PREFIX}${key}`);
+  localStorage.removeItem(key);
+}
 api.interceptors.request.use((request) => {
 	const csrf = csrfCredential();
 	if (csrf) request.headers.set("X-CSRF-Token", csrf);
@@ -130,9 +149,9 @@ api.interceptors.response.use(
 
 async function refreshAccessToken(): Promise<string> {
 	const capturedEpoch = sessionEpoch.capture();
-	const refresh_token = localStorage.getItem(REFRESH);
+	const refresh_token = credentialGet(REFRESH);
 	const csrf = csrfCredential();
-	const cookieSession = localStorage.getItem(COOKIE_SESSION) === "1";
+	const cookieSession = credentialGet(COOKIE_SESSION) === "1";
 	if (!refresh_token && (!cookieSession || !csrf)) throw new Error("missing refresh credential");
   const response = await refreshClient.post(
 		"/auth/refresh",
@@ -161,17 +180,17 @@ export function isTokenExists() {
 }
 
 export function getToken() {
-	const token = localStorage.getItem(TOKEN);
-	const refreshToken = localStorage.getItem(REFRESH);
-	const csrf = localStorage.getItem(CSRF);
-	const cookieSession = localStorage.getItem(COOKIE_SESSION) === "1";
+	const token = credentialGet(TOKEN);
+	const refreshToken = credentialGet(REFRESH);
+	const csrf = credentialGet(CSRF);
+	const cookieSession = credentialGet(COOKIE_SESSION) === "1";
 	if (!token || !hasCoherentCredential(token, refreshToken, cookieSession ? csrf : null)) {
 		authDebug("credential-rejected", {
 			hasAccess: Boolean(token), hasRefresh: Boolean(refreshToken), hasCSRF: Boolean(csrf), cookieSession,
 		});
 		// Reject unmarked legacy access-only storage, while retaining an
 		// explicitly established HttpOnly-cookie session.
-		if (token !== null || refreshToken !== null || localStorage.getItem(NAME) !== null || localStorage.getItem(CSRF) !== null) {
+		if (token !== null || refreshToken !== null || credentialGet(NAME) !== null || csrf !== null) {
 			delToken("incomplete credential");
 		}
 		return undefined;
@@ -185,11 +204,11 @@ export function delToken(reason = "unspecified") {
 	authDebug("credential-cleared", { reason });
 	sessionEpoch.invalidate();
   accessTokenRecovery.reset();
-  localStorage.removeItem(TOKEN);
-  localStorage.removeItem(NAME);
- localStorage.removeItem(REFRESH);
-	localStorage.removeItem(CSRF);
-	localStorage.removeItem(COOKIE_SESSION);
+	credentialRemove(TOKEN);
+	credentialRemove(NAME);
+	credentialRemove(REFRESH);
+	credentialRemove(CSRF);
+	credentialRemove(COOKIE_SESSION);
 }
 
 export function setToken(token_value: string, refreshToken?: string, csrfToken?: string) {
@@ -205,7 +224,7 @@ export function setToken(token_value: string, refreshToken?: string, csrfToken?:
   accessTokenRecovery.reset();
 	storeToken(token_value, refreshToken!, csrfToken);
 	authDebug("token-stored", {
-		hasAccess: Boolean(localStorage.getItem(TOKEN)), hasRefresh: Boolean(localStorage.getItem(REFRESH)), hasCSRF: Boolean(localStorage.getItem(CSRF)),
+		hasAccess: Boolean(credentialGet(TOKEN)), hasRefresh: Boolean(credentialGet(REFRESH)), hasCSRF: Boolean(credentialGet(CSRF)),
 	});
   logoutInProgress = false;
 }
@@ -219,20 +238,20 @@ function storeToken(token_value: string, refreshToken?: string, csrfToken?: stri
 		// Display metadata is optional. Never discard a server-issued session
 		// merely because its access credential is not a browser-decodable JWT.
 	}
-  localStorage.setItem(TOKEN, token_value);
-	localStorage.setItem(NAME, displayName);
+	credentialSet(TOKEN, token_value);
+	credentialSet(NAME, displayName);
 	if (refreshToken) {
-		localStorage.setItem(REFRESH, refreshToken);
-		localStorage.removeItem(COOKIE_SESSION);
+		credentialSet(REFRESH, refreshToken);
+		credentialRemove(COOKIE_SESSION);
 	} else {
-		localStorage.removeItem(REFRESH);
-		localStorage.setItem(COOKIE_SESSION, "1");
+		credentialRemove(REFRESH);
+		credentialSet(COOKIE_SESSION, "1");
 	}
-	if (csrfToken) localStorage.setItem(CSRF, csrfToken);
+	if (csrfToken) credentialSet(CSRF, csrfToken);
 }
 
 function csrfCredential() {
-	return localStorage.getItem(CSRF) || csrfCookie();
+	return credentialGet(CSRF) || csrfCookie();
 }
 
 function csrfCookie() {
@@ -259,7 +278,7 @@ async function revokeRefreshCredential(refreshToken: string | null, csrf?: strin
 
 export async function logoutSession(): Promise<void> {
 	if (logoutInFlight) return logoutInFlight;
-	const refresh_token = localStorage.getItem(REFRESH);
+	const refresh_token = credentialGet(REFRESH);
 	const csrf = csrfCredential();
 	// Explicit logout is locally immediate, but StrictMode and repeated clicks
 	// share the same server revocation before the route navigates to login.
@@ -284,5 +303,5 @@ export function deviceID() {
 }
 
 export function getName() {
-  return localStorage.getItem(NAME);
+  return credentialGet(NAME);
 }
