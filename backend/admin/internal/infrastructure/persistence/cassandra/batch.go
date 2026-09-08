@@ -15,6 +15,23 @@ func BatchInsertData(
 	data [][]any, // serialized_string or set or smth else
 	batchSize int,
 ) error {
+	if err := validateQualifiedIdentifier(tableName); err != nil {
+		return err
+	}
+	if len(columns) == 0 || batchSize <= 0 {
+		return fmt.Errorf("columns and positive batch size are required")
+	}
+	seen := make(map[string]struct{}, len(columns))
+	for _, column := range columns {
+		if err := ValidateIdentifier(column); err != nil {
+			return err
+		}
+		key := strings.ToLower(column)
+		if _, duplicate := seen[key]; duplicate {
+			return fmt.Errorf("duplicate Cassandra column identifier %q", column)
+		}
+		seen[key] = struct{}{}
+	}
 
 	batch := NewExecutor(session, batchSize)
 
@@ -43,9 +60,12 @@ func CreateAndBatchInsertData(
 	primaryKeys []string, // col_name
 	data [][]any, // serialized_string or set or smth else
 ) error {
-	var columns []string
-	for _, col := range columnDefs {
-		columns = append(columns, strings.Split(col, " ")[0])
+	if err := validateQualifiedIdentifier(tableName); err != nil {
+		return err
+	}
+	columns, err := validateColumnDefinitions(columnDefs, primaryKeys)
+	if err != nil {
+		return err
 	}
 
 	primaryKeyClause := fmt.Sprintf("PRIMARY KEY (%s)", strings.Join(primaryKeys, ", "))

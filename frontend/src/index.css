@@ -9,7 +9,7 @@
   --color-link-hover: #062a40;
   --color-surface: #ffffff;
   --color-surface-alt: #eef1f5;
-  --color-page: #f0f3f7;
+  --color-page: #cbd7e3;
   --color-border: #b8c0cc;
   --color-border-strong: #7a8494;
   --color-primary: #0b3d5c;
@@ -31,7 +31,8 @@
   line-height: 1.5;
   font-weight: 400;
   color: var(--color-ink);
-  background-color: var(--color-page);
+  background: linear-gradient(135deg, #c3d1df, var(--color-page) 48%, #d5dee8);
+  background-attachment: fixed;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -48,7 +49,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: var(--color-page);
+  background: linear-gradient(135deg, #c3d1df, var(--color-page) 48%, #d5dee8);
+  background-attachment: fixed;
   color: var(--color-ink);
   font-family: var(--font-sans);
 }

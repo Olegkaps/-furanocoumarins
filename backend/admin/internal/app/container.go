@@ -2,8 +2,9 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	"io"
+	"net/http"
 
 	"github.com/gocql/gocql"
 	"github.com/redis/go-redis/v9"
@@ -13,15 +14,16 @@ import (
 	domainauth "admin/internal/domain/auth"
 	domainmail "admin/internal/domain/mail"
 	domainuser "admin/internal/domain/user"
+	"admin/internal/infrastructure/authmaster"
+	infracache "admin/internal/infrastructure/cache"
 	inframailmemory "admin/internal/infrastructure/mail/memory"
 	inframailsmtp "admin/internal/infrastructure/mail/smtp"
 	"admin/internal/infrastructure/persistence"
-	s3store "admin/internal/infrastructure/persistence/s3"
+	"admin/internal/infrastructure/persistence/cassandra"
+	inframemory "admin/internal/infrastructure/persistence/memory"
 	infrapostgres "admin/internal/infrastructure/persistence/postgres"
 	infraredis "admin/internal/infrastructure/persistence/redis"
-	inframemory "admin/internal/infrastructure/persistence/memory"
-	"admin/internal/infrastructure/persistence/cassandra"
-	infracache "admin/internal/infrastructure/cache"
+	s3store "admin/internal/infrastructure/persistence/s3"
 	"admin/internal/infrastructure/security"
 	"admin/settings"
 )
@@ -36,6 +38,14 @@ type Container struct {
 	Persistence *persistence.Clients
 	EnvType     string
 	Closer      func() error
+	AuthMaster  AuthMaster
+}
+
+type AuthMaster interface {
+	Request(context.Context, string, string, string, io.Reader, string) (*http.Response, error)
+	RequestWithCredentials(context.Context, string, string, string, string, string, io.Reader, string) (*http.Response, error)
+	Me(context.Context, string) (authmaster.User, error)
+	HasRole(context.Context, string, string) (bool, error)
 }
 
 type Options struct {
@@ -49,6 +59,7 @@ type Options struct {
 	Users          domainuser.Repository
 	Links          domainauth.MagicLinkStore
 	CassandraStore *cassandra.Store
+	AuthMaster     AuthMaster
 }
 
 func DefaultOptions() Options {
@@ -66,27 +77,14 @@ func New(opts Options) (*Container, error) {
 	c := &Container{
 		Persistence: &persistence.Clients{},
 		EnvType:     opts.EnvType,
+		AuthMaster:  opts.AuthMaster,
+	}
+	if c.AuthMaster == nil {
+		c.AuthMaster = authmaster.New(settings.C.AuthMasterURL)
 	}
 
 	if opts.EnvType == "AUTOTEST" || opts.EnvType == "TEST" {
 		return newTestContainer(opts)
-	}
-
-	if opts.EnvType != "NODB" {
-		db, err := sql.Open("postgres", opts.PostgresDSN)
-		if err != nil {
-			return nil, fmt.Errorf("open postgres: %w", err)
-		}
-		if err := db.PingContext(context.Background()); err != nil {
-			return nil, fmt.Errorf("ping postgres: %w", err)
-		}
-		c.Persistence.DB = db
-
-		rdb := redis.NewClient(opts.RedisOpts)
-		if err := rdb.Ping(context.Background()).Err(); err != nil {
-			return nil, fmt.Errorf("ping redis: %w", err)
-		}
-		c.Persistence.Redis = rdb
 	}
 
 	c.Persistence.CQL = gocql.NewCluster(opts.CassandraHost)
@@ -108,20 +106,11 @@ func New(opts Options) (*Container, error) {
 	}
 	c.Mail = mailSender
 
-	c.Closer = func() error {
-		var err error
-		if c.Persistence.DB != nil {
-			err = c.Persistence.DB.Close()
-		}
-		if c.Persistence.Redis != nil {
-			if closeErr := c.Persistence.Redis.Close(); closeErr != nil && err == nil {
-				err = closeErr
-			}
-		}
-		return err
-	}
+	c.Closer = func() error { return nil }
 
-	c.Users, c.Auth = buildAuth(opts, c)
+	// auth-master is the only production identity/session provider. The legacy
+	// PostgreSQL user repository and Redis magic-link store stay available only
+	// to TEST/AUTOTEST fixtures and the offline importer.
 	c.Search = wireSearch(c.Cassandra)
 	return c, nil
 }
@@ -137,8 +126,12 @@ func newTestContainer(opts Options) (*Container, error) {
 		Persistence: &persistence.Clients{
 			CQL: gocql.NewCluster("127.0.0.1"),
 		},
-		Mail:    inframailmemory.NewSender(),
-		EnvType: opts.EnvType,
+		Mail:       inframailmemory.NewSender(),
+		EnvType:    opts.EnvType,
+		AuthMaster: opts.AuthMaster,
+	}
+	if c.AuthMaster == nil {
+		c.AuthMaster = authmaster.New(settings.C.AuthMasterURL)
 	}
 	if opts.CassandraStore != nil {
 		c.Cassandra = opts.CassandraStore

@@ -1,0 +1,32 @@
+listen:
+  port: 4040
+  address: 0.0.0.0
+namespaces:
+- name: nginx
+  format: '"$request" $status $request_time "$upstream_response_time" $route $service
+    $proxied'
+  source:
+    syslog:
+      listen_address: udp://0.0.0.0:8514
+      format: rfc3164
+      tags:
+      - nginx
+  relabel_configs:
+  - target_label: route
+    from: route
+  - target_label: service
+    from: service
+  - target_label: proxied
+    from: proxied
+  histogram_buckets:
+  - 0.005
+  - 0.01
+  - 0.025
+  - 0.05
+  - 0.1
+  - 0.25
+  - 0.5
+  - 1
+  - 2.5
+  - 5
+  - 10

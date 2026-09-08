@@ -16,7 +16,7 @@ import (
 type Config struct {
 	EnvType        string        `env:"ENV_TYPE" env-default:"PROD"`
 	SecretKey      string        `env:"SECRET_KEY"`
-	AllowOrigin    string        `env:"ALLOW_ORIGIN"`
+	AllowOrigin    string        `env:"ALLOW_ORIGIN" env-default:"http://localhost:5173"`
 	PgUser         string        `env:"PG_USER"`
 	PgPassword     string        `env:"PG_PASSWORD"`
 	PgDb           string        `env:"PG_DB"`
@@ -29,6 +29,7 @@ type Config struct {
 	DomainPref     string        `env:"DOMAIN_PREF"`
 	SmtpHost       string        `env:"SMTP_HOST" env-default:"smtp.yandex.ru"`
 	SmtpPort       string        `env:"SMTP_PORT" env-default:"587"`
+	SmtpTimeout    time.Duration `env:"SMTP_TIMEOUT" env-default:"5s"`
 	Mail           string        `env:"MAIL"`
 	MailSecret     string        `env:"MAIL_SECRET"`
 	S3Endpoint     string        `env:"S3_ENDPOINT"`
@@ -38,6 +39,7 @@ type Config struct {
 	S3Region       string        `env:"S3_REGION" env-default:"us-east-1"`
 	S3UsePathStyle bool          `env:"S3_USE_PATH_STYLE" env-default:"true"`
 	SearchCacheTTL time.Duration `env:"SEARCH_CACHE_TTL" env-default:"5m"`
+	AuthMasterURL  string        `env:"AUTH_MASTER_URL" env-default:"http://authd:8080"`
 }
 
 // C is the loaded application configuration.
@@ -47,11 +49,21 @@ func init() {
 	if err := cleanenv.ReadEnv(&C); err != nil {
 		panic(fmt.Sprintf("settings: read env: %v", err))
 	}
+	if err := C.Validate(); err != nil {
+		panic(fmt.Sprintf("settings: validate: %v", err))
+	}
 }
 
 const BackVersion = "v2.0"
 
 var CassandraCollectionSeparators = []rune{' ', '_'}
+
+func (c Config) Validate() error {
+	if c.SmtpTimeout <= 0 {
+		return fmt.Errorf("SMTP_TIMEOUT must be positive")
+	}
+	return nil
+}
 
 func (c Config) SecretKeyBytes() []byte {
 	return []byte(c.SecretKey)
@@ -85,11 +97,13 @@ func (c Config) RedisOptions() *redis.Options {
 }
 
 func (c Config) Cors() cors.Config {
+	allowOrigin := strings.TrimSpace(c.AllowOrigin)
+	allowCredentials := allowOrigin != "" && allowOrigin != "*"
 	return cors.Config{
-		AllowHeaders:     "Origin,Content-Type,Accept,Content-Length,Accept-Language,Accept-Encoding,Connection,Access-Control-Allow-Origin,Authorization",
-		AllowOrigins:     c.AllowOrigin,
+		AllowHeaders:     "Origin,Content-Type,Accept,Content-Length,Accept-Language,Accept-Encoding,Connection,Access-Control-Allow-Origin,Authorization,X-CSRF-Token",
+		AllowOrigins:     allowOrigin,
 		AllowOriginsFunc: nil,
-		AllowCredentials: false,
+		AllowCredentials: allowCredentials,
 		AllowMethods: strings.Join([]string{
 			fiber.MethodGet,
 			fiber.MethodPost,

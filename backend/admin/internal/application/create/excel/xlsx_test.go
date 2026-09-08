@@ -207,3 +207,14 @@ func TestReadXLSXToMapAppliesHiddenTextPositive(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"1", "vis"}, result["1"])
 }
+
+func TestReadXLSXToMapIndexesHiddenPrimaryByPersistedValue(t *testing.T) {
+	f := excelize.NewFile()
+	require.NoError(t, f.SetSheetRow("Sheet1", "A1", &[]any{"id", "name"}))
+	require.NoError(t, f.SetSheetRow("Sheet1", "A2", &[]any{"a#annotation#b", "visible"}))
+
+	result, err := excel.ReadXLSXToMap(f, "Sheet1", []string{"id", "name"}, "id")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ab", "visible"}, result["ab"])
+	assert.NotContains(t, result, "a#annotation#b")
+}

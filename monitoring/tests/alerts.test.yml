@@ -1,0 +1,1042 @@
+rule_files:
+- ../alerts.yml
+evaluation_interval: 1m
+tests:
+- interval: 1m
+  input_series:
+  - series: up{job="authd",instance="authd:8080"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: MonitoringTargetDown
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: MonitoringTargetDown
+    exp_alerts:
+    - exp_labels:
+        job: authd
+        instance: authd:8080
+        severity: critical
+      exp_annotations:
+        summary: A monitored target is unreachable
+        description: Check the target process, network and exporter logs.
+- interval: 1m
+  input_series:
+  - series: probe_success{job="http-probe",instance="http://web:8080/healthz"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: HTTPProbeFailed
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: HTTPProbeFailed
+    exp_alerts:
+    - exp_labels:
+        job: http-probe
+        instance: http://web:8080/healthz
+        severity: critical
+      exp_annotations:
+        summary: HTTP liveness probe failed
+        description: Check nginx /nginx-health, go-auth /ping or authd /healthz. These
+          are liveness checks, not database query readiness.
+- interval: 1m
+  input_series:
+  - series: auth_http_request_duration_seconds_count{job="authd",instance="test",method="GET",route="/v1/me",status="500"}
+    values: 0+10x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: Backend5xx
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: Backend5xx
+    exp_alerts:
+    - exp_labels:
+        job: authd
+        instance: test
+        method: GET
+        route: /v1/me
+        severity: warning
+      exp_annotations:
+        summary: HTTP 5xx responses detected
+        description: Inspect failing endpoint logs and dependencies; even low-volume
+          sustained failures alert.
+- interval: 1m
+  input_series:
+  - series: nginx_http_response_count_total{job="nginxlog",instance="test",method="GET",route="/v1/me",status="500"}
+    values: 0+10x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: Nginx5xx
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: Nginx5xx
+    exp_alerts:
+    - exp_labels:
+        job: nginxlog
+        instance: test
+        method: GET
+        route: /v1/me
+        severity: warning
+      exp_annotations:
+        summary: HTTP 5xx responses detected
+        description: Inspect failing endpoint logs and dependencies; even low-volume
+          sustained failures alert.
+- interval: 1m
+  input_series:
+  - series: auth_http_request_duration_seconds_bucket{job="authd",instance="test",method="GET",route="/v1/me",le="1"}
+    values: '0x30'
+  - series: auth_http_request_duration_seconds_bucket{job="authd",instance="test",method="GET",route="/v1/me",le="5"}
+    values: 0+10x30
+  - series: auth_http_request_duration_seconds_bucket{job="authd",instance="test",method="GET",route="/v1/me",le="+Inf"}
+    values: 0+10x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: BackendHighLatency
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: BackendHighLatency
+    exp_alerts:
+    - exp_labels:
+        job: authd
+        instance: test
+        method: GET
+        route: /v1/me
+        severity: warning
+      exp_annotations:
+        summary: Endpoint p95 latency exceeds one second
+        description: Inspect endpoint latency, load and dependency timings; tune this
+          starter threshold to your SLO.
+- interval: 1m
+  input_series:
+  - series: nginx_http_response_time_seconds_hist_bucket{job="nginxlog",instance="test",method="GET",route="/v1/me",le="1"}
+    values: '0x30'
+  - series: nginx_http_response_time_seconds_hist_bucket{job="nginxlog",instance="test",method="GET",route="/v1/me",le="5"}
+    values: 0+10x30
+  - series: nginx_http_response_time_seconds_hist_bucket{job="nginxlog",instance="test",method="GET",route="/v1/me",le="+Inf"}
+    values: 0+10x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: NginxHighLatency
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: NginxHighLatency
+    exp_alerts:
+    - exp_labels:
+        job: nginxlog
+        instance: test
+        method: GET
+        route: /v1/me
+        severity: warning
+      exp_annotations:
+        summary: Endpoint p95 latency exceeds one second
+        description: Inspect endpoint latency, load and dependency timings; tune this
+          starter threshold to your SLO.
+- interval: 1m
+  input_series:
+  - series: pg_up{job="postgres",instance="postgres-exporter:9187"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: PostgresDown
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: PostgresDown
+    exp_alerts:
+    - exp_labels:
+        job: postgres
+        instance: postgres-exporter:9187
+        severity: critical
+      exp_annotations:
+        summary: PostgreSQL is unavailable to its exporter
+        description: Verify PostgreSQL health, connection settings and exporter credentials.
+- interval: 1m
+  input_series:
+  - series: pg_stat_database_numbackends{job="postgres",instance="db",datname="auth"}
+    values: 90x30
+  - series: pg_settings_max_connections{job="postgres",instance="db"}
+    values: 100x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: PostgresConnectionsHigh
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: PostgresConnectionsHigh
+    exp_alerts:
+    - exp_labels:
+        instance: db
+        severity: warning
+      exp_annotations:
+        summary: PostgreSQL connections above 80%
+        description: Inspect active/idle connections and application pool limits.
+- interval: 1m
+  input_series:
+  - series: pg_stat_database_deadlocks{job="postgres",instance="db",datname="auth"}
+    values: 0+1x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: PostgresDeadlocks
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: PostgresDeadlocks
+    exp_alerts:
+    - exp_labels:
+        instance: db
+        datname: auth
+        severity: warning
+      exp_annotations:
+        summary: PostgreSQL deadlocks detected
+        description: Inspect PostgreSQL deadlock logs and transaction lock ordering.
+- interval: 1m
+  input_series:
+  - series: node_vmstat_oom_kill{job="node",instance="vm"}
+    values: 0+1x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: VMOOMKill
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: VMOOMKill
+    exp_alerts:
+    - exp_labels:
+        job: node
+        instance: vm
+        severity: critical
+      exp_annotations:
+        summary: Kernel OOM kill detected
+        description: Inspect kernel logs and container limits on the monitored Linux
+          VM; this is a VM-wide event.
+- interval: 1m
+  input_series:
+  - series: node_filesystem_avail_bytes{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 5x30
+  - series: node_filesystem_size_bytes{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 100x30
+  - series: node_filesystem_readonly{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: VMDiskSpaceLow
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: VMDiskSpaceLow
+    exp_alerts:
+    - exp_labels:
+        job: node
+        instance: vm
+        device: /dev/vda
+        mountpoint: /
+        fstype: ext4
+        severity: critical
+      exp_annotations:
+        summary: VM filesystem free space below 10%
+        description: Free space/inodes or expand the filesystem. Do not delete database
+          files.
+- interval: 1m
+  input_series:
+  - series: node_filesystem_files_free{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 5x30
+  - series: node_filesystem_files{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 100x30
+  - series: node_filesystem_readonly{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: VMInodesLow
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: VMInodesLow
+    exp_alerts:
+    - exp_labels:
+        job: node
+        instance: vm
+        device: /dev/vda
+        mountpoint: /
+        fstype: ext4
+        severity: critical
+      exp_annotations:
+        summary: VM filesystem free inodes below 10%
+        description: Free space/inodes or expand the filesystem. Do not delete database
+          files.
+- interval: 1m
+  input_series:
+  - series: node_memory_MemAvailable_bytes{job="node",instance="vm"}
+    values: 5x30
+  - series: node_memory_MemTotal_bytes{job="node",instance="vm"}
+    values: 100x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: VMMemoryLow
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: VMMemoryLow
+    exp_alerts:
+    - exp_labels:
+        job: node
+        instance: vm
+        severity: warning
+      exp_annotations:
+        summary: VM available memory below 10%
+        description: Inspect resident memory, cache, limits and workload growth.
+- interval: 1m
+  input_series:
+  - series: node_cpu_seconds_total{job="node",instance="vm",cpu="0",mode="idle"}
+    values: 0+1x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: VMCPUHigh
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: VMCPUHigh
+    exp_alerts:
+    - exp_labels:
+        instance: vm
+        severity: warning
+      exp_annotations:
+        summary: VM CPU utilization above 90%
+        description: Inspect CPU consumers, request volume and load average.
+- interval: 1m
+  input_series:
+  - series: process_start_time_seconds{job="authd",instance="authd:8080"}
+    values: 100x15 200x15
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: BackendRestarted
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: BackendRestarted
+    exp_alerts:
+    - exp_labels:
+        job: authd
+        instance: authd:8080
+        severity: warning
+      exp_annotations:
+        summary: Backend process restarted
+        description: Check deployment history and crash logs; planned deployments
+          also trigger this alert.
+- interval: 1m
+  input_series:
+  - series: nginx_parse_errors_total{job="nginxlog",instance="exporter"}
+    values: 0+1x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: NginxLogParseErrors
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: NginxLogParseErrors
+    exp_alerts:
+    - exp_labels:
+        job: nginxlog
+        instance: exporter
+        severity: warning
+      exp_annotations:
+        summary: Nginx access-log exporter cannot parse logs
+        description: Check that nginx log_format and nginxlog exporter format agree.
+- interval: 1m
+  input_series:
+  - series: up{job="authd",instance="authd:8080"}
+    values: 1x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: MonitoringTargetDown
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: probe_success{job="http-probe",instance="http://web:8080/healthz"}
+    values: 1x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: HTTPProbeFailed
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: auth_http_request_duration_seconds_count{job="authd",instance="test",method="GET",route="/v1/me",status="200"}
+    values: 0+10x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: Backend5xx
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: nginx_http_response_count_total{job="nginxlog",instance="test",method="GET",route="/v1/me",status="200"}
+    values: 0+10x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: Nginx5xx
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: auth_http_request_duration_seconds_bucket{job="authd",instance="test",method="GET",route="/v1/me",le="1"}
+    values: 0+10x30
+  - series: auth_http_request_duration_seconds_bucket{job="authd",instance="test",method="GET",route="/v1/me",le="5"}
+    values: 0+10x30
+  - series: auth_http_request_duration_seconds_bucket{job="authd",instance="test",method="GET",route="/v1/me",le="+Inf"}
+    values: 0+10x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: BackendHighLatency
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: nginx_http_response_time_seconds_hist_bucket{job="nginxlog",instance="test",method="GET",route="/v1/me",le="1"}
+    values: 0+10x30
+  - series: nginx_http_response_time_seconds_hist_bucket{job="nginxlog",instance="test",method="GET",route="/v1/me",le="5"}
+    values: 0+10x30
+  - series: nginx_http_response_time_seconds_hist_bucket{job="nginxlog",instance="test",method="GET",route="/v1/me",le="+Inf"}
+    values: 0+10x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: NginxHighLatency
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: pg_up{job="postgres",instance="postgres-exporter:9187"}
+    values: 1x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: PostgresDown
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: pg_stat_database_numbackends{job="postgres",instance="db",datname="auth"}
+    values: 10x30
+  - series: pg_settings_max_connections{job="postgres",instance="db"}
+    values: 100x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: PostgresConnectionsHigh
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: pg_stat_database_deadlocks{job="postgres",instance="db",datname="auth"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: PostgresDeadlocks
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: node_vmstat_oom_kill{job="node",instance="vm"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: VMOOMKill
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: node_filesystem_avail_bytes{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 50x30
+  - series: node_filesystem_size_bytes{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 100x30
+  - series: node_filesystem_readonly{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: VMDiskSpaceLow
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: node_filesystem_avail_bytes{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 5x30
+  - series: node_filesystem_size_bytes{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 100x30
+  - series: node_filesystem_readonly{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 1x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: VMDiskSpaceLow
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: node_filesystem_avail_bytes{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="tmpfs"}
+    values: 5x30
+  - series: node_filesystem_size_bytes{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="tmpfs"}
+    values: 100x30
+  - series: node_filesystem_readonly{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="tmpfs"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: VMDiskSpaceLow
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: node_filesystem_files_free{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 50x30
+  - series: node_filesystem_files{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 100x30
+  - series: node_filesystem_readonly{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: VMInodesLow
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: node_filesystem_files_free{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 5x30
+  - series: node_filesystem_files{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 100x30
+  - series: node_filesystem_readonly{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="ext4"}
+    values: 1x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: VMInodesLow
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: node_filesystem_files_free{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="tmpfs"}
+    values: 5x30
+  - series: node_filesystem_files{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="tmpfs"}
+    values: 100x30
+  - series: node_filesystem_readonly{job="node",instance="vm",device="/dev/vda",mountpoint="/",fstype="tmpfs"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: VMInodesLow
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: node_memory_MemAvailable_bytes{job="node",instance="vm"}
+    values: 50x30
+  - series: node_memory_MemTotal_bytes{job="node",instance="vm"}
+    values: 100x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: VMMemoryLow
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: node_cpu_seconds_total{job="node",instance="vm",cpu="0",mode="idle"}
+    values: 0+60x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: VMCPUHigh
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: process_start_time_seconds{job="authd",instance="authd:8080"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: BackendRestarted
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: nginx_parse_errors_total{job="nginxlog",instance="exporter"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: NginxLogParseErrors
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: http_requests_total{job="go-auth",instance="test",method="GET",route="/v1/me",status="500"}
+    values: 0+10x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: FuranoBackend5xx
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: FuranoBackend5xx
+    exp_alerts:
+    - exp_labels:
+        job: go-auth
+        instance: test
+        method: GET
+        route: /v1/me
+        severity: warning
+      exp_annotations:
+        summary: HTTP 5xx responses detected
+        description: Inspect failing endpoint logs and dependencies; even low-volume
+          sustained failures alert.
+- interval: 1m
+  input_series:
+  - series: http_request_duration_seconds_bucket{job="go-auth",instance="test",method="GET",route="/v1/me",le="1"}
+    values: '0x30'
+  - series: http_request_duration_seconds_bucket{job="go-auth",instance="test",method="GET",route="/v1/me",le="5"}
+    values: 0+10x30
+  - series: http_request_duration_seconds_bucket{job="go-auth",instance="test",method="GET",route="/v1/me",le="+Inf"}
+    values: 0+10x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: FuranoBackendHighLatency
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: FuranoBackendHighLatency
+    exp_alerts:
+    - exp_labels:
+        job: go-auth
+        instance: test
+        method: GET
+        route: /v1/me
+        severity: warning
+      exp_annotations:
+        summary: Endpoint p95 latency exceeds one second
+        description: Inspect endpoint latency, load and dependency timings; tune this
+          starter threshold to your SLO.
+- interval: 1m
+  input_series:
+  - series: process_start_time_seconds{job="go-auth",instance="authd:8080"}
+    values: 100x15 200x15
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: FuranoBackendRestarted
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: FuranoBackendRestarted
+    exp_alerts:
+    - exp_labels:
+        job: go-auth
+        instance: authd:8080
+        severity: warning
+      exp_annotations:
+        summary: Backend process restarted
+        description: Check deployment history and crash logs; planned deployments
+          also trigger this alert.
+- interval: 1m
+  input_series:
+  - series: http_requests_total{job="go-auth",instance="test",method="GET",route="/v1/me",status="200"}
+    values: 0+10x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: FuranoBackend5xx
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: http_request_duration_seconds_bucket{job="go-auth",instance="test",method="GET",route="/v1/me",le="1"}
+    values: 0+10x30
+  - series: http_request_duration_seconds_bucket{job="go-auth",instance="test",method="GET",route="/v1/me",le="5"}
+    values: 0+10x30
+  - series: http_request_duration_seconds_bucket{job="go-auth",instance="test",method="GET",route="/v1/me",le="+Inf"}
+    values: 0+10x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: FuranoBackendHighLatency
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: process_start_time_seconds{job="go-auth",instance="authd:8080"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: FuranoBackendRestarted
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: redis_up{job="redis",instance="redis"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: RedisDown
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: RedisDown
+    exp_alerts:
+    - exp_labels:
+        job: redis
+        instance: redis
+        severity: warning
+      exp_annotations:
+        summary: Redis is unavailable
+        description: Inspect Redis service and exporter credentials.
+- interval: 1m
+  input_series:
+  - series: redis_memory_used_bytes{job="redis",instance="redis"}
+    values: 95x30
+  - series: redis_memory_max_bytes{job="redis",instance="redis"}
+    values: 100x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: RedisMemoryHigh
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: RedisMemoryHigh
+    exp_alerts:
+    - exp_labels:
+        job: redis
+        instance: redis
+        severity: warning
+      exp_annotations:
+        summary: Redis memory exceeds 90% of maxmemory
+        description: Inspect memory growth and eviction policy.
+- interval: 1m
+  input_series:
+  - series: redis_evicted_keys_total{job="redis",instance="redis"}
+    values: 0+1x30
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: RedisEvictions
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: RedisEvictions
+    exp_alerts:
+    - exp_labels:
+        job: redis
+        instance: redis
+        severity: warning
+      exp_annotations:
+        summary: Redis is evicting keys
+        description: Inspect cache sizing and eviction policy.
+- interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: CassandraJMXUnavailable
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: CassandraJMXUnavailable
+    exp_alerts:
+    - exp_labels:
+        job: cassandra
+        severity: warning
+      exp_annotations:
+        summary: Cassandra JMX metrics are unavailable
+        description: CQL TCP probes are separate. Detailed JMX metrics require authenticated
+          remote JMX setup; see monitoring/README.md.
+- interval: 1m
+  input_series:
+  - series: nginx_up{job="nginx",instance="nginx"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: NginxUnavailable
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: NginxUnavailable
+    exp_alerts:
+    - exp_labels:
+        job: nginx
+        instance: nginx
+        severity: warning
+      exp_annotations:
+        summary: Nginx stub status is unavailable
+        description: Check nginx and its private stub_status endpoint.
+- interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: MissingScrapeTargetsGoAuth
+    exp_alerts: []
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsGoAuth
+    exp_alerts:
+    - exp_labels:
+        job: go-auth
+        severity: critical
+      exp_annotations:
+        summary: No scrape targets discovered for go-auth
+        description: Check Swarm replicas and tasks DNS discovery. A removed last
+          task produces no up series and must not appear healthy.
+- interval: 1m
+  input_series:
+  - series: up{job="go-auth",instance="task"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsGoAuth
+    exp_alerts: []
+- interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: MissingScrapeTargetsAuthd
+    exp_alerts: []
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsAuthd
+    exp_alerts:
+    - exp_labels:
+        job: authd
+        severity: critical
+      exp_annotations:
+        summary: No scrape targets discovered for authd
+        description: Check Swarm replicas and tasks DNS discovery. A removed last
+          task produces no up series and must not appear healthy.
+- interval: 1m
+  input_series:
+  - series: up{job="authd",instance="task"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsAuthd
+    exp_alerts: []
+- interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: MissingScrapeTargetsNode
+    exp_alerts: []
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsNode
+    exp_alerts:
+    - exp_labels:
+        job: node
+        severity: critical
+      exp_annotations:
+        summary: No scrape targets discovered for node
+        description: Check Swarm replicas and tasks DNS discovery. A removed last
+          task produces no up series and must not appear healthy.
+- interval: 1m
+  input_series:
+  - series: up{job="node",instance="task"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsNode
+    exp_alerts: []
+- interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: MissingScrapeTargetsPostgres
+    exp_alerts: []
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsPostgres
+    exp_alerts:
+    - exp_labels:
+        job: postgres
+        severity: critical
+      exp_annotations:
+        summary: No scrape targets discovered for postgres
+        description: Check Swarm replicas and tasks DNS discovery. A removed last
+          task produces no up series and must not appear healthy.
+- interval: 1m
+  input_series:
+  - series: up{job="postgres",instance="task"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsPostgres
+    exp_alerts: []
+- interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: MissingScrapeTargetsAuthPostgres
+    exp_alerts: []
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsAuthPostgres
+    exp_alerts:
+    - exp_labels:
+        job: auth-postgres
+        severity: critical
+      exp_annotations:
+        summary: No scrape targets discovered for auth-postgres
+        description: Check Swarm replicas and tasks DNS discovery. A removed last
+          task produces no up series and must not appear healthy.
+- interval: 1m
+  input_series:
+  - series: up{job="auth-postgres",instance="task"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsAuthPostgres
+    exp_alerts: []
+- interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: MissingScrapeTargetsRedis
+    exp_alerts: []
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsRedis
+    exp_alerts:
+    - exp_labels:
+        job: redis
+        severity: critical
+      exp_annotations:
+        summary: No scrape targets discovered for redis
+        description: Check Swarm replicas and tasks DNS discovery. A removed last
+          task produces no up series and must not appear healthy.
+- interval: 1m
+  input_series:
+  - series: up{job="redis",instance="task"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsRedis
+    exp_alerts: []
+- interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: MissingScrapeTargetsNginx
+    exp_alerts: []
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsNginx
+    exp_alerts:
+    - exp_labels:
+        job: nginx
+        severity: critical
+      exp_annotations:
+        summary: No scrape targets discovered for nginx
+        description: Check Swarm replicas and tasks DNS discovery. A removed last
+          task produces no up series and must not appear healthy.
+- interval: 1m
+  input_series:
+  - series: up{job="nginx",instance="task"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsNginx
+    exp_alerts: []
+- interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: MissingScrapeTargetsNginxlog
+    exp_alerts: []
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsNginxlog
+    exp_alerts:
+    - exp_labels:
+        job: nginxlog
+        severity: critical
+      exp_annotations:
+        summary: No scrape targets discovered for nginxlog
+        description: Check Swarm replicas and tasks DNS discovery. A removed last
+          task produces no up series and must not appear healthy.
+- interval: 1m
+  input_series:
+  - series: up{job="nginxlog",instance="task"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsNginxlog
+    exp_alerts: []
+- interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: MissingScrapeTargetsBlackbox
+    exp_alerts: []
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsBlackbox
+    exp_alerts:
+    - exp_labels:
+        job: blackbox
+        severity: critical
+      exp_annotations:
+        summary: No scrape targets discovered for blackbox
+        description: Check Swarm replicas and tasks DNS discovery. A removed last
+          task produces no up series and must not appear healthy.
+- interval: 1m
+  input_series:
+  - series: up{job="blackbox",instance="task"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsBlackbox
+    exp_alerts: []
+- interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: MissingScrapeTargetsCassandra
+    exp_alerts: []
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsCassandra
+    exp_alerts:
+    - exp_labels:
+        job: cassandra
+        severity: critical
+      exp_annotations:
+        summary: No scrape targets discovered for cassandra
+        description: Check Swarm replicas and tasks DNS discovery. A removed last
+          task produces no up series and must not appear healthy.
+- interval: 1m
+  input_series:
+  - series: up{job="cassandra",instance="task"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsCassandra
+    exp_alerts: []
+- interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 0m
+    alertname: MissingScrapeTargetsAlertmanager
+    exp_alerts: []
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsAlertmanager
+    exp_alerts:
+    - exp_labels:
+        job: alertmanager
+        severity: critical
+      exp_annotations:
+        summary: No scrape targets discovered for alertmanager
+        description: Check Swarm replicas and tasks DNS discovery. A removed last
+          task produces no up series and must not appear healthy.
+- interval: 1m
+  input_series:
+  - series: up{job="alertmanager",instance="task"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: MissingScrapeTargetsAlertmanager
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: probe_success{job="tcp-probe",instance="cassandra:9042"}
+    values: '0x10'
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: CassandraTCPProbeFailed
+    exp_alerts:
+    - exp_labels:
+        job: tcp-probe
+        instance: cassandra:9042
+        severity: critical
+      exp_annotations:
+        summary: Cassandra CQL TCP port is unreachable
+        description: Check Cassandra service and networking. A successful TCP probe
+          does not authenticate or execute a CQL query.
+- interval: 1m
+  input_series:
+  - series: probe_success{job="tcp-probe",instance="cassandra:9042"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: CassandraTCPProbeFailed
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: redis_up{job="redis",instance="redis"}
+    values: 1x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: RedisDown
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: redis_memory_used_bytes{job="redis",instance="redis"}
+    values: 100x30
+  - series: redis_memory_max_bytes{job="redis",instance="redis"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: RedisMemoryHigh
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: redis_evicted_keys_total{job="redis",instance="redis"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: RedisEvictions
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: cassandra_stats{job="cassandra",name="known"}
+    values: 1x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: CassandraJMXUnavailable
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: nginx_up{job="nginx",instance="nginx"}
+    values: 1x30
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: NginxUnavailable
+    exp_alerts: []

@@ -4,21 +4,34 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 
 import './App.css'
 import SearchApp, { AppPhilogeneticTree, AppResultTable } from "./SearchApp/SearchApp";
 import AboutPage from "./About/AboutPage";
-import { AdminApp, AdminLogin, AdminLogout, AdminReset, AdminAdmit } from "./Admin/Admin";
+import { AdminApp, AdminLogin, AdminLogout, AdminReset, AdminAdmit, AdminMagicCallback } from "./Admin/Admin";
+import Register from "./Admin/Register";
 import { Reference } from "./Reference/Reference";
 import SubstancePage from "./SubstancePage/SubstancePage";
 import { SiteFooter } from "./shared/SiteFooter";
 import HistoryPage from "./SearchApp/HistoryPage";
 import CachePage from "./SearchApp/CachePage";
 import { CacheSchemaBanner } from "./shared/CacheSchemaBanner";
+import { restoreCookieSession } from "./shared/api";
 
 
 function App() {
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    void restoreCookieSession().finally(() => setAuthReady(true));
+  }, []);
+
+  if (!authReady) {
+    return <div className="app-shell"><main className="app-shell__main" aria-busy="true" /></div>;
+  }
+
   return (
     <BrowserRouter>
       <div className="app-shell">
@@ -39,6 +52,8 @@ function App() {
               <Route path="/logout" element={<AdminLogout />}/>
               <Route path="/reset" element={<AdminReset />}/>
               <Route path="/admit/:code" element={<AdminAdmit />}/>
+			  <Route path="/admit" element={<AdminMagicCallback />}/>
+			  <Route path="/register" element={<Register />}/>
               <Route path="/admin" element={<AdminApp />}/>
               <Route path="/reference/:article_id" element={<Reference />}/>
           </Routes>

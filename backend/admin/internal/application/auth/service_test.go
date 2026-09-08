@@ -32,7 +32,7 @@ func (s stubHasher) Hash(password string) (string, error) {
 
 func (s stubHasher) HashWithPrefix(prefix string) stubHasher {
 	return stubHasher{
-		hash: prefix + "token",
+		hash:   prefix + "token",
 		verify: s.verify,
 	}
 }
@@ -165,6 +165,19 @@ func TestServiceConfirmPasswordChangeNegativeInvalidToken(t *testing.T) {
 	)
 	err := svc.ConfirmPasswordChange(context.Background(), "bad", "new-pass")
 	assert.ErrorIs(t, err, appauth.ErrInvalidToken)
+}
+
+func TestServiceConfirmPasswordChangeNegativeConsumeError(t *testing.T) {
+	svc := appauth.NewService(
+		inframemory.NewUserRepository(),
+		errorLinkStore{consumeErr: assert.AnError},
+		inframailmemory.NewSender(),
+		security.PasswordHasher{},
+		stubTokens{},
+		"https://example.com",
+	)
+	err := svc.ConfirmPasswordChange(context.Background(), "broken", "new-pass")
+	require.ErrorIs(t, err, assert.AnError)
 }
 
 func TestServiceConfirmLoginLinkNegativeInvalidToken(t *testing.T) {

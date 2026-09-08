@@ -25,6 +25,9 @@ services:
       ENV_TYPE: TEST
       RUN_INTEGRATION: "1"
       TEST_POSTGRES_DSN: "user=postgres password=postgres dbname=postgres host=postgres port=5432 sslmode=disable"
+      FURANO_REPOSITORY_ROOT: /workspace
+    volumes:
+      - .:/workspace:ro
     depends_on:
       postgres:
         condition: service_healthy

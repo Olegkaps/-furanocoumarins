@@ -4,7 +4,7 @@ import "github.com/gocql/gocql"
 
 // TableImporter performs Cassandra operations within a single session.
 type TableImporter interface {
-	InsertTable(table *Table) error
+	ReserveTable(table *Table) (bool, error)
 	CreateAndBatchInsert(tableName string, columnDefs, primaryKeys []string, data [][]any) error
 	SetTableOk(table *Table) error
 	GetArticleIds() (map[string]string, error)
@@ -15,8 +15,8 @@ type sessionImporter struct {
 	session *gocql.Session
 }
 
-func (i *sessionImporter) InsertTable(table *Table) error {
-	return InserTable(i.session, table)
+func (i *sessionImporter) ReserveTable(table *Table) (bool, error) {
+	return ReserveTable(i.session, table)
 }
 
 func (i *sessionImporter) CreateAndBatchInsert(

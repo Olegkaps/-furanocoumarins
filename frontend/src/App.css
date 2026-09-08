@@ -5,10 +5,13 @@ html {
 #root {
   width: min(1280px, 96%);
   margin: 0 auto;
-  padding: 20px 0 0;
+  padding: 20px 18px 0;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background: color-mix(in srgb, #f4f7fa 82%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
 }
 
 .app-shell {

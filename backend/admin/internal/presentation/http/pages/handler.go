@@ -86,14 +86,6 @@ func (h *Handler) GetPage(c *fiber.Ctx) error {
 // @Failure      400,401,500 {object} response.ErrorResponse
 // @Router       /pages/{name} [put]
 func (h *Handler) PutPage(c *fiber.Ctx) error {
-	role, err := deps.JWTRole(c)
-	if err != nil {
-		return response.Resp401(c, err)
-	}
-	if role != "admin" {
-		return response.Resp401(c, nil)
-	}
-
 	name := c.Params("name")
 	if name == "" {
 		return response.Resp400(c, fmt.Errorf("name is required"))
@@ -107,7 +99,7 @@ func (h *Handler) PutPage(c *fiber.Ctx) error {
 	ctx := context.Background()
 	key := "pages/" + name + ".md"
 
-	_, err = h.Container.Persistence.S3.PutObject(ctx, &s3.PutObjectInput{
+	_, err := h.Container.Persistence.S3.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(settings.C.S3Bucket),
 		Key:         aws.String(key),
 		Body:        bytes.NewReader(body),

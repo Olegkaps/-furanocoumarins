@@ -1,4 +1,6 @@
+research/
 env/
+deploy/swarm/production.conf
 grafana.ini
 token.json
 backend/cassandra/nf-data-explorer/

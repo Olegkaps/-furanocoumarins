@@ -1,22 +1,29 @@
-import React, { useEffect, useState } from "react";
+import React, { useRef, useState } from "react";
 import { Navigate, useNavigate, Link } from "react-router-dom";
-import { api, setToken } from "./utils";
+import { api, setToken, deviceID } from "./utils";
 import "./Admin.css";
 
 const LoginForm: React.FC = () => {
   const [uname_or_email, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [isLoginMode, setIsLoginMode] = useState(true);
+	const [challenge, setChallenge] = useState("");
+	const [otp, setOTP] = useState("");
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const url = isLoginMode ? "/auth/login" : "/auth/login-mail";
+    const url = challenge ? "/auth/login-verify-otp" : isLoginMode ? "/auth/login" : "/auth/login-mail";
 
     const bodyFormData = new FormData();
     bodyFormData.append("uname_or_email", uname_or_email);
-    if (isLoginMode) {
+	if (challenge) {
+		bodyFormData.append("challenge", challenge);
+		bodyFormData.append("code", otp);
+		bodyFormData.append("device_id", deviceID());
+	} else if (isLoginMode) {
       bodyFormData.append("password", password);
     }
 
@@ -25,14 +32,26 @@ const LoginForm: React.FC = () => {
       .catch((err) => err.response);
 
     if (response?.status === 401 || response?.status === 400) {
-      setError("Incorrect email login data, check it out");
+	  if (challenge) {
+		setChallenge("");
+		setOTP("");
+		setPassword("");
+		setError("That code is invalid or already used. Enter your password again to request a fresh code.");
+	  } else {
+		setError("Incorrect username or password");
+	  }
     } else if (response?.status > 199 && response?.status < 400) {
       setError("");
-      if (isLoginMode) {
-        setToken(response.data.token);
+	  setNotice("");
+	  if (response.data?.otp_sent) {
+		setChallenge(response.data.login_challenge);
+		return;
+	  }
+      if (isLoginMode || challenge) {
+		setToken(response.data.access_token, response.data.refresh_token, response.data.csrf_token);
         navigate("/admin");
       } else {
-        alert("Mail sent");
+		setNotice("If the account exists, a sign-in link was requested. If it does not arrive, wait briefly and request another link.");
       }
     } else {
       setError("Cannot process request");
@@ -43,6 +62,7 @@ const LoginForm: React.FC = () => {
     <div className="auth-page">
       <div className="auth-card">
         <h2>Sign in</h2>
+		<p className="auth-card__notice">Use your password plus an email code, or request an email login link. Both are complete sign-in methods; magic links never require a password.</p>
         <form onSubmit={handleSubmit}>
           <label>
             Username or email
@@ -53,7 +73,9 @@ const LoginForm: React.FC = () => {
               autoComplete="username"
             />
           </label>
-          {isLoginMode && (
+		  {challenge ? (
+			<label>Email verification code<input value={otp} onChange={(e) => setOTP(e.target.value)} inputMode="numeric" autoComplete="one-time-code" /></label>
+		  ) : isLoginMode && (
             <label>
               Password
               <input
@@ -66,16 +88,17 @@ const LoginForm: React.FC = () => {
           )}
           <div className="auth-card__actions">
             <button type="submit" className="btn btn-primary">
-              {isLoginMode ? "Login" : "Send login link"}
+			  {challenge ? "Verify code" : isLoginMode ? "Login" : "Send login link"}
             </button>
           </div>
         </form>
         {error && <p className="auth-card__error">{error}</p>}
+		{notice && <p className="auth-card__notice" role="status">{notice}</p>}
         <div className="auth-card__links">
           <button
             type="button"
             className="btn"
-            onClick={() => setIsLoginMode(!isLoginMode)}
+			onClick={() => { setChallenge(""); setOTP(""); setError(""); setNotice(""); setIsLoginMode(!isLoginMode); }}
           >
             {isLoginMode ? "Log in by mail" : "Log in by password"}
           </button>
@@ -89,25 +112,47 @@ const LoginForm: React.FC = () => {
 export default LoginForm;
 
 export const MailAdmit: React.FC<{ word: string }> = (props) => {
-  const bodyFormData = new FormData();
-  bodyFormData.append("word", props.word);
-  const [result, setResult] = useState("bad");
+  const word = props.word;
+	const [result, setResult] = useState<"ready" | "pending" | "ok" | "error">("ready");
+	const confirmationStarted = useRef(false);
 
-  useEffect(() => {
-    async function confirm() {
-      const response = await api
-        .post("/auth/confirm-login-mail", bodyFormData)
-        .catch((err) => err.response);
-      if (response?.status > 199 && response?.status < 400) {
-        setToken(response.data.token);
-        setResult("ok");
-      }
-    }
-    void confirm();
-  }, []);
+	const confirm = async () => {
+		if (confirmationStarted.current) return;
+		confirmationStarted.current = true;
+		setResult("pending");
+		const bodyFormData = new FormData();
+		bodyFormData.append("word", word);
+		bodyFormData.append("device_id", deviceID());
+		const response = await api
+			.post("/auth/confirm-login-mail", bodyFormData)
+			.catch((err) => err.response);
+		if (response?.status > 199 && response?.status < 400) {
+			try {
+				setToken(response.data.access_token, response.data.refresh_token, response.data.csrf_token);
+				setResult("ok");
+			} catch {
+				setResult("error");
+			}
+		} else {
+			setResult("error");
+		}
+	};
 
-  if (result === "ok") {
-    return <Navigate to="/admin" />;
-  }
-  return <p className="empty-state">Incorrect link</p>;
+	if (result === "ok") {
+		return <Navigate to="/admin" />;
+	}
+	if (result === "ready") {
+		return (
+			<div className="empty-state">
+				<p>Continue to sign in with this one-time link.</p>
+				<button type="button" className="btn btn-primary" onClick={() => void confirm()}>
+					Sign in
+				</button>
+			</div>
+		);
+	}
+	if (result === "pending") {
+		return <p className="empty-state" role="status">Signing you in…</p>;
+	}
+	return <div className="empty-state"><p>This sign-in link is invalid or has already been used.</p><Link to="/login">Request a fresh sign-in link</Link></div>;
 };

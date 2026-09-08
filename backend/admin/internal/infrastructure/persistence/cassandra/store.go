@@ -1,7 +1,9 @@
 package cassandra
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -30,6 +32,24 @@ func (s *Store) withSession(fn func(*gocql.Session) error) error {
 	}
 	defer session.Close()
 	return fn(session)
+}
+
+// EnsureActivationSchema upgrades pre-activation-pointer Cassandra clusters
+// before HTTP starts accepting requests. Startup fails closed if the schema or
+// one-time legacy active-row migration cannot complete.
+func (s *Store) EnsureActivationSchema(ctx context.Context) error {
+	return s.withSession(func(session *gocql.Session) error {
+		if err := session.Query(tableActivationSchemaCQL).WithContext(ctx).Exec(); err != nil {
+			return fmt.Errorf("create table activation schema: %w", err)
+		}
+		if err := session.AwaitSchemaAgreement(ctx); err != nil {
+			return fmt.Errorf("await table activation schema agreement: %w", err)
+		}
+		if _, err := ensureTableActivationStateContext(ctx, session); err != nil {
+			return fmt.Errorf("initialize table activation state: %w", err)
+		}
+		return nil
+	})
 }
 
 func (s *Store) GetArticle(id string) (string, error) {

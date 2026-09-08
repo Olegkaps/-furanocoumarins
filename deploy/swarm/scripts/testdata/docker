@@ -1,0 +1,269 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${FAKE_DOCKER_STATE:?}"
+: "${FAKE_SCENARIO:?}"
+if [[ "${FAKE_SCENARIO}" != "init-secrets" && "${FAKE_SCENARIO}" != cassandra-* ]]; then
+  : "${FAKE_DEPLOYED_IMAGE:?}"
+fi
+
+printf '%s\n' "$*" >>"${FAKE_DOCKER_STATE}/calls"
+
+if [[ "${FAKE_SCENARIO}" == cassandra-* ]]; then
+  source_volume="${FAKE_LEGACY_VOLUME:-furanocoumarins_cassandra3_data}"
+  target_volume="${FAKE_SWARM_VOLUME:-furanocoumarins_swarm_cassandra3_data}"
+  case "$1" in
+    info)
+      printf 'active\n'
+      exit 0
+      ;;
+    inspect)
+      case "$*" in
+        *"{{range .Mounts}}"*) printf '%s\n' "${source_volume}" ;;
+        *"com.docker.compose.project"*) printf 'furanocoumarins\n' ;;
+        *"{{.State.Running}} legacy-cassandra")
+          if [[ "${FAKE_SCENARIO}" == "cassandra-stopped" || -f "${FAKE_DOCKER_STATE}/cassandra-stopped" ]]; then
+            printf 'false\n'
+          else
+            printf 'true\n'
+          fi
+          ;;
+        *) echo "unsupported Cassandra inspect fake call: $*" >&2; exit 80 ;;
+      esac
+      exit 0
+      ;;
+    ps)
+      case "$*" in
+        "ps --all --quiet --filter volume=${source_volume}")
+          [[ "${FAKE_SCENARIO}" == "cassandra-container-removed" ]] || printf 'legacy-cassandra\n'
+          ;;
+        *"label=com.docker.compose.project=furanocoumarins"*"label=com.docker.compose.service=go-auth"*)
+          if [[ "${FAKE_SCENARIO}" != "cassandra-stopped" && ! -f "${FAKE_DOCKER_STATE}/writer-stopped" ]]; then
+            printf 'legacy-go-auth\n'
+          fi
+          ;;
+        *"--filter volume=${source_volume}"*)
+          if [[ "${FAKE_SCENARIO}" != "cassandra-stopped" && "${FAKE_SCENARIO}" != "cassandra-container-removed" && ! -f "${FAKE_DOCKER_STATE}/cassandra-stopped" ]]; then
+            printf 'legacy-cassandra legacy-cassandra\n'
+          fi
+          ;;
+        *) echo "unsupported Cassandra ps fake call: $*" >&2; exit 80 ;;
+      esac
+      exit 0
+      ;;
+    exec)
+      case "$*" in
+        "exec legacy-cassandra nodetool drain"|"exec legacy-cassandra cqlsh -e DESCRIBE CLUSTER") ;;
+        *) echo "unsupported Cassandra exec fake call: $*" >&2; exit 80 ;;
+      esac
+      exit 0
+      ;;
+    stop)
+      shift
+      for container in "$@"; do
+        case "${container}" in
+          legacy-cassandra) : >"${FAKE_DOCKER_STATE}/cassandra-stopped" ;;
+          legacy-go-auth) : >"${FAKE_DOCKER_STATE}/writer-stopped" ;;
+          *) echo "unsupported Cassandra stop target: ${container}" >&2; exit 80 ;;
+        esac
+      done
+      exit 0
+      ;;
+    start)
+      shift
+      for container in "$@"; do
+        case "${container}" in
+          legacy-cassandra) rm -f "${FAKE_DOCKER_STATE}/cassandra-stopped" ;;
+          legacy-go-auth) rm -f "${FAKE_DOCKER_STATE}/writer-stopped" ;;
+          *) echo "unsupported Cassandra start target: ${container}" >&2; exit 80 ;;
+        esac
+      done
+      exit 0
+      ;;
+    volume)
+      action="$2"
+      volume="${*: -1}"
+      case "${action}" in
+        inspect)
+          if [[ "${volume}" == "${source_volume}" ]]; then
+            [[ "${FAKE_SCENARIO}" != "cassandra-source-missing" ]]
+            exit
+          fi
+          if [[ "${volume}" != "${target_volume}" || ! -f "${FAKE_DOCKER_STATE}/target-exists" ]]; then
+            exit 1
+          fi
+          if [[ "$*" == *'furanocoumarins.cassandra-volume'* ]]; then
+            printf 'migration-v1\n'
+          elif [[ "$*" == *'furanocoumarins.cassandra-source'* ]]; then
+            printf '%s\n' "${source_volume}"
+          fi
+          exit 0
+          ;;
+        create)
+          : >"${FAKE_DOCKER_STATE}/target-exists"
+          printf '%s\n' "${target_volume}"
+          exit 0
+          ;;
+        rm)
+          rm -f "${FAKE_DOCKER_STATE}/target-exists"
+          exit 0
+          ;;
+      esac
+      ;;
+    run)
+      if [[ "$*" == *'cat /target/.furanocoumarins-cassandra-migration-v1'* ]]; then
+        [[ -f "${FAKE_DOCKER_STATE}/target-ready" ]] || exit 1
+        printf 'version=1\nsource=%s\nmanifest=sha256:%064d\n' "${source_volume}" 0
+        exit 0
+      fi
+      if [[ "${FAKE_SCENARIO}" == "cassandra-copy-failure" ]]; then
+        exit 81
+      fi
+      : >"${FAKE_DOCKER_STATE}/target-ready"
+      exit 0
+      ;;
+  esac
+  echo "unsupported Cassandra fake Docker call: $*" >&2
+  exit 82
+fi
+
+if [[ "${FAKE_SCENARIO}" == "init-secrets" ]]; then
+  if [[ "$1" == "info" ]]; then
+    printf 'active\n'
+    exit 0
+  fi
+  if [[ "$1" == "secret" && "$2" == "inspect" ]]; then
+    [[ -f "${FAKE_DOCKER_STATE}/exists-$3" ]]
+    exit
+  fi
+  if [[ "$1" == "secret" && "$2" == "create" ]]; then
+    if [[ "$3" == "--label" ]]; then
+      label="$4"
+      name="$5"
+      file="$6"
+      printf '%s' "${label}" >"${FAKE_DOCKER_STATE}/label-${name}"
+    else
+      name="$3"
+      file="$4"
+    fi
+    cp "${file}" "${FAKE_DOCKER_STATE}/secret-${name}"
+    : >"${FAKE_DOCKER_STATE}/exists-${name}"
+    printf '%s\n' "fake-${name}"
+    exit 0
+  fi
+  echo "unsupported init-secrets fake docker call: $*" >&2
+  exit 89
+fi
+
+next_count() {
+  local name="$1"
+  local file="${FAKE_DOCKER_STATE}/${name}.count"
+  local value=0
+  if [[ -f "${file}" ]]; then
+    value="$(<"${file}")"
+  fi
+  value=$((value + 1))
+  printf '%s' "${value}" >"${file}"
+  printf '%s' "${value}"
+}
+
+if [[ "$1" == "inspect" ]]; then
+  if [[ "$*" == *".State.Running"* ]]; then
+    printf 'true\n'
+  elif [[ "$*" == *".NetworkSettings.Networks"* && -f "${FAKE_DOCKER_STATE}/legacy-network-attached" ]]; then
+    printf 'true\n'
+  fi
+  exit 0
+fi
+
+if [[ "$1" == "network" ]]; then
+  case "$2" in
+    inspect) [[ -f "${FAKE_DOCKER_STATE}/import-network" ]] || exit 1 ;;
+    create) : >"${FAKE_DOCKER_STATE}/import-network" ;;
+    connect) : >"${FAKE_DOCKER_STATE}/legacy-network-attached" ;;
+    disconnect) rm -f "${FAKE_DOCKER_STATE}/legacy-network-attached" ;;
+    rm) rm -f "${FAKE_DOCKER_STATE}/import-network" ;;
+    *) exit 94 ;;
+  esac
+  exit 0
+fi
+
+if [[ "$1" == "secret" && "$2" == "inspect" ]]; then
+  exit 0
+fi
+
+if [[ "$1" != "service" ]]; then
+  echo "unsupported fake docker call: $*" >&2
+  exit 90
+fi
+shift
+
+case "$1" in
+  inspect)
+    shift
+    if [[ "${1:-}" == "--format" ]]; then
+      format="$2"
+      service="$3"
+      case "${format}" in
+        *ContainerSpec.Image*) printf '%s\n' "${FAKE_DEPLOYED_IMAGE}" ;;
+        *Replicated.Replicas*)
+          if [[ "${service}" == *_go-auth ]]; then
+            printf '%s\n' "${FAKE_GO_AUTH_REPLICAS:-4}"
+          else
+            printf '%s\n' "${FAKE_AUTHD_REPLICAS:-3}"
+          fi
+          ;;
+        *) echo "unsupported inspect format: ${format}" >&2; exit 91 ;;
+      esac
+    fi
+    ;;
+  scale)
+    exit 0
+    ;;
+  ps)
+    service="${*: -1}"
+    if [[ "${service}" == *_auth-import-once ]]; then
+		if [[ "${FAKE_SCENARIO}" == "import_ps_error" ]]; then
+			echo "simulated importer inspection failure" >&2
+			exit 88
+		fi
+      count="$(next_count importer)"
+      case "${FAKE_SCENARIO}" in
+        failed) printf 'Failed 1 second ago\n' ;;
+        rejected) printf 'Rejected 1 second ago\n' ;;
+        import_timeout) printf 'Running 1 second ago\n' ;;
+        *)
+          if [[ "${count}" -lt 2 ]]; then
+            printf 'Running 1 second ago\n'
+          else
+            printf 'Complete 1 second ago\n'
+          fi
+          ;;
+      esac
+    else
+		if [[ "${FAKE_SCENARIO}" == "writer_ps_error" ]]; then
+			echo "simulated writer inspection failure" >&2
+			exit 89
+		fi
+      count="$(next_count writer)"
+      if [[ "${FAKE_SCENARIO}" == "writer_timeout" || "${count}" -le "${FAKE_WRITER_ACTIVE_CALLS:-2}" ]]; then
+        printf 'Running 1 second ago\n'
+      else
+        printf 'Shutdown 1 second ago\n'
+      fi
+    fi
+    ;;
+  create)
+    if [[ "${FAKE_SCENARIO}" == "writer_timeout" ]]; then
+      echo "create called while writers active" >&2
+      exit 92
+    fi
+    ;;
+  rm|logs)
+    exit 0
+    ;;
+  *)
+    echo "unsupported fake docker service call: $*" >&2
+    exit 93
+    ;;
+esac

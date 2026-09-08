@@ -13,17 +13,20 @@ import (
 )
 
 type stubReader struct {
-	version    domainsearch.TableVersion
-	metadata   *domainsearch.MetadataResponse
-	searchData []map[string]any
+	version     domainsearch.TableVersion
+	metadata    *domainsearch.MetadataResponse
+	searchData  []map[string]any
+	metadataErr error
+	versionErr  error
+	searchErr   error
 }
 
 func (s *stubReader) ActiveTableVersion(_ *fiber.Ctx) (domainsearch.TableVersion, error) {
-	return s.version, nil
+	return s.version, s.versionErr
 }
 
 func (s *stubReader) FetchMetadata(_ *fiber.Ctx) (*domainsearch.MetadataResponse, error) {
-	return s.metadata, nil
+	return s.metadata, s.metadataErr
 }
 
 func (s *stubReader) FetchSearchData(
@@ -31,12 +34,13 @@ func (s *stubReader) FetchSearchData(
 	_ domainsearch.TableVersion,
 	_, _ string,
 ) ([]map[string]any, error) {
-	return s.searchData, nil
+	return s.searchData, s.searchErr
 }
 
 type stubActiveVersions struct {
 	version domainsearch.TableVersion
 	calls   int
+	err     error
 }
 
 func (s *stubActiveVersions) SetActiveVersion(version domainsearch.TableVersion) {
@@ -45,7 +49,7 @@ func (s *stubActiveVersions) SetActiveVersion(version domainsearch.TableVersion)
 
 func (s *stubActiveVersions) RefreshActiveVersion(_ *fiber.Ctx) error {
 	s.calls++
-	return nil
+	return s.err
 }
 
 func TestServiceGetMetadataPositive(t *testing.T) {
@@ -99,4 +103,43 @@ func TestServiceRefreshActiveTableVersionPositive(t *testing.T) {
 	svc := appsearch.NewService(&stubReader{}, versions)
 	require.NoError(t, svc.RefreshActiveTableVersion(nil))
 	assert.Equal(t, 1, versions.calls)
+}
+
+func TestServiceRefreshActiveTableVersionWithoutRegistry(t *testing.T) {
+	svc := appsearch.NewService(&stubReader{}, nil)
+	require.NoError(t, svc.RefreshActiveTableVersion(nil))
+}
+
+func TestServiceRefreshActiveTableVersionPropagatesError(t *testing.T) {
+	versions := &stubActiveVersions{err: assert.AnError}
+	svc := appsearch.NewService(&stubReader{}, versions)
+	require.ErrorIs(t, svc.RefreshActiveTableVersion(nil), assert.AnError)
+	assert.Equal(t, 1, versions.calls)
+}
+
+func TestServiceSearchPropagatesReaderErrors(t *testing.T) {
+	validMetadata := &domainsearch.MetadataResponse{
+		Metadata: []domainsearch.ColumnMeta{{Column: "name", Type: "text search"}},
+	}
+	for _, test := range []struct {
+		name   string
+		reader *stubReader
+	}{
+		{name: "metadata", reader: &stubReader{metadataErr: assert.AnError}},
+		{name: "active version", reader: &stubReader{metadata: validMetadata, versionErr: assert.AnError}},
+		{name: "search data", reader: &stubReader{metadata: validMetadata, searchErr: assert.AnError}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := appsearch.NewService(test.reader, nil).Search(nil, "name = 'alice'")
+			require.ErrorIs(t, err, assert.AnError)
+		})
+	}
+}
+
+func TestServiceSearchRejectsMetadataWithoutVisibleColumns(t *testing.T) {
+	reader := &stubReader{metadata: &domainsearch.MetadataResponse{
+		Metadata: []domainsearch.ColumnMeta{{Column: "secret", Type: "invisible text"}},
+	}}
+	_, err := appsearch.NewService(reader, nil).Search(nil, "secret = 'alice'")
+	require.EqualError(t, err, "no visible columns found in table metadata")
 }
