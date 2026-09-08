@@ -708,8 +708,8 @@ func TestImportTableMalformedScientificModifiersHaveNoCassandraWrites(t *testing
 		"link[%s]", "link[/%s]", "link[https://%s.example.test/path]", "link[https://user@example.test/%s]",
 		"link[https://example.test/no-placeholder]", "link[https://example.test/%s/%s]", "link[https://example.test/bad path/%s]",
 		"link[https://example.test/\n%s]", "link[https://example.test/%s\\evil]",
-		"link[https://example.test/?id=%s]", "link[https://example.test/path#%s]", "link[https://example.test/path/ref-%s]",
-		"link[/articles?id=%s]", "link[/articles#%s]", "link[/articles/ref-%s]",
+		"link[https://example.test/?id=%s]", "link[https://example.test/path#%s]",
+		"link[/articles?id=%s]", "link[/articles#%s]",
 		"set[]", "set[a][b]", "set[a] set", "set set[a]", "set[a] set[b]",
 	} {
 		t.Run(columnType, func(t *testing.T) {

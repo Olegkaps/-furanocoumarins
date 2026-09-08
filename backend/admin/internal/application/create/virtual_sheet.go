@@ -210,9 +210,8 @@ func validateLinkPathPlaceholder(template string, placeholder, pathStart int) er
 		pathEnd = pathStart + suffix
 	}
 	placeholderEnd := placeholder + len("%s")
-	if placeholder <= pathStart || placeholderEnd > pathEnd || template[placeholder-1] != '/' ||
-		(placeholderEnd != pathEnd && template[placeholderEnd] != '/') {
-		return fmt.Errorf("link placeholder must occupy one complete URL path segment")
+	if placeholder <= pathStart || placeholderEnd > pathEnd {
+		return fmt.Errorf("link placeholder must stay within the URL path")
 	}
 	return nil
 }

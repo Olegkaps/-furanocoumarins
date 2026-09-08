@@ -2,7 +2,6 @@
     @backend path \
         /metadata \
         /autocomplete/* \
-        /search \
         /article/* \
         /pages/* \
         /ping \
@@ -14,6 +13,20 @@
         /table/* \
         /tables \
         /bibtex
+
+    # /search is also a client-side SPA route. Only requests carrying the API
+    # query parameter belong to the backend; a browser navigation to /search
+    # must receive index.html instead of the backend's empty-query 400 JSON.
+    @search_api {
+        path /search
+        query q=*
+    }
+
+    handle @search_api {
+        reverse_proxy {$FURANO_BACKEND_ORIGIN:https://176.108.251.108.nip.io} {
+            header_up Host {upstream_hostport}
+        }
+    }
 
     handle @backend {
         reverse_proxy {$FURANO_BACKEND_ORIGIN:https://176.108.251.108.nip.io} {

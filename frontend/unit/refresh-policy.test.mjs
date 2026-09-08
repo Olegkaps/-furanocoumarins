@@ -158,6 +158,8 @@ test("metadata labels use exact tokens outside modifier arguments", () => {
 
 test("metadata links allow HTTPS and safe relative destinations only", () => {
   assert.equal(safeMetadataLink("https://example.test/articles/%s", "ref-1"), "https://example.test/articles/ref-1");
+  assert.equal(safeMetadataLink("https://powo.science.kew.org/taxon/urn:lsid:ipni.org:names:%s", "2639224-4"), "https://powo.science.kew.org/taxon/urn:lsid:ipni.org:names:2639224-4");
+  assert.equal(safeMetadataLink("https://example.test/articles/ref-%s", "../logout"), "https://example.test/articles/ref-..%2Flogout");
   assert.equal(safeMetadataLink("/articles/%s", "ref-1"), "/articles/ref-1");
   assert.equal(safeMetadataLink("/articles/%s", "case report 1"), "/articles/case%20report%201");
   assert.equal(safeMetadataLink("/articles/%s", "case\u202freport"), "/articles/case%E2%80%AFreport");
@@ -187,7 +189,6 @@ test("metadata links allow HTTPS and safe relative destinations only", () => {
   assert.equal(safeMetadataLink("https://example.test/%s/%s", "ref-1"), null);
   assert.equal(safeMetadataLink("https://example.test/?id=%s", "ref-1"), null);
   assert.equal(safeMetadataLink("https://example.test/path#%s", "ref-1"), null);
-  assert.equal(safeMetadataLink("https://example.test/path/ref-%s", "ref-1"), null);
 });
 
 test("metadata modifiers preserve clas, link, and finite set arguments", () => {

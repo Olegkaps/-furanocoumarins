@@ -73,6 +73,20 @@ func TestVirtualSheetPostprocessSupportsStructuredScientificModifiers(t *testing
 	assert.Equal(t, map[string]struct{}{"Bergapten": {}, "Psoralen": {}}, aliases)
 }
 
+func TestVirtualSheetPostprocessAllowsEncodedPlaceholderWithinLinkPath(t *testing.T) {
+	sheet := appcreate.NewVirtualSheet()
+	sheet.ColumnNames = []string{"id", "powoid_original"}
+	sheet.ColumnTypes = []string{
+		"primary",
+		"default[id] link[https://powo.science.kew.org/taxon/urn:lsid:ipni.org:names:%s]",
+	}
+	sheet.KeyColumn = "id"
+	sheet.Rows = map[string][]any{"123": {"123", "123"}}
+
+	require.NoError(t, sheet.Postprocess())
+	assert.Equal(t, []string{"id TEXT", "powoid_original TEXT"}, sheet.ColumnCassTypes)
+}
+
 func TestVirtualSheetPostprocessNegativeMissingExternal(t *testing.T) {
 	sheet := appcreate.NewVirtualSheet()
 	sheet.ColumnNames = []string{"name", "ref"}
@@ -224,8 +238,8 @@ func TestVirtualSheetPostprocessStrictScientificModifierForms(t *testing.T) {
 		"link[%s]", "link[/%s]", "link[https://%s.example.test/path]", "link[https://user@example.test/%s]",
 		"link[https://example.test/no-placeholder]", "link[https://example.test/%s/%s]", "link[https://example.test/bad path/%s]",
 		"link[https://example.test/\n%s]", "link[https://example.test/%s\\evil]",
-		"link[https://example.test/?id=%s]", "link[https://example.test/path#%s]", "link[https://example.test/path/ref-%s]",
-		"link[/articles?id=%s]", "link[/articles#%s]", "link[/articles/ref-%s]",
+		"link[https://example.test/?id=%s]", "link[https://example.test/path#%s]",
+		"link[/articles?id=%s]", "link[/articles#%s]",
 		"set[", "set[]", "set[a][b]", "set[a] set", "set set[a]", "set[a] set[b]",
 	} {
 		t.Run(columnType, func(t *testing.T) {

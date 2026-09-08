@@ -19,6 +19,9 @@ test("frontend container serves the SPA without nginx PID files", () => {
   assert.match(caddyfile, /^\s*file_server$/m);
   assert.match(caddyfile, /^\s*\/auth\/\* \\$/m);
   assert.match(caddyfile, /^\s*\/get-tables-list \\$/m);
+  assert.match(caddyfile, /^\s*@search_api \{$/m);
+  assert.match(caddyfile, /^\s*path \/search$/m);
+  assert.match(caddyfile, /^\s*query q=\*$/m);
   assert.match(caddyfile, /^\s*reverse_proxy \{\$FURANO_BACKEND_ORIGIN:https:\/\/176\.108\.251\.108\.nip\.io\}/m);
   assert.match(frontendConfig, /import\.meta\.env\.PROD\s*\?\s*window\.location\.origin/);
 });

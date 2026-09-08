@@ -123,7 +123,7 @@ function isSafeMetadataLinkTemplate(template) {
     const separator = authorityTail.search(/[/?#]/u);
     const authorityEnd = separator < 0 ? template.length : "https://".length + separator;
     if (placeholder < authorityEnd) return false;
-    if (!hasPathSegmentPlaceholder(template, placeholder, authorityEnd)) return false;
+    if (!hasPathPlaceholder(template, placeholder, authorityEnd)) return false;
     try {
       const parsed = new URL(candidate);
       return parsed.protocol === "https:" && parsed.hostname !== "" && parsed.username === "" && parsed.password === "";
@@ -133,7 +133,7 @@ function isSafeMetadataLinkTemplate(template) {
   }
 
   if (template.startsWith("/") && !template.startsWith("//") && placeholder > 1) {
-    if (!hasPathSegmentPlaceholder(template, placeholder, 0)) return false;
+    if (!hasPathPlaceholder(template, placeholder, 0)) return false;
     try {
       const parsed = new URL(candidate, "https://metadata.invalid");
       return parsed.origin === "https://metadata.invalid" && parsed.pathname.startsWith("/");
@@ -144,16 +144,13 @@ function isSafeMetadataLinkTemplate(template) {
   return false;
 }
 
-function hasPathSegmentPlaceholder(template, placeholder, pathStart) {
+function hasPathPlaceholder(template, placeholder, pathStart) {
   const query = template.indexOf("?", pathStart);
   const fragment = template.indexOf("#", pathStart);
   const endings = [query, fragment].filter((index) => index >= 0);
   const pathEnd = endings.length === 0 ? template.length : Math.min(...endings);
   const placeholderEnd = placeholder + "%s".length;
-  return placeholder > pathStart &&
-    placeholderEnd <= pathEnd &&
-    template[placeholder - 1] === "/" &&
-    (placeholderEnd === pathEnd || template[placeholderEnd] === "/");
+  return placeholder > pathStart && placeholderEnd <= pathEnd;
 }
 
 function encodeMetadataPathSegment(value) {
