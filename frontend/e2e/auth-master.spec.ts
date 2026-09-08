@@ -36,7 +36,17 @@ async function signInByMagic(page: Page, request: APIRequestContext, identity: s
 	const link = String(loginMail.Text).match(/https?:\/\/[^\s]+/)?.[0];
 	expect(link).toBeTruthy();
 	await page.goto(link!);
+	const confirmation = page.waitForResponse((response) => response.url().endsWith("/auth/confirm-login-mail") && response.request().method() === "POST");
 	await page.getByRole("button", { name: "Sign in", exact: true }).click();
+	const confirmationResponse = await confirmation;
+	if (process.env.E2E_DEBUG_AUTH === "1") {
+		const payload = await confirmationResponse.json() as Record<string, unknown>;
+		const state = await page.evaluate(() => ({
+			storageKeys: Object.keys(localStorage).filter((key) => key.startsWith("auth-") || key === "name").sort(),
+			cookieNames: document.cookie.split(";").map((part) => part.trim().split("=")[0]).filter(Boolean).sort(),
+		}));
+		console.log("auth debug", JSON.stringify({ status: confirmationResponse.status(), responseKeys: Object.keys(payload).sort(), ...state }));
+	}
 	await expect(page).toHaveURL(/admin/);
 }
 

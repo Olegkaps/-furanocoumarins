@@ -127,8 +127,12 @@ export const MailAdmit: React.FC<{ word: string }> = (props) => {
 			.post("/auth/confirm-login-mail", bodyFormData)
 			.catch((err) => err.response);
 		if (response?.status > 199 && response?.status < 400) {
-			setToken(response.data.access_token, response.data.refresh_token, response.data.csrf_token);
-			setResult("ok");
+			try {
+				setToken(response.data.access_token, response.data.refresh_token, response.data.csrf_token);
+				setResult("ok");
+			} catch {
+				setResult("error");
+			}
 		} else {
 			setResult("error");
 		}

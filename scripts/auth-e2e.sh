@@ -1,6 +1,11 @@
 #!/bin/sh
 set -eu
 compose=${COMPOSE:-"podman compose"}
+if [ -n "${E2E_PROJECT_NAME:-}" ]; then
+  compose="${compose} -p ${E2E_PROJECT_NAME}"
+fi
+frontend_mode=${E2E_FRONTEND:-vite}
+frontend_origin=${E2E_FRONTEND_ORIGIN:-http://localhost:5173}
 cleanup() {
   status=$?
   if [ "$status" -ne 0 ]; then
@@ -10,7 +15,11 @@ cleanup() {
     done
   fi
   test -z "${vite_pid:-}" || kill "$vite_pid" 2>/dev/null || true
-  $compose -f docker-compose.auth-test.yaml down -v >/dev/null 2>&1 || true
+  if [ "${E2E_SAFE_CLEANUP:-}" = "1" ]; then
+    $compose -f docker-compose.auth-test.yaml down >/dev/null 2>&1 || true
+  else
+    $compose -f docker-compose.auth-test.yaml down -v >/dev/null 2>&1 || true
+  fi
   return "$status"
 }
 
@@ -55,7 +64,11 @@ verify_import_rerun() {
   $compose -f docker-compose.auth-test.yaml up -d authd backend
 }
 trap cleanup EXIT INT TERM
-$compose -f docker-compose.auth-test.yaml down -v >/dev/null 2>&1 || true
+if [ "${E2E_SAFE_CLEANUP:-}" = "1" ]; then
+  $compose -f docker-compose.auth-test.yaml down >/dev/null 2>&1 || true
+else
+  $compose -f docker-compose.auth-test.yaml down -v >/dev/null 2>&1 || true
+fi
 $compose -f docker-compose.auth-test.yaml build auth-import authd backend
 $compose -f docker-compose.auth-test.yaml up -d auth-postgres source-postgres mailpit cassandra authd
 i=0
@@ -93,12 +106,15 @@ printf '%s\n' "${upgrade_state}" | grep -Fq '2000-01-01' || {
 # empty pointer and the browser journey then imports its own real datasets.
 $compose -f docker-compose.auth-test.yaml exec -T cassandra cqlsh -e \
   "DELETE FROM chemdb.tables WHERE created_at = '2000-01-01T00:00:00Z'; DELETE FROM chemdb.table_activation WHERE scope = 'current'; INSERT INTO chemdb.tables (created_at, name, version, table_meta, table_data, table_species, is_active, is_ok) VALUES ('2001-01-01T00:00:00Z', 'activation-not-ready-fixture', 'v2', 'chemdb.not_ready_meta', 'chemdb.not_ready_data', 'chemdb.not_ready_species', false, false);"
-# Deliberately use the checked-in frontend/backend defaults here. This makes
-# the browser journey regress the local first-use CORS contract rather than an
-# E2E-only origin override.
-(cd frontend && exec ./node_modules/.bin/vite --host localhost --port 5173 --strictPort) >/tmp/furanocoumarins-vite.log 2>&1 & vite_pid=$!
+# Vite validates the development-origin contract. Proxy mode uses the
+# production Caddy path, including forwarded cookies and same-origin storage.
+if [ "${frontend_mode}" = "proxy" ]; then
+  $compose -f docker-compose.auth-test.yaml up -d frontend
+else
+  (cd frontend && VITE_REACT_APP_BACKEND_SOURCE=http://localhost:8081 exec ./node_modules/.bin/vite --host localhost --port 5173 --strictPort) >/tmp/furanocoumarins-vite.log 2>&1 & vite_pid=$!
+fi
 i=0
-until curl -fsS http://localhost:5173/login >/dev/null; do i=$((i+1)); test "$i" -lt 60 || { cat /tmp/furanocoumarins-vite.log; exit 1; }; sleep 1; done
+until curl -fsS "${frontend_origin}/login" >/dev/null; do i=$((i+1)); test "$i" -lt 60 || { test "${frontend_mode}" = "proxy" && $compose -f docker-compose.auth-test.yaml logs frontend; cat /tmp/furanocoumarins-vite.log 2>/dev/null || true; exit 1; }; sleep 1; done
 if [ "$(uname -s)" = Darwin ] && [ -z "${PLAYWRIGHT_CHROMIUM_EXECUTABLE:-}" ]; then
   shell_path=$(cd frontend && node -e 'console.log(require("@playwright/test").chromium.executablePath())')
   normal_path=$(printf '%s' "$shell_path" | sed 's/chromium_headless_shell/chromium/; s#chrome-mac/headless_shell#chrome-mac/Chromium.app/Contents/MacOS/Chromium#')
@@ -108,9 +124,14 @@ if ! (cd frontend && node -e 'const fs=require("fs"); const {chromium}=require("
   echo "Playwright Chromium is missing; run 'make install-e2e'" >&2
   exit 1
 fi
-(cd frontend && npm run test:e2e)
+if [ -n "${E2E_TEST_GREP:-}" ]; then
+  (cd frontend && PLAYWRIGHT_BASE_URL="${frontend_origin}" npm run test:e2e -- --grep "${E2E_TEST_GREP}")
+else
+  (cd frontend && PLAYWRIGHT_BASE_URL="${frontend_origin}" npm run test:e2e)
+fi
+if [ "${E2E_AUTH_ONLY:-}" = "1" ]; then exit 0; fi
 $compose -f docker-compose.auth-test.yaml stop mailpit
-(cd frontend && VERIFY_SMTP_FAILURE=1 npm run test:e2e -- --grep "magic start hides delivery failure")
+(cd frontend && PLAYWRIGHT_BASE_URL="${frontend_origin}" VERIFY_SMTP_FAILURE=1 npm run test:e2e -- --grep "magic start hides delivery failure")
 $compose -f docker-compose.auth-test.yaml up -d mailpit
 verify_import_rerun
-(cd frontend && VERIFY_REPAIRED_MEMBERSHIP=1 npm run test:e2e -- --grep "repaired imported memberships")
+(cd frontend && PLAYWRIGHT_BASE_URL="${frontend_origin}" VERIFY_REPAIRED_MEMBERSHIP=1 npm run test:e2e -- --grep "repaired imported memberships")

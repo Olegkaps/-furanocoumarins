@@ -1,4 +1,4 @@
-.PHONY: test install install-e2e frontend-deps auth-import test-unit test-race test-integration test-e2e test-backend-container test-frontend-container lint compose-check
+.PHONY: test install install-e2e frontend-deps auth-import test-unit test-race test-integration test-e2e test-e2e-proxy-debug test-backend-container test-frontend-container lint compose-check
 
 CONTAINER_ENGINE ?= $(shell if command -v podman >/dev/null 2>&1; then echo podman; else echo docker; fi)
 COMPOSE ?= $(shell if command -v podman >/dev/null 2>&1; then echo podman compose; else echo docker compose; fi)
@@ -73,6 +73,9 @@ test-integration: test-e2e
 
 test-e2e: frontend-deps
 	./scripts/auth-e2e.sh
+
+test-e2e-proxy-debug: frontend-deps
+	E2E_PROJECT_NAME=furano-auth-proxy-debug-$$$$ E2E_SAFE_CLEANUP=1 E2E_FRONTEND=proxy E2E_FRONTEND_ORIGIN=http://localhost:5174 E2E_DEBUG_AUTH=1 E2E_AUTH_ONLY=1 E2E_TEST_GREP='passwordless migrated superuser' ./scripts/auth-e2e.sh
 
 compose-check:
 	$(COMPOSE) -f docker-compose.local.yaml --profile migration config

@@ -21,6 +21,25 @@ const NAME = "name";
 const REFRESH = "auth-refresh-token";
 const CSRF = "auth-csrf-token";
 const COOKIE_SESSION = "auth-cookie-session";
+const AUTH_DEBUG_KEY = "auth-debug-events";
+
+type AuthDebugEvent = {
+  event: string;
+  at: string;
+  details?: Record<string, boolean | string | null>;
+};
+
+function authDebug(event: string, details?: AuthDebugEvent["details"]) {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("auth_debug") === "1") sessionStorage.setItem("auth-debug-enabled", "1");
+  if (sessionStorage.getItem("auth-debug-enabled") !== "1") return;
+  const entry: AuthDebugEvent = { event, at: new Date().toISOString(), details };
+  let events: AuthDebugEvent[] = [];
+  try { events = JSON.parse(sessionStorage.getItem(AUTH_DEBUG_KEY) ?? "[]"); } catch { /* reset malformed diagnostics */ }
+  events.push(entry);
+  sessionStorage.setItem(AUTH_DEBUG_KEY, JSON.stringify(events.slice(-30)));
+  console.info("auth debug", entry);
+}
 
 export const api = axios.create({
   baseURL: config["BASE_URL"],
@@ -46,7 +65,8 @@ api.interceptors.request.use((request) => {
 export function forceLogout(redirect = true) {
   if (logoutInProgress) return;
   logoutInProgress = true;
-  delToken();
+	 authDebug("force-logout");
+  delToken("forced logout");
   const path = window.location.pathname;
   const onAuthPage =
     path.startsWith("/login") ||
@@ -146,10 +166,13 @@ export function getToken() {
 	const csrf = localStorage.getItem(CSRF);
 	const cookieSession = localStorage.getItem(COOKIE_SESSION) === "1";
 	if (!token || !hasCoherentCredential(token, refreshToken, cookieSession ? csrf : null)) {
+		authDebug("credential-rejected", {
+			hasAccess: Boolean(token), hasRefresh: Boolean(refreshToken), hasCSRF: Boolean(csrf), cookieSession,
+		});
 		// Reject unmarked legacy access-only storage, while retaining an
 		// explicitly established HttpOnly-cookie session.
 		if (token !== null || refreshToken !== null || localStorage.getItem(NAME) !== null || localStorage.getItem(CSRF) !== null) {
-			delToken();
+			delToken("incomplete credential");
 		}
 		return undefined;
 	}
@@ -158,7 +181,8 @@ export function getToken() {
 	return token;
 }
 
-export function delToken() {
+export function delToken(reason = "unspecified") {
+	authDebug("credential-cleared", { reason });
 	sessionEpoch.invalidate();
   accessTokenRecovery.reset();
   localStorage.removeItem(TOKEN);
@@ -170,13 +194,19 @@ export function delToken() {
 
 export function setToken(token_value: string, refreshToken?: string, csrfToken?: string) {
 	csrfToken ||= csrfCookie();
+	authDebug("set-token-response", {
+		hasAccess: Boolean(token_value), hasRefresh: Boolean(refreshToken), hasCSRF: Boolean(csrfToken),
+	});
 	if (!hasCoherentCredential(token_value, refreshToken, csrfToken)) {
-		delToken();
+		delToken("incomplete server response");
 		throw new Error("incomplete session credential");
 	}
 	sessionEpoch.invalidate();
   accessTokenRecovery.reset();
 	storeToken(token_value, refreshToken!, csrfToken);
+	authDebug("token-stored", {
+		hasAccess: Boolean(localStorage.getItem(TOKEN)), hasRefresh: Boolean(localStorage.getItem(REFRESH)), hasCSRF: Boolean(localStorage.getItem(CSRF)),
+	});
   logoutInProgress = false;
 }
 
@@ -233,7 +263,7 @@ export async function logoutSession(): Promise<void> {
 	const csrf = csrfCredential();
 	// Explicit logout is locally immediate, but StrictMode and repeated clicks
 	// share the same server revocation before the route navigates to login.
-	delToken();
+	delToken("explicit logout");
 	logoutInFlight = (async () => {
 		// The old credential and any rotated winner are separate revocation
 		// obligations. Waiting for recovery to settle keeps StrictMode remounts
