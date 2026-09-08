@@ -52,6 +52,7 @@ const sessionEpoch = createSessionEpoch();
 
 let logoutInProgress = false;
 let logoutInFlight: Promise<void> | null = null;
+let cookieSessionRestoreInFlight: Promise<boolean> | null = null;
 const accessTokenRecovery = createAccessTokenRecovery(
   () => credentialGet(TOKEN),
   refreshAccessToken,
@@ -173,6 +174,37 @@ async function refreshAccessToken(): Promise<string> {
 	(next) => storeToken(next.accessToken, next.refreshToken, next.csrfToken),
 	(next) => revokeRefreshCredential(next.refreshToken ?? null, next.csrfToken),
   );
+}
+
+/**
+ * Rebuild an access credential after a browser closes the tab-scoped backup.
+ * The refresh token remains HttpOnly; this request only proceeds when the
+ * matching readable CSRF cookie is still present.
+ */
+export function restoreCookieSession(): Promise<boolean> {
+  if (getToken()) return Promise.resolve(true);
+  if (cookieSessionRestoreInFlight) return cookieSessionRestoreInFlight;
+
+  const csrf = csrfCookie();
+  if (!csrf) return Promise.resolve(false);
+
+  const restoration = refreshClient.post(
+    "/auth/refresh",
+    { device_id: deviceID() },
+    { headers: { "X-CSRF-Token": csrf } },
+  ).then((response) => {
+    const accessToken = response.data?.access_token;
+    const refreshToken = response.data?.refresh_token;
+    const csrfToken = response.data?.csrf_token ?? csrf;
+    if (!hasCoherentCredential(accessToken, refreshToken, csrfToken)) return false;
+    setToken(accessToken, refreshToken, csrfToken);
+    authDebug("cookie-session-restored", { hasAccess: true, hasRefresh: Boolean(refreshToken), hasCSRF: true });
+    return true;
+  }).catch(() => false).finally(() => {
+    if (cookieSessionRestoreInFlight === restoration) cookieSessionRestoreInFlight = null;
+  });
+  cookieSessionRestoreInFlight = restoration;
+  return restoration;
 }
 
 export function isTokenExists() {

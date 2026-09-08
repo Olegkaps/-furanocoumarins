@@ -683,6 +683,37 @@ test("magic login survives immediate local credential eviction", async ({ page }
 	}))).toEqual({ persistent: null, inTab: "opaque-access" });
 });
 
+test("closed-tab magic session restores from the refresh cookie", async ({ page }) => {
+	let refreshBody: Record<string, unknown> | undefined;
+	let refreshCSRF = "";
+	await page.context().addCookies([
+		{ name: "csrf_token", value: "cookie-csrf", url: "http://localhost:5173", sameSite: "Lax" },
+		{ name: "refresh_token", value: "http-only-refresh", url: "http://localhost:5173", httpOnly: true, sameSite: "Lax" },
+	]);
+	await page.route("**/auth/refresh", (route) => {
+		refreshBody = route.request().postDataJSON();
+		refreshCSRF = route.request().headers()["x-csrf-token"] ?? "";
+		return route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ access_token: "restored-access", csrf_token: "restored-csrf" }),
+		});
+	});
+	await page.route("**/get-tables-list", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+	await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: '{"login":"cookie-user","superuser":false}' }));
+	await page.route("**/auth/sessions", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+
+	await page.goto("/admin");
+	await expect(page).toHaveURL(/admin/);
+	await expect(page.getByRole("heading", { name: "Administration" })).toBeVisible();
+	await expect.poll(() => refreshBody).toEqual({ device_id: expect.any(String) });
+	expect(refreshCSRF).toBe("cookie-csrf");
+	await expect.poll(() => page.evaluate(() => ({
+		access: localStorage.getItem("auth-token"),
+		inTab: sessionStorage.getItem("auth-session-auth-token"),
+	}))).toEqual({ access: "restored-access", inTab: "restored-access" });
+});
+
 test("cookie-only magic session enters admin and refreshes without exposing the refresh token", async ({ page }) => {
 	const jwt = (login: string) => {
 		const payload = Buffer.from(JSON.stringify({ login, exp: 4_102_444_800 })).toString("base64url");

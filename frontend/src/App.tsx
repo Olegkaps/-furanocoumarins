@@ -4,6 +4,7 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 
 import './App.css'
@@ -17,9 +18,20 @@ import { SiteFooter } from "./shared/SiteFooter";
 import HistoryPage from "./SearchApp/HistoryPage";
 import CachePage from "./SearchApp/CachePage";
 import { CacheSchemaBanner } from "./shared/CacheSchemaBanner";
+import { restoreCookieSession } from "./shared/api";
 
 
 function App() {
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    void restoreCookieSession().finally(() => setAuthReady(true));
+  }, []);
+
+  if (!authReady) {
+    return <div className="app-shell"><main className="app-shell__main" aria-busy="true" /></div>;
+  }
+
   return (
     <BrowserRouter>
       <div className="app-shell">
