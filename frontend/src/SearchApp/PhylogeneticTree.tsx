@@ -41,6 +41,7 @@ type TreeViewCtx = {
   matchIds: Set<string>;
   activeMatchId: string | null;
   spacing: TreeSpacing;
+  countMode: CountMode;
 };
 
 type TreeSpacing = {
@@ -283,6 +284,7 @@ class PhilogeneticTreeNode {
                   clade_key={this.link_key || meta[meta_ind] || ""}
                   clade_val={this.link_val || this.clade_name}
                   plain={this.is_path_stem}
+                  countMode={ctx?.countMode ?? "all"}
                 />
               </div>
             </div>
@@ -640,12 +642,14 @@ function CountButton({
   clade_key,
   clade_val,
   plain,
+  countMode,
 }: {
   number: number;
   seriesCounts?: Array<{ color: string; n: number }>;
   clade_key: string;
   clade_val: string;
   plain?: boolean;
+  countMode: CountMode;
 }) {
   const [searchParams] = useSearchParams();
 
@@ -677,14 +681,14 @@ function CountButton({
               borderColor: s.color,
               background: `color-mix(in srgb, ${s.color} 12%, var(--color-surface))`,
             }}
-            title={String(s.n)}
+            title={countTitle(s.n, countMode)}
           >
             {formatCompactCount(s.n)}
           </span>
         ))}
       </span>
     ) : (
-      <span className="tree-count-chip__num" title={String(number)}>
+      <span className="tree-count-chip__num" title={countTitle(number, countMode)}>
         {formatCompactCount(number)}
       </span>
     );
@@ -761,6 +765,16 @@ function formatCompactCount(n: number): string {
     return sign + body + "M";
   }
   return sign + String(Math.round(abs / 1_000_000)) + "M";
+}
+
+function countTitle(n: number, countMode: CountMode): string {
+  const unit =
+    countMode === "chemicals"
+      ? "chemicals"
+      : countMode === "articles"
+        ? "articles"
+        : "records";
+  return `${n} ${unit}`;
 }
 
 export type CountMode = "chemicals" | "articles" | "all";
@@ -1422,6 +1436,7 @@ function PhilogeneticTree({
     matchIds: new Set(matchIdsList),
     activeMatchId,
     spacing,
+    countMode,
   };
 
   return (
@@ -1675,7 +1690,7 @@ function PhilogeneticTreeOrNull({
       <div className="tree-toolbar__divider" aria-hidden />
 
       <div className="tree-toolbar__group" data-tour="tree-count-mode">
-        <span className="tree-toolbar__label">Count by</span>
+        <span className="tree-toolbar__label">Number of</span>
         <div className="tree-toolbar__buttons">
           {(["chemicals", "articles", "all"] as const).map((mode) => (
             <button

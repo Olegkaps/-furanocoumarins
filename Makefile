@@ -35,7 +35,6 @@ test-unit: frontend-deps
 	bash deploy/swarm/scripts/production-config_test.sh
 	bash deploy/swarm/scripts/image-reference_test.sh
 	bash deploy/swarm/scripts/init-secrets_test.sh
-	bash deploy/swarm/scripts/migrate-cassandra-volume_test.sh
 	./deploy/swarm/scripts/callback-url_test.sh
 	./deploy/swarm/scripts/callback-secret_test.sh
 	./deploy/swarm/scripts/deploy_test.sh
@@ -49,6 +48,14 @@ test-race: frontend-deps
 
 test-backend-container:
 	$(COMPOSE) -f docker-compose.test.yaml run --rm --build test
+
+# Uses disposable databases only: migration fixtures create chemdb tables/data.
+# Provision them separately; this target never mounts or deletes legacy volumes.
+.PHONY: test-entity-migration
+test-entity-migration:
+	@test -n "$(TEST_POSTGRES_DSN)" || { echo 'TEST_POSTGRES_DSN must select a disposable test database'; exit 1; }
+	@test -n "$(TEST_CASSANDRA_HOST)" || { echo 'TEST_CASSANDRA_HOST must select a disposable Cassandra fixture'; exit 1; }
+	cd backend/admin && ENV_TYPE=TEST go test -tags=integration -p 1 ./internal/application/create ./internal/infrastructure/persistence/cassandra ./internal/migration/cassandrapostgres -count=1
 
 test-frontend-container:
 	@set -eu; \
@@ -87,7 +94,7 @@ compose-check:
 	AUTH_SMTP_HOST='smtp.invalid' AUTH_MAIL_FROM='auth@invalid' \
 	FURANO_REPOSITORY_ROOT='$(CURDIR)' \
 	$(COMPOSE) -f deploy/swarm/stack.yaml config
-	@bash -n deploy/swarm/scripts/production-config.sh deploy/swarm/scripts/production-config_test.sh deploy/swarm/scripts/callback-url.sh deploy/swarm/scripts/callback-url_test.sh deploy/swarm/scripts/callback-secret.sh deploy/swarm/scripts/callback-secret_test.sh deploy/swarm/scripts/image-reference.sh deploy/swarm/scripts/image-reference_test.sh deploy/swarm/scripts/deploy.sh deploy/swarm/scripts/deploy_test.sh deploy/swarm/scripts/init-secrets.sh deploy/swarm/scripts/init-secrets_test.sh deploy/swarm/scripts/migrate-cassandra-volume.sh deploy/swarm/scripts/migrate-cassandra-volume_test.sh deploy/swarm/scripts/run-auth-import.sh deploy/swarm/scripts/run-auth-import_test.sh deploy/swarm/scripts/testdata/docker
+	@bash -n deploy/swarm/scripts/production-config.sh deploy/swarm/scripts/production-config_test.sh deploy/swarm/scripts/callback-url.sh deploy/swarm/scripts/callback-url_test.sh deploy/swarm/scripts/callback-secret.sh deploy/swarm/scripts/callback-secret_test.sh deploy/swarm/scripts/image-reference.sh deploy/swarm/scripts/image-reference_test.sh deploy/swarm/scripts/deploy.sh deploy/swarm/scripts/deploy_test.sh deploy/swarm/scripts/init-secrets.sh deploy/swarm/scripts/init-secrets_test.sh deploy/swarm/scripts/run-auth-import.sh deploy/swarm/scripts/run-auth-import_test.sh deploy/swarm/scripts/testdata/docker
 	@test ! -e docker-compose.yaml || { echo 'obsolete docker-compose.yaml must remain deleted'; exit 1; }
 
 # Monitoring validation is isolated from deployed services and volumes.

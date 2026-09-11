@@ -8,6 +8,10 @@ import (
 )
 
 func ReadXLSXToMap(file *excelize.File, sheetName string, columnNames []string, keyColumn string) (map[string][]string, error) {
+	return readXLSXToMap(file, sheetName, columnNames, keyColumn, false)
+}
+
+func readXLSXToMap(file *excelize.File, sheetName string, columnNames []string, keyColumn string, preserveRows bool) (map[string][]string, error) {
 	rows, err := file.GetRows(sheetName)
 	if err != nil {
 		return nil, fmt.Errorf("can`t read Sheet %s: %w", sheetName, err)
@@ -58,6 +62,12 @@ func ReadXLSXToMap(file *excelize.File, sheetName string, columnNames []string, 
 		var key string
 		if keyColumn == "" {
 			key = strings.Join(values, "\t")
+			if preserveRows {
+				if strings.Join(values, "") == "" {
+					continue
+				}
+				key = fmt.Sprintf("%s:%d", sheetName, rowNum+2)
+			}
 		} else {
 			if keyIdx >= len(row) {
 				if strings.Join(values, "") == "" {
@@ -108,7 +118,7 @@ func ReadXLSXToMapMerged(file *excelize.File, sheetNames []string, columnNames [
 	result := make(map[string][]any)
 
 	for _, sheet := range sheetNames {
-		curr_result, err := ReadXLSXToMap(file, sheet, columnNames, keyColumn)
+		curr_result, err := readXLSXToMap(file, sheet, columnNames, keyColumn, true)
 		if err != nil {
 			return nil, err
 		}

@@ -56,7 +56,7 @@ adds sessions and superuser management.
 Production uses the existing `postgres` service as the offline legacy-user
 source and a separate private `auth-postgres` service as auth-master's target.
 The application does not construct the legacy PostgreSQL user repository or
-Redis magic-link store at runtime. Cassandra, S3, and the in-process search
+Redis magic-link store at runtime. PostgreSQL, S3, and the in-process search
 cache remain unchanged.
 
 Every credential, DSN, selected superuser, encryption key, and browser callback
@@ -77,10 +77,9 @@ non-`latest` version tags. Version-tag immutability is enforced by registry and
 operator policy; only digest references are cryptographically pinned.
 
 Follow [the Swarm deployment guide](../deploy/swarm/README.md) to create
-secrets, perform the offline Cassandra volume cutover, deploy the private
-services, stop application writers, and execute the non-restarting identity
-migration job. Never run the importer while `go-auth` or `authd` can write
-identity data.
+secrets, deploy the private services, stop application writers, and execute the
+non-restarting identity migration job. Never run the importer while `go-auth`
+or `authd` can write identity data.
 
 Delete the migration-only source DSN and selected-superuser secrets after the
 import is verified. Persistent services never mount them; recreate them only

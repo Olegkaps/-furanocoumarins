@@ -62,12 +62,6 @@ scrape_configs:
     - tasks.redis-exporter
     type: A
     port: 9121
-- job_name: cassandra
-  dns_sd_configs:
-  - names:
-    - tasks.cassandra-exporter
-    type: A
-    port: 8080
 - job_name: node
   dns_sd_configs:
   - names:
@@ -96,23 +90,6 @@ scrape_configs:
     - http://go-auth:80/ping
     - http://authd:8080/healthz
     - http://nginx:8080/nginx-health
-  relabel_configs:
-  - source_labels:
-    - __address__
-    target_label: __param_target
-  - source_labels:
-    - __param_target
-    target_label: instance
-  - target_label: __address__
-    replacement: blackbox-exporter:9115
-- job_name: tcp-probe
-  metrics_path: /probe
-  params:
-    module:
-    - tcp_connect
-  static_configs:
-  - targets:
-    - cassandra:9042
   relabel_configs:
   - source_labels:
     - __address__

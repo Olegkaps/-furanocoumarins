@@ -4,7 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 CONFIG_FILE="${ROOT_DIR}/deploy/swarm/production.conf"
 USE_LOCAL=false
-ALLOW_FRESH_CASSANDRA=false
 source "${ROOT_DIR}/deploy/swarm/scripts/production-config.sh"
 source "${ROOT_DIR}/deploy/swarm/scripts/callback-url.sh"
 source "${ROOT_DIR}/deploy/swarm/scripts/image-reference.sh"
@@ -15,18 +14,14 @@ while [[ $# -gt 0 ]]; do
       USE_LOCAL=true
       shift
       ;;
-    --fresh-cassandra)
-      ALLOW_FRESH_CASSANDRA=true
-      shift
-      ;;
     --config)
-      [[ $# -ge 2 ]] || { echo "Usage: $0 [--config FILE] [--local] [--fresh-cassandra]" >&2; exit 1; }
+      [[ $# -ge 2 ]] || { echo "Usage: $0 [--config FILE] [--local]" >&2; exit 1; }
       CONFIG_FILE="$2"
       shift 2
       ;;
     *)
       echo "Unknown option: $1"
-      echo "Usage: $0 [--config FILE] [--local] [--fresh-cassandra]"
+      echo "Usage: $0 [--config FILE] [--local]"
       exit 1
       ;;
   esac
@@ -35,7 +30,6 @@ done
 load_production_config "${CONFIG_FILE}"
 export AUTH_MASTER_IMAGE AUTH_POSTGRES_IMAGE FURANO_BACKEND_IMAGE
 export AUTH_SMTP_HOST AUTH_SMTP_PORT AUTH_MAIL_FROM
-export SWARM_CASSANDRA_VOLUME
 export FURANO_REPOSITORY_ROOT="${ROOT_DIR}"
 
 cd "${ROOT_DIR}"
@@ -88,53 +82,6 @@ if ! docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null | grep -qE 'ac
   echo "Docker Swarm is not initialized. Run: docker swarm init"
   exit 1
 fi
-
-prepare_cassandra_volume() {
-  local kind source_label marker
-  if ! docker volume inspect "${SWARM_CASSANDRA_VOLUME}" >/dev/null 2>&1; then
-    if [[ "${ALLOW_FRESH_CASSANDRA}" != true ]]; then
-      echo "Prepared Swarm Cassandra volume '${SWARM_CASSANDRA_VOLUME}' does not exist." >&2
-      echo "Run: ./deploy/swarm/scripts/migrate-cassandra-volume.sh" >&2
-      echo "For a confirmed new installation with no Cassandra data, use deploy.sh --fresh-cassandra." >&2
-      exit 1
-    fi
-    if docker volume inspect "${LEGACY_CASSANDRA_VOLUME}" >/dev/null 2>&1; then
-      echo "Refusing --fresh-cassandra because legacy volume '${LEGACY_CASSANDRA_VOLUME}' exists." >&2
-      exit 1
-    fi
-    docker volume create \
-      --label furanocoumarins.cassandra-volume=fresh \
-      "${SWARM_CASSANDRA_VOLUME}" >/dev/null
-  fi
-
-  kind="$(docker volume inspect --format '{{index .Labels "furanocoumarins.cassandra-volume"}}' "${SWARM_CASSANDRA_VOLUME}" 2>/dev/null || true)"
-  if [[ "${kind}" == "fresh" ]]; then
-    if docker volume inspect "${LEGACY_CASSANDRA_VOLUME}" >/dev/null 2>&1; then
-      echo "Refusing an empty/fresh Swarm Cassandra volume while legacy data exists." >&2
-      echo "Remove the unused target volume explicitly, then run migrate-cassandra-volume.sh." >&2
-      exit 1
-    fi
-    return 0
-  fi
-  if [[ "${kind}" != "migration-v1" ]]; then
-    echo "Swarm Cassandra volume '${SWARM_CASSANDRA_VOLUME}' is not managed by this deployment." >&2
-    exit 1
-  fi
-  source_label="$(docker volume inspect --format '{{index .Labels "furanocoumarins.cassandra-source"}}' "${SWARM_CASSANDRA_VOLUME}" 2>/dev/null || true)"
-  marker="$(docker run --rm --user 0 \
-    --mount "type=volume,src=${SWARM_CASSANDRA_VOLUME},dst=/target,readonly" \
-    cassandra:3.11.9 sh -ec 'cat /target/.furanocoumarins-cassandra-migration-v1' 2>/dev/null || true)"
-  if [[ "${source_label}" != "${LEGACY_CASSANDRA_VOLUME}" ]] ||
-    ! grep -Fxq 'version=1' <<<"${marker}" ||
-    ! grep -Fxq "source=${LEGACY_CASSANDRA_VOLUME}" <<<"${marker}" ||
-    ! grep -Eq '^manifest=sha256:[0-9a-f]{64}$' <<<"${marker}"; then
-    echo "Swarm Cassandra volume has no valid completed-migration marker." >&2
-    echo "Do not deploy; rerun or repair migrate-cassandra-volume.sh first." >&2
-    exit 1
-  fi
-}
-
-prepare_cassandra_volume
 
 REQUIRED_SECRETS=(
   go_auth_env postgres_user postgres_password postgres_db redis_password

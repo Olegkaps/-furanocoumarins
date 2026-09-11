@@ -1,7 +1,7 @@
 {
   "uid": "furanocoumarins-overview",
   "title": "Furanocoumarins \u2014 services and VM",
-  "description": "Nginx, Go/Fiber BFF, auth-master, PostgreSQL x2, Redis, Cassandra reachability, Linux VM. JMX missing is explicit; TCP liveness is not database readiness.",
+  "description": "Nginx, Go/Fiber BFF, auth-master, PostgreSQL x2, Redis, and Linux VM.",
   "schemaVersion": 40,
   "version": 1,
   "tags": [
@@ -2152,122 +2152,6 @@
       "gridPos": {
         "x": 12,
         "y": 216,
-        "w": 12,
-        "h": 8
-      }
-    },
-    {
-      "title": "Cassandra CQL port reachability",
-      "description": "TCP port 9042 only; does not authenticate or run CQL.",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "probe_success{job=\"tcp-probe\"}",
-          "legendFormat": "{{instance}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "id": 57,
-      "gridPos": {
-        "x": 0,
-        "y": 224,
-        "w": 12,
-        "h": 8
-      }
-    },
-    {
-      "title": "Cassandra JMX metrics present",
-      "description": "Zero means unavailable. Existing Cassandra local-only JMX is unchanged; configure authenticated remote JMX before expecting these metrics.",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "count(cassandra_stats{job=\"cassandra\"}) or vector(0)",
-          "legendFormat": "{{instance}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "id": 58,
-      "gridPos": {
-        "x": 12,
-        "y": 224,
-        "w": 12,
-        "h": 8
-      }
-    },
-    {
-      "title": "Cassandra read/write latency p99",
-      "description": "Criteo JMX metrics use microseconds. Empty until authenticated JMX is configured.",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "cassandra_stats{job=\"cassandra\",name=~\"org:apache:cassandra:metrics:clientrequest:(read|write):latency:99thpercentile\"} / 1e6",
-          "legendFormat": "{{name}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "id": 59,
-      "gridPos": {
-        "x": 0,
-        "y": 232,
-        "w": 12,
-        "h": 8
-      }
-    },
-    {
-      "title": "Cassandra pending compactions",
-      "description": "Empty until authenticated JMX is configured.",
-      "type": "timeseries",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "cassandra_stats{job=\"cassandra\",name=\"org:apache:cassandra:metrics:compaction:pendingtasks:value\"}",
-          "legendFormat": "{{instance}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "id": 60,
-      "gridPos": {
-        "x": 12,
-        "y": 232,
         "w": 12,
         "h": 8
       }

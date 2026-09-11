@@ -73,7 +73,6 @@ nano deploy/swarm/configs/nginx.conf
 sudo certbot certonly --standalone -d api.furan.example.com -d grafana.furan.example.com
 
 ./deploy/swarm/scripts/init-secrets.sh
-./deploy/swarm/scripts/migrate-cassandra-volume.sh
 ./deploy/swarm/scripts/deploy.sh
 
 # Run once after the first stack deploy to move legacy identities.
@@ -99,66 +98,9 @@ single-VM Swarm. The stack uses list-form `depends_on`, which is accepted by
 `docker stack deploy`; Swarm does not use dependency conditions for readiness,
 so application startup ordering remains the deploy script's responsibility.
 
-On every `go-auth` start, the backend idempotently creates the Cassandra
-`chemdb.table_activation` control table and migrates the single legacy
-`is_active=true` registry row into its serialized active pointer before opening
-the HTTP listener. This is the ordered upgrade step for existing clusters; no
-separate manual CQL rollout is required. Startup is bounded and fails closed if
-schema agreement fails or legacy data contains more than one active row. The
-Cassandra principal used by `go-auth` therefore needs permission to create this
-one table during the rollout.
-
-## One-shot legacy Cassandra cutover
-
-Run the Cassandra migration after secret initialization and before the first
-Swarm deploy:
-
-```bash
-./deploy/swarm/scripts/migrate-cassandra-volume.sh
-```
-
-This is an offline physical migration on the documented single Docker host. It
-finds the actual legacy Cassandra container from the source volume and the
-running `go-auth` writer from the container's Compose project labels. It then
-stops the writer, runs `nodetool drain`, stops Cassandra, and uses the unchanged
-`cassandra:3.11.9` image to copy the entire volume—not only the currently known
-`chemdb` tables—to a distinct Swarm-owned volume. The script does not read or
-execute `docker-compose.local.yaml`, whose current services may differ from the
-legacy deployment. It compares sorted filesystem metadata and SHA-256 checksums
-for every regular file before writing a completion marker. Commit logs, saved
-caches, hints, system keyspaces, schema, indexes, dynamically created data tables,
-and application keyspaces therefore move together.
-
-The default source is `furanocoumarins_cassandra3_data`; the default target is
-`furanocoumarins_swarm_cassandra3_data`. If the legacy Compose project used a
-different project name, add its actual source volume once to the same ignored
-configuration file:
-
-```text
-LEGACY_CASSANDRA_VOLUME=actual_compose_cassandra3_data
-```
-
-No environment export or legacy Compose file is needed. On copy or verification
-failure, the script removes only the partial target it created and directly
-restarts whichever legacy containers it stopped. On success it keeps the source
-volume stopped and untouched for rollback; remove that source only after
-application-level verification and a separate backup.
-
-`deploy.sh` mounts only the explicit target volume. It refuses to deploy when
-the target has not been prepared, and rejects migrated volumes without the
-source label and completed checksum marker. It continues to use
-`cassandra:3.11.9` for both marker validation and the Swarm service. Only a
-confirmed installation with no legacy Cassandra data may create an empty
-labeled volume using `./deploy/swarm/scripts/deploy.sh --fresh-cassandra`; that
-flag still fails if the configured legacy source exists.
-
-The fake-Docker regression test covers the fixed image, drain/stop/copy
-ordering, idempotency, failure cleanup, and legacy-container restoration.
-Compose rendering verifies the external-volume wiring. A
-browser-only E2E cannot exercise a host-volume cutover; the existing
-live-Cassandra import/search journey verifies the migrated data at the
-application layer, while the final production copy remains an operator-run
-maintenance step.
+The backend creates and validates its PostgreSQL `chemdb` schema during
+startup. Existing Cassandra data is imported once with the offline
+`migrate-cassandra-postgres` command; it is not a Swarm service or volume.
 
 {% note alert %}
 
@@ -288,7 +230,6 @@ deploy/swarm/
 └── scripts/
     ├── production-config.sh
     ├── init-secrets.sh
-    ├── migrate-cassandra-volume.sh
     ├── deploy.sh
     └── run-auth-import.sh
 ```

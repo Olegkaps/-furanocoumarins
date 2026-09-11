@@ -2,6 +2,7 @@ package cassandra
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
@@ -16,11 +17,17 @@ var ErrNotConfigured = errors.New("cassandra is not configured")
 // Store owns Cassandra session lifecycle.
 type Store struct {
 	cluster *gocql.ClusterConfig
+	db      *sql.DB
 }
 
 func NewStore(cluster *gocql.ClusterConfig) *Store {
 	return &Store{cluster: cluster}
 }
+
+// NewPostgresStore is the production data store.  The package name is kept
+// temporarily for API compatibility with the workbook importer; it never
+// opens a CQL session.
+func NewPostgresStore(db *sql.DB) *Store { return &Store{db: db} }
 
 func (s *Store) withSession(fn func(*gocql.Session) error) error {
 	if s.cluster == nil {
@@ -38,6 +45,9 @@ func (s *Store) withSession(fn func(*gocql.Session) error) error {
 // before HTTP starts accepting requests. Startup fails closed if the schema or
 // one-time legacy active-row migration cannot complete.
 func (s *Store) EnsureActivationSchema(ctx context.Context) error {
+	if s.db != nil {
+		return s.ensurePostgresSchema(ctx)
+	}
 	return s.withSession(func(session *gocql.Session) error {
 		if err := session.Query(tableActivationSchemaCQL).WithContext(ctx).Exec(); err != nil {
 			return fmt.Errorf("create table activation schema: %w", err)
@@ -53,6 +63,9 @@ func (s *Store) EnsureActivationSchema(ctx context.Context) error {
 }
 
 func (s *Store) GetArticle(id string) (string, error) {
+	if s.db != nil {
+		return s.pgGetArticle(id)
+	}
 	var text string
 	err := s.withSession(func(session *gocql.Session) error {
 		var err error
@@ -63,6 +76,9 @@ func (s *Store) GetArticle(id string) (string, error) {
 }
 
 func (s *Store) GetAllTables() ([]*Table, error) {
+	if s.db != nil {
+		return s.pgGetAllTables()
+	}
 	var tables []*Table
 	err := s.withSession(func(session *gocql.Session) error {
 		var err error
@@ -73,18 +89,27 @@ func (s *Store) GetAllTables() ([]*Table, error) {
 }
 
 func (s *Store) ActivateTable(timestamp time.Time) error {
+	if s.db != nil {
+		return s.pgActivateTable(timestamp)
+	}
 	return s.withSession(func(session *gocql.Session) error {
 		return ActivateTable(session, timestamp)
 	})
 }
 
 func (s *Store) DeleteTable(c *fiber.Ctx, timestamp time.Time) error {
+	if s.db != nil {
+		return s.pgDeleteTable(c, timestamp)
+	}
 	return s.withSession(func(session *gocql.Session) error {
 		return DeleteTable(c, session, timestamp)
 	})
 }
 
 func (s *Store) DeleteAllBadTables(c *fiber.Ctx) error {
+	if s.db != nil {
+		return s.pgDeleteAllBadTables(c)
+	}
 	return s.withSession(func(session *gocql.Session) error {
 		tables, err := GetAllTables(session)
 		if err != nil {
@@ -115,6 +140,9 @@ func (s *Store) DeleteAllBadTables(c *fiber.Ctx) error {
 }
 
 func (s *Store) GetActiveTable(c *fiber.Ctx) (*Table, error) {
+	if s.db != nil {
+		return s.pgGetActiveTable(c)
+	}
 	var table *Table
 	err := s.withSession(func(session *gocql.Session) error {
 		var err error
@@ -125,6 +153,9 @@ func (s *Store) GetActiveTable(c *fiber.Ctx) (*Table, error) {
 }
 
 func (s *Store) GetColumnMeta(c *fiber.Ctx, table *Table) ([]*ColumnMeta, error) {
+	if s.db != nil {
+		return s.pgGetColumnMeta(c, table)
+	}
 	var columns []*ColumnMeta
 	err := s.withSession(func(session *gocql.Session) error {
 		var err error
@@ -135,6 +166,9 @@ func (s *Store) GetColumnMeta(c *fiber.Ctx, table *Table) ([]*ColumnMeta, error)
 }
 
 func (s *Store) GetColumnWhere(tableData, selectClause, where string) ([]map[string]any, error) {
+	if s.db != nil {
+		return s.pgGetColumnWhere(tableData, selectClause, where)
+	}
 	var results []map[string]any
 	err := s.withSession(func(session *gocql.Session) error {
 		var err error
@@ -145,6 +179,9 @@ func (s *Store) GetColumnWhere(tableData, selectClause, where string) ([]map[str
 }
 
 func (s *Store) GetPrefix(tableData, column, prefix string) ([]string, error) {
+	if s.db != nil {
+		return s.pgGetPrefix(tableData, column, prefix)
+	}
 	var values []string
 	err := s.withSession(func(session *gocql.Session) error {
 		var err error
@@ -155,6 +192,9 @@ func (s *Store) GetPrefix(tableData, column, prefix string) ([]string, error) {
 }
 
 func (s *Store) GetPageKey(name string) (string, error) {
+	if s.db != nil {
+		return s.pgGetPageKey(name)
+	}
 	var key string
 	err := s.withSession(func(session *gocql.Session) error {
 		var err error
@@ -165,18 +205,27 @@ func (s *Store) GetPageKey(name string) (string, error) {
 }
 
 func (s *Store) SetPageKey(name, s3Key string) error {
+	if s.db != nil {
+		return s.pgSetPageKey(name, s3Key)
+	}
 	return s.withSession(func(session *gocql.Session) error {
 		return SetPageKey(session, name, s3Key)
 	})
 }
 
 func (s *Store) BatchInsertBibtex(rows [][]any) error {
+	if s.db != nil {
+		return s.pgBatchInsertBibtex(rows)
+	}
 	return s.withSession(func(session *gocql.Session) error {
 		return BatchInsertData(session, "chemdb.bibtex", []string{"article_id", "bibtex_text"}, rows, 10)
 	})
 }
 
 func (s *Store) GetColumn(tableData, column string) ([]string, error) {
+	if s.db != nil {
+		return s.pgGetColumn(tableData, column)
+	}
 	var values []string
 	err := s.withSession(func(session *gocql.Session) error {
 		var err error

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gocql/gocql"
@@ -415,6 +416,30 @@ func deleteTableLocked(session *gocql.Session, timestamp time.Time) error {
 		metadata.TableMeta,
 		metadata.TableData,
 		metadata.TableSpecies,
+	}
+	catalog := SourceCatalogName(metadata.TableData)
+	parts := strings.Split(catalog, ".")
+	var found string
+	err = session.Query(`SELECT table_name FROM system_schema.tables WHERE keyspace_name=? AND table_name=?`, strings.ToLower(parts[0]), strings.ToLower(parts[1])).Scan(&found)
+	if err != nil && err != gocql.ErrNotFound {
+		return err
+	}
+	if err == nil {
+		iter := session.Query("SELECT virtual_name, physical_table FROM " + catalog).Iter()
+		var virtual, physical string
+		for iter.Scan(&virtual, &physical) {
+			if err := ValidateSourceTable(metadata.TableData, metadata.TableSpecies, virtual, physical); err != nil {
+				iter.Close()
+				return err
+			}
+			if physical != metadata.TableSpecies {
+				tablesToDrop = append(tablesToDrop, physical)
+			}
+		}
+		if err := iter.Close(); err != nil {
+			return err
+		}
+		tablesToDrop = append(tablesToDrop, catalog)
 	}
 
 	for _, tableName := range tablesToDrop {

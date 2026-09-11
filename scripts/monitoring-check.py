@@ -16,17 +16,16 @@ for unsafe in ('$uri', '$args', '$http_', '$request_body', '$remote_addr', '$req
 assert 'default unmatched;' in nginx and 'default OTHER;' in nginx
 config = (root / 'monitoring/prometheus.yml').read_text()
 assert '5000' not in config
-for job in ('go-auth', 'authd', 'auth-postgres', 'postgres', 'redis', 'cassandra', 'nginx', 'nginxlog', 'node'):
+for job in ('go-auth', 'authd', 'auth-postgres', 'postgres', 'redis', 'nginx', 'nginxlog', 'node'):
     assert f'job_name: {job}\n' in config, job
 stack = (root / 'deploy/swarm/stack.yaml').read_text()
 authd = stack.split('\n  authd:\n')[1].split('\n  redis:\n')[0]
 assert '      - metrics\n' in authd and '    ports:' not in authd
-assert 'LOCAL_JMX' not in stack, 'Do not change Cassandra JMX authentication implicitly'
 assert 'location = /metrics { return 404; }' in (root / 'deploy/swarm/configs/nginx.conf').read_text()
 dashboard = json.loads((root / 'monitoring/dashboards/furanocoumarins.json').read_text())
 assert len({p['id'] for p in dashboard['panels']}) == len(dashboard['panels'])
 expressions = [t['expr'] for p in dashboard['panels'] for t in p['targets']]
-for metric in ('http_request_duration_seconds_bucket', 'auth_http_request_duration_seconds_bucket', 'nginx_http_response_time_seconds_hist_bucket', 'nginx_http_upstream_time_seconds_hist_bucket', 'go_goroutines', 'redis_up', 'cassandra_stats', 'node_vmstat_oom_kill'):
+for metric in ('http_request_duration_seconds_bucket', 'auth_http_request_duration_seconds_bucket', 'nginx_http_response_time_seconds_hist_bucket', 'nginx_http_upstream_time_seconds_hist_bucket', 'go_goroutines', 'redis_up', 'node_vmstat_oom_kill'):
     assert any(metric in expr for expr in expressions), metric
 assert all(p['datasource']['uid'] == 'prometheus' for p in dashboard['panels'])
 rules = re.findall(r'^  - alert: (.+)$', (root / 'monitoring/alerts.yml').read_text(), re.M)

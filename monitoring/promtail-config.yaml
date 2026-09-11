@@ -29,7 +29,7 @@ scrape_configs:
           source: "tag"
 
       - regex:
-          expression: '(?P<service>postgres|redis|cassandra|go-auth|nginx|prometheus|grafana|loki|promtail|minio)'
+          expression: '(?P<service>postgres|redis|go-auth|nginx|prometheus|grafana|loki|promtail|minio)'
           source: container_name
 
       - labels:

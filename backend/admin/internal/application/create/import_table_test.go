@@ -23,6 +23,7 @@ type mockImporter struct {
 	articleIDs     map[string]string
 	getArticleErr  error
 	lastBatchCols  []string
+	dataBatchCols  []string
 	lastBatchTable string
 	insertCalls    int
 	setOkCalls     int
@@ -41,6 +42,9 @@ func (m *mockImporter) CreateAndBatchInsert(tableName string, columnDefs, primar
 	m.calls = append(m.calls, "batch")
 	m.lastBatchTable = tableName
 	m.lastBatchCols = columnDefs
+	if strings.HasPrefix(tableName, "chemdb.data_") && !strings.HasSuffix(tableName, "_sources") {
+		m.dataBatchCols = columnDefs
+	}
 	if m.batchErr != nil && m.batchCalls == m.batchErrOn {
 		return m.batchErr
 	}
@@ -75,6 +79,129 @@ func (m *mockImporter) CreateSASIIndex(string, string) error {
 type mockStore struct {
 	imp cassandra.TableImporter
 	err error
+}
+
+type metadataCaptureImporter struct {
+	mockImporter
+	metadata [][]any
+}
+
+func (m *metadataCaptureImporter) CreateAndBatchInsert(tableName string, columns, keys []string, rows [][]any) error {
+	if strings.HasPrefix(tableName, "chemdb.meta_") {
+		m.metadata = rows
+	}
+	return m.mockImporter.CreateAndBatchInsert(tableName, columns, keys, rows)
+}
+
+func TestImportTableDerivesSetChoicesWithoutChangingWorkbook(t *testing.T) {
+	for _, declaration := range []string{"set", "set[<>]"} {
+		t.Run(declaration, func(t *testing.T) {
+			f := fullImportWorkbook(t)
+			t.Cleanup(func() { _ = f.Close() })
+			require.NoError(t, f.SetCellValue("meta", "C5", "search "+declaration+" chemical"))
+			require.NoError(t, f.SetSheetRow("main", "A2", &[]any{"1", "Psoralen_Bergapten Bergapten"}))
+			require.NoError(t, f.SetSheetRow("main", "A3", &[]any{"2", "Xanthotoxin Psoralen"}))
+			imp := &metadataCaptureImporter{}
+			_, err := appcreate.ImportTable(&mockStore{imp: imp}, f, "meta", "derived-set", logging.Nop{})
+			require.NoError(t, err)
+			found := false
+			for _, row := range imp.metadata {
+				if row[1] == "name" {
+					assert.Equal(t, "search set[Bergapten Psoralen Xanthotoxin] chemical", row[2])
+					found = true
+				}
+			}
+			require.True(t, found)
+			sourceType, err := f.GetCellValue("meta", "C5")
+			require.NoError(t, err)
+			assert.Equal(t, "search "+declaration+" chemical", sourceType)
+		})
+	}
+}
+
+func TestImportTableBlankColumnModifiersRemainText(t *testing.T) {
+	for _, declaration := range []string{"", " \t\n"} {
+		t.Run(declaration, func(t *testing.T) {
+			f := fullImportWorkbook(t)
+			t.Cleanup(func() { _ = f.Close() })
+			require.NoError(t, f.SetCellValue("meta", "C5", declaration))
+			imp := &metadataCaptureImporter{}
+			_, err := appcreate.ImportTable(&mockStore{imp: imp}, f, "meta", "blank-modifiers", logging.Nop{})
+			require.NoError(t, err)
+			assert.Contains(t, imp.dataBatchCols, "name TEXT")
+			assert.Equal(t, 1, imp.setOkCalls)
+			found := false
+			for _, row := range imp.metadata {
+				if row[1] == "name" {
+					assert.Equal(t, strings.Trim(declaration, " "), row[2])
+					found = true
+				}
+			}
+			assert.True(t, found)
+			original, err := f.GetCellValue("meta", "C5")
+			require.NoError(t, err)
+			assert.Equal(t, declaration, original)
+		})
+	}
+}
+
+func TestImportTableSetChoiceBoundaries(t *testing.T) {
+	for _, tc := range []struct{ name, declaration, value, want string }{
+		{"empty", "set[<>]", "", "set chemical"},
+		{"explicit", "set[Curated Other]", "Different", "set[Curated Other] chemical"},
+		{"apostrophe", "set", "O'Brien", "set[O'Brien] chemical"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := fullImportWorkbook(t)
+			t.Cleanup(func() { _ = f.Close() })
+			require.NoError(t, f.SetCellValue("meta", "C5", tc.declaration+" chemical"))
+			require.NoError(t, f.SetCellValue("main", "B2", tc.value))
+			imp := &metadataCaptureImporter{}
+			_, err := appcreate.ImportTable(&mockStore{imp: imp}, f, "meta", tc.name, logging.Nop{})
+			require.NoError(t, err)
+			for _, row := range imp.metadata {
+				if row[1] == "name" {
+					assert.Equal(t, tc.want, row[2])
+				}
+			}
+		})
+	}
+}
+
+func TestImportTableSetChoicesIncludeDefaultsAndSpeciesRows(t *testing.T) {
+	f := fullImportWorkbook(t)
+	t.Cleanup(func() { _ = f.Close() })
+	// The default value is only visible after row postprocessing. Unjoined
+	// species columns must not leak into joined search metadata.
+	require.NoError(t, f.SetCellValue("meta", "C5", "default[id] set[<>] chemical"))
+	require.NoError(t, f.SetCellValue("main", "B2", ""))
+	require.NoError(t, f.SetCellValue("meta", "C7", "set[<>]"))
+	require.NoError(t, f.SetCellValue("classification", "B2", "Rutaceae_Apiaceae"))
+	imp := &metadataCaptureImporter{}
+	_, err := appcreate.ImportTable(&mockStore{imp: imp}, f, "meta", "default-species-set", logging.Nop{})
+	require.NoError(t, err)
+	types := make(map[string]string)
+	for _, row := range imp.metadata {
+		types[row[1].(string)] = row[2].(string)
+	}
+	assert.Equal(t, "default[id] set[1] chemical", types["name"])
+	assert.NotContains(t, types, "species")
+}
+
+func TestImportTableRejectsUnrepresentableAutomaticSetChoicesBeforeWrites(t *testing.T) {
+	for _, value := range []string{"compound[1]", "compound\n1", "compound\t1", "<>"} {
+		t.Run(value, func(t *testing.T) {
+			f := fullImportWorkbook(t)
+			t.Cleanup(func() { _ = f.Close() })
+			require.NoError(t, f.SetCellValue("meta", "C5", "set[<>] chemical"))
+			require.NoError(t, f.SetCellValue("main", "B2", value))
+			imp := &metadataCaptureImporter{}
+			_, err := appcreate.ImportTable(&mockStore{imp: imp}, f, "meta", "invalid-set", logging.Nop{})
+			require.ErrorContains(t, err, "cannot be represented in set[choices]")
+			assert.Zero(t, imp.insertCalls)
+			assert.Zero(t, imp.batchCalls)
+		})
+	}
 }
 
 func (s *mockStore) WithImporter(fn func(cassandra.TableImporter) error) error {
@@ -202,7 +329,7 @@ func TestImportTableNegativeConflictingColumnMeta(t *testing.T) {
 	setMetaRows(t, f, [][]any{
 		{"sheet", "column", "type", "description", "show_name"},
 		{"main", "id", "primary", "first", "ID"},
-		{"other", "id", "text", "second", "ID"},
+		{"main", "id", "text", "second", "ID"},
 	})
 
 	_, err := appcreate.ImportTable(store, f, "meta", "test-table", logging.Nop{})
@@ -429,8 +556,8 @@ func TestImportTableSupportsClasLinkAndFiniteSetModifiers(t *testing.T) {
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{
 		"id TEXT", "classification_id TEXT", "source_link TEXT", "aliases SET<TEXT>", "family TEXT", "uuid UUID",
-	}, imp.lastBatchCols)
-	assert.NotContains(t, imp.calls, "sasi", "finite-choice sets must not create a SASI index")
+	}, imp.dataBatchCols)
+	assert.Contains(t, imp.calls, "sasi", "searchable sets require the store's membership index")
 }
 
 func TestImportTableNearPrimaryTokenHasNoCassandraWrites(t *testing.T) {
@@ -440,9 +567,9 @@ func TestImportTableNearPrimaryTokenHasNoCassandraWrites(t *testing.T) {
 		{"sheet", "column", "type", "description", "show_name"},
 		{"__LIST__", "main", "main", "", ""},
 		{"__LIST__", "classification", "classification", "", ""},
-		{"main", "id", "notprimary", "", "ID"},
+		{"main", "id", "primary", "", "ID"},
 		{"main", "name", "text", "", "Name"},
-		{"classification", "cid", "primary", "", "CID"},
+		{"classification", "cid", "notprimary", "", "CID"},
 		{"classification", "species", "text", "", "Species"},
 	})
 

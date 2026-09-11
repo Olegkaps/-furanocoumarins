@@ -1267,7 +1267,7 @@ function TableStateBar({
         Download results:
         <button
           type="button"
-          className="btn"
+          className="btn btn-download"
           onClick={() => downloadResultsWorkbook(downloadSheets, meta)}
           title="Download Excel (one sheet per query)"
           aria-label="Download Excel"

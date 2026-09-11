@@ -42,7 +42,7 @@ export function SearchLine({
           aria-label="Search query"
         />
         <div className="search-submit" title="Search">
-          <ChevronRight width={22} height={22} style={{ color: "white" }} />
+          <ChevronRight width={22} height={22} />
           <input
             type="submit"
             value=""

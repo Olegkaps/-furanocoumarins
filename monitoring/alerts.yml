@@ -207,15 +207,6 @@ groups:
     annotations:
       summary: Redis is evicting keys
       description: Inspect cache sizing and eviction policy.
-  - alert: CassandraJMXUnavailable
-    expr: absent(cassandra_stats{job="cassandra"})
-    for: 10m
-    labels:
-      severity: warning
-    annotations:
-      summary: Cassandra JMX metrics are unavailable
-      description: CQL TCP probes are separate. Detailed JMX metrics require authenticated
-        remote JMX setup; see monitoring/README.md.
   - alert: NginxUnavailable
     expr: nginx_up{job="nginx"} == 0
     for: 2m
@@ -224,15 +215,6 @@ groups:
     annotations:
       summary: Nginx stub status is unavailable
       description: Check nginx and its private stub_status endpoint.
-  - alert: CassandraTCPProbeFailed
-    expr: probe_success{job="tcp-probe",instance="cassandra:9042"} == 0
-    for: 2m
-    labels:
-      severity: critical
-    annotations:
-      summary: Cassandra CQL TCP port is unreachable
-      description: Check Cassandra service and networking. A successful TCP probe
-        does not authenticate or execute a CQL query.
   - alert: MissingScrapeTargetsGoAuth
     expr: absent(up{job="go-auth"})
     for: 2m
@@ -312,15 +294,6 @@ groups:
       severity: critical
     annotations:
       summary: No scrape targets discovered for blackbox
-      description: Check Swarm replicas and tasks DNS discovery. A removed last task
-        produces no up series and must not appear healthy.
-  - alert: MissingScrapeTargetsCassandra
-    expr: absent(up{job="cassandra"})
-    for: 2m
-    labels:
-      severity: critical
-    annotations:
-      summary: No scrape targets discovered for cassandra
       description: Check Swarm replicas and tasks DNS discovery. A removed last task
         produces no up series and must not appear healthy.
   - alert: MissingScrapeTargetsAlertmanager

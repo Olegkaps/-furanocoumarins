@@ -24,7 +24,7 @@ func columnsFixture() []domainsearch.ColumnMeta {
 func TestValidateRequestPositive(t *testing.T) {
 	columns := columnsFixture()
 	assert.NoError(t, search.ValidateRequest("name = 'user'", columns))
-	assert.NoError(t, search.ValidateRequest("name IN ('a') AND surname LIKE 'x%'", columns))
+	assert.NoError(t, search.ValidateRequest("name LIKE 'a%' AND surname LIKE 'x%'", columns))
 }
 
 func TestValidateRequestNegative(t *testing.T) {
@@ -103,7 +103,6 @@ func TestValidateRequestSQLInjectionPositiveSafeQueries(t *testing.T) {
 	columns := columnsFixture()
 	safe := []string{
 		"name = 'O''Brien'",
-		"name IN ('a', 'b') AND surname != 'x'",
 		"name LIKE 'prefix%' AND second_name CONTAINS 'token'",
 		"name = 'value' AND surname = 'ref'",
 	}
@@ -112,6 +111,11 @@ func TestValidateRequestSQLInjectionPositiveSafeQueries(t *testing.T) {
 			assert.NoError(t, search.ValidateRequest(query, columns))
 		})
 	}
+}
+
+func TestValidateRequestRejectsUnsupportedIN(t *testing.T) {
+	err := search.ValidateRequest("name IN ('a', 'b')", columnsFixture())
+	require.Error(t, err)
 }
 
 func TestIsTypesEqualSQLInjectionNegative(t *testing.T) {

@@ -26,6 +26,32 @@ Which data is displayed is determined by metadata inside the uploaded XLSX workb
 - **The results are in the table**: final table with filtered data.
 - **Admin panel**: database content management (adding, editing, deleting records).
 
+## Preserved source entities
+
+Workbook imports retain every registered virtual sheet separately, including
+rows not referenced by `main`, alongside the joined table used for search.
+`classification` holds species, `structures` holds chemicals, and optional
+`publication`/`publications` sheets hold workbook publication records. Other
+virtual sheets are preserved too. BibTeX articles remain in the independent
+`chemdb.bibtex` table.
+
+These are parsed, unjoined rows: existing defaults, annotation removal, and set
+conversion apply, but external keys are not replaced by joined values. Each
+dataset's source catalog records physical sheet names, column metadata, natural
+keys, provenance, and the stored table pointers. No spreadsheet edits are needed.
+Deleting a dataset also deletes its owned source tables; global BibTeX is retained.
+
+The offline Cassandra-to-PostgreSQL importer copies source catalogs and their
+tables when present. Older datasets without catalogs retain their existing joined
+data, species, and bibliography, but cannot recover original chemical or
+publication sheets—including unreferenced records—from those joins. Reimport the
+original workbook to obtain complete unjoined sources.
+
+`make test-entity-migration` validates source preservation, cleanup, and real
+Cassandra-to-PostgreSQL copying/reruns. Set `TEST_POSTGRES_DSN`,
+`TEST_CASSANDRA_HOST`, and optionally `TEST_CASSANDRA_PORT` to **disposable test
+databases only**: the tests create and remove scientific-data fixtures in `chemdb`.
+
 ## Comparing queries
 
 On the results table and phylogenetic tree pages you can compare several searches at once (up to **4**, including the primary query).
@@ -49,7 +75,8 @@ Successful compare groups are also saved in browser **History** (`/history`) for
   with its own PostgreSQL database.
 - The legacy PostgreSQL `users` table is read only by the one-time importer;
   its password hashes are never copied.
-- Table data storage: Apache Cassandra.
+- Table data storage: PostgreSQL. Cassandra is only an offline migration source
+  for existing deployments and is not part of the runtime stack.
 - Object storage: S3-compatible storage (MinIO in dev) for editable page content (About, substance descriptions).
 - UI library for Cassandra: Netflix Data Explorer.
 - Authorization: JWT.
@@ -61,7 +88,7 @@ Successful compare groups are also saved in browser **History** (`/history`) for
 
 ### Local development
 
-For local work use [docker-compose.local.yaml](docker-compose.local.yaml): go-auth, PostgreSQL, Redis, Cassandra, and **MinIO** (S3-compatible storage for editable pages). Monitoring services are disabled in this compose file by default.
+For local work use [docker-compose.local.yaml](docker-compose.local.yaml): go-auth, PostgreSQL, Redis, and **MinIO** (S3-compatible storage for editable pages). Monitoring services are disabled in this compose file by default.
 
 1. Generate env files and `monitoring/grafana.ini`:
 
@@ -74,7 +101,7 @@ For local work use [docker-compose.local.yaml](docker-compose.local.yaml): go-au
 2. On a first deployment, start infrastructure without `authd`/`go-auth`:
 
    ```bash
-   docker compose -f docker-compose.local.yaml up -d postgres redis cassandra minio auth-postgres mailpit
+   docker compose -f docker-compose.local.yaml up -d postgres redis minio auth-postgres mailpit
    ```
 
 3. Initialize the domain databases, then run the one-time `make auth-import`
@@ -114,7 +141,6 @@ nano env/.env
 nano deploy/swarm/configs/nginx.conf
 sudo certbot certonly --standalone -d api.furan.example.com -d grafana.furan.example.com
 ./deploy/swarm/scripts/init-secrets.sh
-./deploy/swarm/scripts/migrate-cassandra-volume.sh
 ./deploy/swarm/scripts/deploy.sh
 ./deploy/swarm/scripts/run-auth-import.sh
 docker stack ps furanocoumarins
@@ -127,30 +153,25 @@ The scripts read the ignored `production.conf`; no deployment variables or
 callback files need to be exported. TLS certificates are managed by Certbot on
 the host and mounted into the nginx container.
 
-The Cassandra cutover command finds the legacy containers from the source
-volume and Compose labels, stops the writer, drains and stops Cassandra, and
-uses the unchanged `cassandra:3.11.9` image to copy the complete data directory
-into a separate Swarm volume. It never reads `docker-compose.local.yaml`. Every
-file is verified before the target is marked usable, and the source remains
-untouched for rollback. If the old Compose project used a non-default volume
-name, set `LEGACY_CASSANDRA_VOLUME` once in `production.conf`.
-
 Full setup, certificate renewal, and secrets rotation: [deploy/swarm/README.md](deploy/swarm/README.md).
 
 ## Database initialization
 
-Before the first complete backend launch, build the CLI and initialize the domain stores in this order (Cassandra keyspace first, then its tables). Auth-master owns its own schema and initializes it when `authd` starts; the legacy PostgreSQL schema is only the migration source.
+Before the first complete backend launch, start PostgreSQL. The backend creates its
+own `chemdb` schema on startup. Auth-master owns its own schema and initializes
+it when `authd` starts; the legacy PostgreSQL schema is only the migration source.
 
 - Build CLI binary:
   ```bash
   go build -o cli ./cli
   ```
 
-- Database initialization (order matters: create keyspace, then tables):
+- Existing Cassandra installations are cut over once, while they are quiesced:
   ```bash
-  ./cli init postgresql
-  ./cli init cass_key    # Cassandra keyspace chemdb
-  ./cli init cassandra   # Tables including chemdb.pages (for About and substance pages)
+  (cd backend/admin && \
+    FURANO_CASSANDRA_HOST=legacy-cassandra \
+    FURANO_POSTGRES_DSN='postgres://…' \
+    go run ./cmd/migrate-cassandra-postgres)
   ```
 
 - Do not create new administrators in the legacy users table. The selected
@@ -199,19 +220,15 @@ Main backend (go-auth) variables are loaded from `env/.env` (and related files u
 **Backend (go-auth):**
 - PostgreSQL: `PG_USER`, `PG_PASSWORD`, `PG_DB`, `PG_HOST`, `PG_PORT`, `PG_SSLMODE`
 - Redis: `REDIS_ADDR`, `REDIS_PASSWORD`
-- Cassandra: `CASSANDRA_HOST`
 - JWT: `SECRET_KEY`
 - CORS: `ALLOW_ORIGIN`
 - Links in emails: `DOMAIN_PREF`
 - S3 (for editable pages): `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`; optionally `S3_REGION`, `S3_USE_PATH_STYLE`
 - SMTP and other app settings as used in the compose/env files (`SMTP_HOST`, `SMTP_PORT`, `SMTP_TIMEOUT` with a positive five-second default, `MAIL`, `MAIL_SECRET`)
 
-XLSX imports preflight the metadata and joins before their first Cassandra
-write. Concurrent app replicas reserve the millisecond registry key with a
-LocalSerial `IF NOT EXISTS` lightweight transaction and retry only definite
-collisions; an uncertain CAS error stops immediately. The in-process “another
-import is running” response is a usability guard, while Cassandra provides the
-cross-replica uniqueness guarantee without deployment downtime.
+XLSX imports preflight the metadata and joins before their first PostgreSQL
+write. PostgreSQL enforces the registry key and active-table uniqueness; an
+uncertain database error stops immediately.
 
 **Frontend:**
 - `VITE_REACT_APP_BACKEND_SOURCE` — backend API base URL (used as `BASE_URL` in [frontend/src/config.tsx](frontend/src/config.tsx)). Must be set at build/run time for the frontend to call the API.

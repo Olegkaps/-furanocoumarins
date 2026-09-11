@@ -1,7 +1,7 @@
 # QA-инструкция — Furanocoumarins Analysis Platform
 
 Этот документ описывает текущий контракт платформы: публичный научный поиск,
-импорт XLSX, хранение таблиц в Cassandra, редактируемые страницы в S3/MinIO и
+импорт XLSX, хранение таблиц в PostgreSQL, редактируемые страницы в S3/MinIO и
 аутентификацию через приватный auth-master. Общая установка описана в
 [README](../README.md), детали интеграции и миграции — в
 [auth-master integration](AUTH_MASTER.md).
@@ -53,7 +53,7 @@ Playwright. `make test` сам проверяет Compose-конфигураци
 изолированный стек. Не запускайте `go test`, Playwright, Podman или Docker
 напрямую: так легко обойти подготовку фикстур, миграцию или итоговую сводку.
 
-Для ручного локального запуска и первичной инициализации доменных Cassandra/S3
+Для ручного локального запуска и первичной инициализации доменных PostgreSQL/S3
 хранилищ следуйте [README](../README.md#project-launch). Legacy-команда создания
 администратора больше не используется: новые аккаунты создаёт выбранный
 superuser через приглашения, а права выдаются в auth-master.
@@ -108,7 +108,7 @@ make auth-import
 | `make test-unit` | deployment-contract скрипты, backend unit/regression, frontend unit, production build |
 | `make test-race` | backend-тесты с race detector |
 | `make test-integration` | реальный изолированный стек; это тот же Compose-backed browser/integration gate, что и `make test-e2e` |
-| `make test-e2e` | импорт пользователей, PostgreSQL, private authd, Mailpit, Cassandra, go-auth, Vite и Playwright Chromium |
+| `make test-e2e` | импорт пользователей, PostgreSQL, private authd, Mailpit, go-auth, Vite и Playwright Chromium |
 | `make test` | полный gate: Compose contract, lint, unit, race, integration и E2E с итоговой сводкой |
 
 Browser/integration gate проверяет не только наличие экранов. В нём есть:
@@ -125,12 +125,10 @@ Browser/integration gate проверяет не только наличие э�
 - пагинация пользователей/ролей, grant `admin`, запрет grant от обычного admin,
   ban/unban и signing-key rotation;
 - отказ защищённых мутаций анонимному пользователю;
-- реальный импорт детерминированного XLSX в Cassandra, статус `Ready`,
+- реальный импорт детерминированного XLSX в PostgreSQL, статус `Ready`,
   активация и live-запрос `/search` к сохранённым join/ref данным;
-- upgrade со старой Cassandra-схемы без `table_activation`, перенос legacy
-  active pointer при старте backend, отказ активации missing/broken версии без
-  потери прежней active и ровно одну active Ready-версию после конкурентных
-  активаций;
+- отказ активации missing/broken версии без потери прежней active и ровно одну
+  active Ready-версию после конкурентных активаций;
 - браузерный научный поиск, grouping/filtering одного result set, безопасные
   ссылки и сохранение отдельных строк для разных species/chemical даже при
   одинаковых значениях и references;
@@ -143,7 +141,7 @@ Browser/integration gate проверяет не только наличие э�
 
 Публичный UI-тест использует детерминированные mock-ответы metadata/search для
 точной проверки построения запроса и рендера. Отдельный passwordless journey
-проверяет live Cassandra import/search через настоящий backend.
+проверяет live PostgreSQL import/search через настоящий backend.
 
 ### 3.1. Что остаётся ручным
 
@@ -152,7 +150,7 @@ Browser/integration gate проверяет не только наличие э�
 
 - production Swarm, TLS, реальные Docker secrets, внешний SMTP и cloud S3;
 - запись/чтение About и substance pages через настоящий MinIO/S3;
-- одновременный импорт с нескольких реальных реплик приложения и Cassandra;
+- одновременный импорт с нескольких реальных реплик приложения и PostgreSQL;
 - разрушительный corpus/fuzz для autocomplete и search на одноразовом стенде;
 - браузеры кроме Chromium, responsive layout, screen reader, полная
   accessibility и визуальная регрессия;
@@ -164,7 +162,7 @@ Browser/integration gate проверяет не только наличие э�
 {% note warning %}
 
 Injection/fuzz, удаление активной таблицы и испытания больших архивов проводите
-только на изолированном стенде с disposable Cassandra. Не используйте
+только на изолированном стенде с disposable PostgreSQL. Не используйте
 production или единственную копию научных данных.
 
 {% endnote %}
@@ -274,7 +272,7 @@ link, текущий access и refresh должны быть непригодн�
   и письмом автору;
 - email об успехе напоминает активировать таблицу.
 
-### 5.1. Строгий preflight до записи в Cassandra
+### 5.1. Строгий preflight до записи в PostgreSQL
 
 До reservation и первой записи проверяется полный metadata/join contract.
 Идентификаторы колонок обязаны соответствовать
@@ -284,7 +282,7 @@ link, текущий access и refresh должны быть непригодн�
 
 Также preflight проверяет:
 
-- Cassandra column definitions состоят только из `TEXT`, `SET<TEXT>` или
+- PostgreSQL-compatible column definitions состоят только из `TEXT`, `SET<TEXT>` или
   `UUID`;
 - каждый virtual sheet имеет ровно один существующий primary key;
 - типы и структурные модификаторы `external`, `default`, `clas`, `link`, `set`
@@ -299,14 +297,13 @@ link, текущий access и refresh должны быть непригодн�
   различаются только допустимыми `primary`/`external` ролями.
 
 Злые имена вроде `name); DROP TABLE data;--`, reserved keywords и дубликаты
-case-variants должны завершаться preflight error без Cassandra calls. Это
+case-variants должны завершаться preflight error без database calls. Это
 проверено unit/regression tests; утверждение, что произвольное имя колонки из
-XLSX достигает CQL DDL, больше не соответствует реализации.
+XLSX достигает SQL DDL, больше не соответствует реализации.
 
-Registry key версии таблицы резервируется межреплично Cassandra LWT
-`INSERT ... IF NOT EXISTS` с consistency `LocalSerial`. Повторяются только
-достоверные millisecond-collisions, максимум 1024 кандидата; неопределённый CAS
-останавливает импорт, чтобы не создавать вторую таблицу с неизвестным статусом.
+Registry key версии таблицы резервируется PostgreSQL уникальным ключом.
+Неопределённая ошибка базы останавливает импорт, чтобы не создавать вторую
+таблицу с неизвестным статусом.
 
 ### 5.2. Meta-лист
 
@@ -329,13 +326,27 @@ row должна ссылаться на virtual name, объявленный ч
 | `external[name]` | Join с другим virtual sheet |
 | `ref[]` | Набор article IDs для последующей BibTeX-проверки |
 | `search` | Search/autocomplete index, если тип совместим |
-| `set` / `set[a b]` | Множество; варианты могут ограничивать UI choice |
+| `set` / `set[<>]` / `set[a b]` | Для первых двух backend выводит варианты из импортированных данных; явные варианты сохраняются |
 | `default[column]` | Заполнение пустого значения из указанной колонки |
 | `invisible` | Не показывать как обычную колонку UI |
 | `clas[NN]` / `clas[NN][tag]` | Уровень таксономии для дерева |
 | `SMILES` / `smiles` | Структура вещества и ссылка на substance page |
 | `link[template]` | Безопасная ссылка с одним `%s` path segment |
 | `table_...` | Группировка results по chemical/species domain identity |
+
+Импорт сохраняет также отдельные обработанные строки всех virtual sheets до
+join, включая неиспользованные записи. `classification` — виды, `structures` —
+вещества, необязательные `publication`/`publications` — публикации из workbook.
+Остальные sheets, включая `main`, тоже сохраняются. Каталог версии хранит
+исходные имена sheets, ключи, metadata колонок и ссылки на отдельные таблицы;
+внешние ключи в этих таблицах не заменяются присоединёнными значениями.
+Глобальный `chemdb.bibtex` остаётся отдельным источником библиографии.
+
+Проверяйте, что запись без ссылки из `main` остаётся в исходной entity-таблице,
+но не появляется в joined search. Ready допустим только после сохранения всех
+таблиц и каталога. Удаление версии удаляет её source-таблицы, но не BibTeX.
+При миграции legacy-версии без такого каталога нельзя считать утраченные
+исходные вещества восстановленными из join: для полного набора нужен workbook.
 
 ### 5.3. Строки данных и скрытый текст `#…#`
 
@@ -372,12 +383,8 @@ join-ятся по видимому значению; коллизия двух 
 - Готовая новая версия имеет `is_ok=true`, `is_active=false`.
 - Активация через `POST /make-table-active/:timestamp` переключает metadata и
   поиск; проверьте, что старые filters не залипли в cache.
-- Backend до открытия HTTP idempotently создаёт `chemdb.table_activation` и
-  переносит единственную legacy `is_active=true` запись. Несколько legacy
-  active rows или ошибка schema agreement останавливают запуск, а не включают
-  произвольную версию.
 - Missing или Broken timestamp возвращает ошибку и сохраняет прежнюю active
-  версию. Конкурентные активации сериализуются Cassandra LWT; после их
+  версию. Конкурентные активации сериализуются PostgreSQL транзакцией; после их
   завершения active должна быть ровно одна Ready-версия.
 - `DELETE /table/:timestamp` удаляет одну версию, `DELETE /tables` — broken
   versions. Удаление active проверяйте только на disposable стенде.
@@ -391,16 +398,16 @@ join-ятся по видимому значению; коллизия двух 
 ## 6. Поиск, дерево и результаты
 
 `GET /search?q=` принимает только известные metadata columns, строковые
-литералы и allowlisted operators: `AND`, `IN`, `CONTAINS`, `LIKE`, `=`, `!=`,
-`<`, `>`, `<=`, `>=`, скобки и запятые. Пустой запрос, неизвестные identifiers,
-`OR 1=1`, `UNION`, `; DROP` и незавершённые literals должны вернуть `400`, а не
-сырой CQL или `500`.
+литералы и allowlisted operators: `AND`, `CONTAINS`, `LIKE`, `=`, `!=`, `<`,
+`>`, `<=`, `>=`. `LIKE` выполняется PostgreSQL-оператором `ILIKE`. Пустой
+запрос, неизвестные identifiers, `OR 1=1`, `UNION`, `; DROP` и незавершённые
+literals должны вернуть `400`, а не сырой SQL или `500`.
 
-Валидатор ограничивает grammar, но итоговый allowlisted expression остаётся
-частью CQL `WHERE ... ALLOW FILTERING`. Поэтому ручной security corpus на
-изолированной Cassandra всё ещё полезен. Особенно проверяйте
+Валидатор ограничивает grammar, а адаптер параметризует значения PostgreSQL
+`WHERE`. Поэтому ручной security corpus на изолированном PostgreSQL всё ещё
+полезен. Особенно проверяйте
 `GET /autocomplete/:column?value=`: path column и prefix не должны позволять
-читать чужую колонку, ломать literal или выдавать backend/CQL details.
+читать чужую колонку, ломать literal или выдавать backend/SQL details.
 
 Ручной UI-checklist (в частности, compare/cmp сценарии, которых нет в browser
 automation):

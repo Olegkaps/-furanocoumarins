@@ -22,7 +22,7 @@ fi
 
 echo "Running postgres integration tests (optional)..."
 if [ "${RUN_INTEGRATION:-0}" = "1" ]; then
-  go test -tags=integration ./internal/infrastructure/persistence/postgres/... -v
+  go test -tags=integration ./internal/infrastructure/persistence/postgres/... ./internal/infrastructure/persistence/cassandra/... -v
 else
   echo "Skipped integration tests. Set RUN_INTEGRATION=1 to enable."
 fi

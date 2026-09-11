@@ -15,11 +15,13 @@ func ValidateRequest(searchRequest string, columns []domainsearch.ColumnMeta) er
 		return &response.UserError{E: fmt.Errorf("search request is required")}
 	}
 
-	allowedWords := []string{"AND", "IN", "CONTAINS", "LIKE", "=", "!=", "<", ">", "<=", ">="}
+	// The public search grammar deliberately stays small.  PostgreSQL does not
+	// need CQL's IN form for the UI workflows; accepting it here would create a
+	// second, subtly different query language in the storage adapter.
+	allowedWords := []string{"AND", "CONTAINS", "LIKE", "=", "!=", "<", ">", "<=", ">="}
 	for i := range allowedWords {
 		allowedWords[i] = `\s` + allowedWords[i] + `\s`
 	}
-	allowedWords = append(allowedWords, `\(`, `\)`, `,`)
 	allowedPatterns := strings.Join(allowedWords, "|")
 	regex := regexp.MustCompile(allowedPatterns)
 

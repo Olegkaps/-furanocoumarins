@@ -14,7 +14,7 @@ const fetchAutocomplete = (column: string): any => {
   return async (query: string): Promise<string[]> => {
     let data: string[] = [];
 
-    var response = await api.get('/autocomplete/'+column + "?value=" + query).catch((err) => {return err.response});
+    var response = await api.get('/autocomplete/'+column, { params: { value: query } }).catch((err) => {return err.response});
 
     if (response && response.status === 200) {
       data = response.data["values"]
@@ -27,6 +27,7 @@ const fetchAutocomplete = (column: string): any => {
 };
 
 interface AutocompletesInputProps {
+	value: string;
   fetchAutocomplete: (query: string) => Promise<string[]>;
   onChange: (value: string) => void;
   style: React.CSSProperties;
@@ -34,6 +35,7 @@ interface AutocompletesInputProps {
 }
 
 function AutocompletedInput({
+  value,
   fetchAutocomplete,
   onChange,
   style,
@@ -44,6 +46,7 @@ function AutocompletedInput({
   return (
     <div className="app-container" data-tour={dataTour}>
       <Autocomplete
+        value={value}
         fetchSuggestions={fetchAutocomplete}
         onSelect={(value) => setSelectedValue(value)}
         onChange={onChange}
@@ -56,6 +59,7 @@ function AutocompletedInput({
 
 function SearchApp() {
   let [metadata, setMetadata] = useState<Array<{[index: string]:any}>>([]);
+  const [searchValues, setSearchValues] = useState<Record<string, string>>({});
   const [openSection, setOpenSection] = useState<Record<string, boolean>>({
     specie: false,
     chemical: false,
@@ -101,14 +105,12 @@ function SearchApp() {
   }
 
   let parsed_metadata: {[index: string]: any;}[] = []
-  let search_values = new Map<{[index: string]: any;}, string>()
 
   metadata.forEach((curr_meta) => {
     if (!hasMetadataTypeToken(String(curr_meta["type"]), "search")) {
       return
     }
     parsed_metadata.push(curr_meta)
-    search_values.set(curr_meta, "")
   })
 
   const firstSpecieField = parsed_metadata.find((m) =>
@@ -122,7 +124,8 @@ function SearchApp() {
     e.preventDefault();
     let search_params: string[] = []
 
-    search_values.forEach((val, key) => {
+    parsed_metadata.forEach((key) => {
+      const val = (searchValues[key["column"]] ?? "").trim();
       if (val === "") {
         return
       }
@@ -130,7 +133,7 @@ function SearchApp() {
       if (hasMetadataTypeToken(String(key["type"]), "set")) {
         op = " CONTAINS "
       }
-      search_params.push(key["column"] + op + "'" + val + "'")
+      search_params.push(key["column"] + op + "'" + val.replaceAll("'", "''") + "'")
     })
 
     if (search_params.length === 0) {
@@ -138,7 +141,7 @@ function SearchApp() {
       return
     }
 
-    navigate('/table?query=' + search_params.join(" AND "));
+    navigate('/table?query=' + encodeURIComponent(search_params.join(" AND ")));
   };
 
   return <>
@@ -204,8 +207,9 @@ function SearchApp() {
             {fieldInd > 0 && <span style={{position: 'absolute', left: '90%', color: 'var(--color-muted)', fontWeight: 600}}>AND</span>}
             <br></br>
             <AutocompletedInput
+              value={searchValues[curr_meta["column"]] ?? ""}
               fetchAutocomplete={_fetch}
-              onChange={(value) => {search_values.set(curr_meta, value.trim())}}
+              onChange={(value) => setSearchValues((previous) => ({ ...previous, [curr_meta["column"]]: value }))}
               dataTour={
                 curr_meta === firstSpecieField
                   ? "search-autocomplete"

@@ -25,7 +25,6 @@ type Config struct {
 	PgSSLMode      string        `env:"PG_SSLMODE" env-default:"disable"`
 	RedisAddr      string        `env:"REDIS_ADDR" env-default:"redis:6379"`
 	RedisPassword  string        `env:"REDIS_PASSWORD"`
-	CassandraHost  string        `env:"CASSANDRA_HOST"`
 	DomainPref     string        `env:"DOMAIN_PREF"`
 	SmtpHost       string        `env:"SMTP_HOST" env-default:"smtp.yandex.ru"`
 	SmtpPort       string        `env:"SMTP_PORT" env-default:"587"`

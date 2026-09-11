@@ -143,7 +143,7 @@ func TestProductionAuthDeploymentContract(t *testing.T) {
 	require.ElementsMatch(t, []string{"postgres"}, stack.Services["postgres-exporter"].DependsOn)
 	require.ElementsMatch(t, []string{"redis"}, stack.Services["redis-exporter"].DependsOn)
 	require.Equal(t, "oliver006/redis_exporter:v1.62.0-alpine", stack.Services["redis-exporter"].Image, "the secret-reading wrapper requires /bin/sh")
-	require.ElementsMatch(t, []string{"cassandra"}, stack.Services["cassandra-exporter"].DependsOn)
+	require.NotContains(t, stack.Services, "cassandra-exporter")
 	require.ElementsMatch(t, []string{"go-auth"}, stack.Services["nginx"].DependsOn)
 	require.ElementsMatch(t, []string{"nginx"}, stack.Services["nginx-exporter"].DependsOn)
 	require.ElementsMatch(t, []string{"prometheus"}, stack.Services["grafana"].DependsOn)
@@ -156,7 +156,7 @@ func TestProductionAuthDeploymentContract(t *testing.T) {
 	require.Equal(t, "256M", stack.Services["grafana"].Deploy["resources"].(map[string]any)["limits"].(map[string]any)["memory"])
 	require.Equal(t, "512M", goAuth.Deploy["resources"].(map[string]any)["limits"].(map[string]any)["memory"])
 	for _, serviceName := range []string{
-		"postgres-exporter", "auth-postgres-exporter", "redis-exporter", "cassandra-exporter",
+		"postgres-exporter", "auth-postgres-exporter", "redis-exporter",
 		"node-exporter", "nginx-exporter", "prometheus", "grafana", "loki", "promtail",
 		"nginxlog-exporter", "blackbox-exporter", "alertmanager",
 	} {
@@ -177,18 +177,8 @@ func TestProductionAuthDeploymentContract(t *testing.T) {
 	require.NotContains(t, stack.Secrets, "auth_source_database_url", "migration source must not be attached to the persistent stack")
 	require.NotContains(t, stack.Secrets, "auth_selected_superuser", "migration identity must not be attached to the persistent stack")
 
-	cassandra := stack.Services["cassandra"]
-	require.Equal(t, "cassandra:3.11.9", cassandra.Image)
-	require.Equal(t, "1024M", cassandra.Environment["MAX_HEAP_SIZE"])
-	require.Equal(t, "200M", cassandra.Environment["HEAP_NEWSIZE"])
-	require.Equal(t, map[string]any{
-		"limits": map[string]any{"cpus": "0.50", "memory": "2G"},
-	}, cassandra.Deploy["resources"])
-	require.Contains(t, cassandra.Volumes, "cassandra3_data:/var/lib/cassandra")
-	cassandraVolume, ok := stack.Volumes["cassandra3_data"]
-	require.True(t, ok)
-	require.True(t, cassandraVolume.External, "Swarm must mount only the explicitly prepared Cassandra target")
-	require.Contains(t, cassandraVolume.Name, "SWARM_CASSANDRA_VOLUME")
+	require.NotContains(t, stack.Services, "cassandra")
+	require.NotContains(t, stack.Volumes, "cassandra3_data")
 }
 
 func TestLocalRuntimeDoesNotDependOnLegacyIdentityStores(t *testing.T) {
@@ -205,6 +195,19 @@ func TestLocalRuntimeDoesNotDependOnLegacyIdentityStores(t *testing.T) {
 	importer := compose.Services["auth-import"]
 	require.Contains(t, importer.DependsOn, "postgres", "legacy PostgreSQL remains only as the offline migration source")
 	require.Contains(t, importer.DependsOn, "auth-postgres")
+}
+
+func TestLocalImportNotificationsUseTestMailbox(t *testing.T) {
+	var compose struct {
+		Services map[string]struct {
+			Environment map[string]string `yaml:"environment"`
+		} `yaml:"services"`
+	}
+	require.NoError(t, yaml.Unmarshal([]byte(readRepositoryFile(t, "docker-compose.auth-test.yaml")), &compose))
+	env := compose.Services["backend"].Environment
+	require.Equal(t, "mailpit", env["SMTP_HOST"])
+	require.Equal(t, "1025", env["SMTP_PORT"])
+	require.Equal(t, "app@test.local", env["MAIL"])
 }
 
 func TestQAManualMatchesCurrentAuthAndTestContract(t *testing.T) {
@@ -225,9 +228,9 @@ func TestQAManualMatchesCurrentAuthAndTestContract(t *testing.T) {
 		"/auth/refresh",
 		"/auth/logout",
 		"^[A-Za-z][A-Za-z0-9_]*$",
-		"LocalSerial",
+		"PostgreSQL транзакцией",
 		"Playwright",
-		"live Cassandra import/search",
+		"live PostgreSQL import/search",
 	} {
 		require.Contains(t, manual, required)
 	}
@@ -272,8 +275,7 @@ func TestOneShotImportDeploymentContract(t *testing.T) {
 	swarmReadme := readRepositoryFile(t, "deploy/swarm/README.md")
 	rootReadme := readRepositoryFile(t, "README.md")
 	deploy := readRepositoryFile(t, "deploy/swarm/scripts/deploy.sh")
-	cassandraMigration := readRepositoryFile(t, "deploy/swarm/scripts/migrate-cassandra-volume.sh")
-	for _, script := range []string{initSecrets, deploy, cassandraMigration, readRepositoryFile(t, "deploy/swarm/scripts/run-auth-import.sh")} {
+	for _, script := range []string{initSecrets, deploy, readRepositoryFile(t, "deploy/swarm/scripts/run-auth-import.sh")} {
 		require.Contains(t, script, "production-config.sh")
 		require.Contains(t, script, "load_production_config")
 	}
@@ -292,7 +294,7 @@ func TestOneShotImportDeploymentContract(t *testing.T) {
 	}
 	for _, command := range []string{
 		"docker swarm init", "cp deploy/swarm/production.conf.example deploy/swarm/production.conf",
-		"./deploy/swarm/scripts/init-secrets.sh", "./deploy/swarm/scripts/migrate-cassandra-volume.sh",
+		"./deploy/swarm/scripts/init-secrets.sh",
 		"./deploy/swarm/scripts/deploy.sh",
 		"./deploy/swarm/scripts/run-auth-import.sh",
 	} {
@@ -328,27 +330,8 @@ func TestOneShotImportDeploymentContract(t *testing.T) {
 	require.Contains(t, initSecrets, "@postgres:5432/")
 	require.Contains(t, deploy, "validate_go_auth_origin")
 	require.Contains(t, deploy, "wait_for_local_service_health")
-	require.Contains(t, deploy, "prepare_cassandra_volume")
-	require.Contains(t, deploy, "--fresh-cassandra")
-	require.Contains(t, deploy, "furanocoumarins.cassandra-volume")
-	require.Contains(t, deploy, ".furanocoumarins-cassandra-migration-v1")
 	require.Contains(t, deploy, `"${STACK_NAME}_authd"`)
 	require.Contains(t, deploy, `"${STACK_NAME}_go-auth"`)
-	for _, required := range []string{
-		"nodetool drain", "tar --numeric-owner", "sha256sum", "cmp -s",
-		"docker volume rm", "docker start", "cassandra:3.11.9",
-		"furanocoumarins.cassandra-source",
-		".furanocoumarins-cassandra-migration-v1",
-	} {
-		require.Contains(t, cassandraMigration, required)
-	}
-	require.NotContains(t, cassandraMigration, "docker-compose.local.yaml")
-	require.NotContains(t, cassandraMigration, "docker compose")
-	require.Less(t, strings.Index(cassandraMigration, "nodetool drain"), strings.Index(cassandraMigration, "tar --numeric-owner"))
-	require.Contains(t, productionConfig, "LEGACY_CASSANDRA_VOLUME")
-	require.Contains(t, productionConfig, "SWARM_CASSANDRA_VOLUME")
-	require.Contains(t, productionExample, "LEGACY_CASSANDRA_VOLUME")
-	require.Contains(t, productionExample, "SWARM_CASSANDRA_VOLUME")
 
 	makefile := readRepositoryFile(t, "Makefile")
 	require.Contains(t, makefile, "test: compose-check")
@@ -360,15 +343,13 @@ func TestOneShotImportDeploymentContract(t *testing.T) {
 	require.Contains(t, makefile, "./deploy/swarm/scripts/callback-secret_test.sh")
 	require.Contains(t, makefile, "deploy/swarm/scripts/production-config_test.sh")
 	require.Contains(t, makefile, "deploy/swarm/scripts/init-secrets_test.sh")
-	require.Contains(t, makefile, "deploy/swarm/scripts/migrate-cassandra-volume_test.sh")
 	require.Contains(t, makefile, "test-backend-container:")
 
 	backendMain := readRepositoryFile(t, "backend/admin/main.go")
 	require.Contains(t, backendMain, "EnsureActivationSchema(startupCtx)")
 	require.Contains(t, backendMain, "context.WithTimeout")
 	e2eHarness := readRepositoryFile(t, "scripts/auth-e2e.sh")
-	require.Contains(t, e2eHarness, "legacy-upgrade-fixture")
-	require.Contains(t, e2eHarness, "SELECT active_created_at FROM chemdb.table_activation")
+	require.NotContains(t, e2eHarness, "cassandra")
 	require.Contains(t, makefile, "./deploy/swarm/scripts/deploy_test.sh")
 	callbackTest := readRepositoryFile(t, "deploy/swarm/scripts/callback-url_test.sh")
 	for _, rejected := range []string{"?next=/admin", "#token", "user@frontend.example", "user:pass@frontend.example", "localhost", "127.0.0.1", "127.99.1.2", "[::1]", "'*'", "frontend.example,https://other.example", "https://other.example"} {

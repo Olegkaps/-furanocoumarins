@@ -19,6 +19,11 @@ accounts, invitations, bans, roles, sessions, and signing-key rotation.
   domain handlers; mutations sit behind `RequireAdmin`.
 - `backend/admin/internal/migration/authmaster` and
   `backend/admin/cmd/import-furanocoumarins` — side-owned offline identity import.
+- `backend/admin/internal/application/create` — workbook validation, unjoined
+  source preservation, and joined search-table construction.
+- `backend/admin/internal/migration/cassandrapostgres` and
+  `backend/admin/cmd/migrate-cassandra-postgres` — offline scientific-data cutover;
+  Cassandra is not a runtime dependency.
 - `frontend/src/Admin` — password and magic login, reset, registration,
   sessions, and superuser management.
 - `frontend/src/SearchApp`, `About`, `Reference`, and `SubstancePage` — public
@@ -66,15 +71,34 @@ For local Compose use direct `FURANO_SOURCE_DATABASE_URL` and
 `FURANO_SUPERUSER` values. Production Swarm mounts their `_FILE` variants into
 the side-owned importer job.
 
-Before the first Swarm deploy, run `migrate-cassandra-volume.sh` on the same
-single Docker host as the legacy Compose volume. It discovers the actual legacy
-containers from the volume and Compose labels instead of reading the mutable
-local Compose file, quiesces `go-auth`, drains and stops Cassandra, and uses the
-unchanged `cassandra:3.11.9` image to clone the complete data directory into a
-different externally named Swarm volume. It verifies every file checksum and
-writes the completion marker. Never let `deploy.sh` substitute a fresh Cassandra
-volume while the legacy source exists. Keep the source volume untouched until
-the migrated application has been verified and backed up.
+Scientific data uses PostgreSQL at runtime. The separate offline
+`migrate-cassandra-postgres` command requires `FURANO_CASSANDRA_HOST` and
+`FURANO_POSTGRES_DSN`. Read a quiesced legacy source, use an isolated target for
+validation, and retain the original Cassandra volume until the migrated
+application has been verified and backed up. Table schemas, content fingerprints,
+and row counts participate in the cutover manifest; changed sources must not be
+silently accepted on rerun.
+
+## Unjoined source entities
+
+Preserve every registered virtual workbook sheet before joining, including rows
+not referenced by `main`. These are processed rows (defaults and set conversion
+already applied), not byte-for-byte workbook archives. Preserve natural keys,
+external reference keys, original column metadata, and physical sheet names.
+Keep the joined table as the public search representation.
+
+`classification` represents species and `structures` represents chemicals.
+Optional `publication`/`publications` sheets represent workbook publications;
+global `chemdb.bibtex` remains the independent bibliography. Never invent
+publication records from `ref[]` values. Source-table catalogs belong to their
+dataset, must migrate with it, and must be included in broken/deleted-dataset
+cleanup without deleting global BibTeX. Publish Ready only after all source
+tables and their catalog have been saved.
+
+Legacy datasets without source catalogs still retain their existing species,
+joined data, and bibliography. Do not claim original chemical/publication sheets
+were recovered from joins: unreferenced rows may already have been lost. Reimport
+the workbook to obtain complete unjoined sources.
 
 ## Testing
 
@@ -83,6 +107,9 @@ Run tests through the root `Makefile`:
 - `make lint` — Go vet plus frontend lint.
 - `make test-unit` — backend unit/regression suite and frontend production build.
 - `make test-backend-container` — CI-equivalent backend coverage/integration container.
+- `make test-entity-migration` — unjoined entities and real Cassandra/PostgreSQL
+  migration tests; explicit disposable `TEST_POSTGRES_DSN` and
+  `TEST_CASSANDRA_HOST` required, optional `TEST_CASSANDRA_PORT`.
 - `make test-integration` — isolated Compose-backed auth/migration integration.
 - `make test-e2e` — Playwright business journeys against the isolated stack.
 - `make test` — complete gate.

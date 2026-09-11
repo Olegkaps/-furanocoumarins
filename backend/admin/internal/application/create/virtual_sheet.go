@@ -19,6 +19,7 @@ type columnModifiers struct {
 	linkTemplate, setChoices                         string
 	hasExternal, hasDefaultColumn, hasClassification bool
 	hasLink, hasSetChoices                           bool
+	setStart, setEnd                                 int
 	tokens                                           map[string]struct{}
 }
 
@@ -45,7 +46,9 @@ func (m columnModifiers) hasToken(token string) bool {
 func parseColumnType(columnType string) (columnModifiers, error) {
 	modifiers := columnModifiers{tokens: make(map[string]struct{})}
 	if strings.TrimSpace(columnType) == "" {
-		return modifiers, fmt.Errorf("column type is required")
+		// Workbook types are optional modifiers: without one, values remain text.
+		// Keep the original metadata unchanged, including legacy blank cells.
+		return modifiers, nil
 	}
 	for cursor := 0; cursor < len(columnType); {
 		for cursor < len(columnType) && isTypeSpace(columnType[cursor]) {
@@ -80,13 +83,17 @@ func parseColumnType(columnType string) (columnModifiers, error) {
 			if err := cassandra.ValidateTypeToken(token); err != nil {
 				return modifiers, fmt.Errorf("bad type %q: %w", columnType, err)
 			}
-			if token == "set" && modifiers.hasSetChoices {
+			if token == "set" && modifiers.hasToken("set") {
 				return modifiers, fmt.Errorf("bad type %q: set and set[...] cannot be combined", columnType)
+			}
+			if token == "set" {
+				modifiers.setStart, modifiers.setEnd = start, cursor
 			}
 			modifiers.tokens[canonicalColumnTypeToken(token)] = struct{}{}
 			continue
 		}
 
+		start := cursor
 		argument, next, err := parseTypeArgument(columnType, cursor+len(marker), marker)
 		if err != nil {
 			return modifiers, err
@@ -147,6 +154,11 @@ func parseColumnType(columnType string) (columnModifiers, error) {
 				return modifiers, fmt.Errorf("bad type %q: malformed set[choices] modifier", columnType)
 			}
 			modifiers.setChoices, modifiers.hasSetChoices = argument, true
+			modifiers.setStart, modifiers.setEnd = start, cursor
+			// Both workbook declarations request choices derived by the backend.
+			if argument == "<>" {
+				modifiers.setChoices, modifiers.hasSetChoices = "", false
+			}
 			modifiers.tokens["set"] = struct{}{}
 		}
 	}

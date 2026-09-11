@@ -150,31 +150,6 @@ services:
       restart_policy:
         condition: on-failure
 
-  cassandra:
-    image: cassandra:3.11.9
-    hostname: cassandra
-    environment:
-      MAX_HEAP_SIZE: 1024M
-      HEAP_NEWSIZE: 200M
-    volumes:
-      - cassandra3_data:/var/lib/cassandra
-    networks:
-      - back
-    logging: *default-logging
-    healthcheck:
-      test: ["CMD-SHELL", "cqlsh -e 'describe cluster'"]
-      interval: 60s
-      timeout: 30s
-      retries: 10
-      start_period: 120s
-    deploy:
-      resources:
-        limits:
-          cpus: "0.50"
-          memory: 2G
-      restart_policy:
-        condition: on-failure
-
   # TEMPORARILY DISABLED: scaled to zero while the host is memory constrained.
   postgres-exporter:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
@@ -271,34 +246,6 @@ services:
         limits:
           cpus: "0.05"
           memory: 32M
-      restart_policy:
-        condition: on-failure
-
-  # TEMPORARILY DISABLED: scaled to zero while the host is memory constrained.
-  cassandra-exporter:
-    image: criteord/cassandra_exporter:2.3.8
-    environment:
-      JVM_OPTS: "-Xms32m -Xmx128m"
-    volumes:
-      - ${FURANO_REPOSITORY_ROOT}/monitoring/cassandra-exporter.yml:/etc/cassandra_exporter/config.yml:ro
-    networks:
-      - back
-      - metrics
-    logging: *default-logging
-    depends_on:
-      - cassandra
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "8080"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    deploy:
-      replicas: 0
-      resources:
-        limits:
-          cpus: "0.05"
-          memory: 256M
       restart_policy:
         condition: on-failure
 
@@ -619,9 +566,6 @@ volumes:
   postgres_data:
   auth_postgres_data:
   redis-data:
-  cassandra3_data:
-    external: true
-    name: "${SWARM_CASSANDRA_VOLUME:-furanocoumarins_swarm_cassandra3_data}"
   grafanadata:
   prometheusdata:
 

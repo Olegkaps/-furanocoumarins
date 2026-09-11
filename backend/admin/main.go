@@ -32,7 +32,7 @@ func main() {
 	startupCtx, cancelStartup := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelStartup()
 	if err := container.Cassandra.EnsureActivationSchema(startupCtx); err != nil {
-		logging.Fatal("initialize Cassandra activation schema: %s", err)
+		logging.Fatal("initialize PostgreSQL data schema: %s", err)
 	}
 
 	http.Handle("/metrics", promhttp.Handler())

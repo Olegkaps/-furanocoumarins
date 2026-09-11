@@ -17,13 +17,6 @@ services:
     image: axllent/mailpit:latest
     ports: ["18025:8025"]
 
-  cassandra:
-    image: cassandra:3.11.9
-    environment:
-      MAX_HEAP_SIZE: 512M
-      HEAP_NEWSIZE: 100M
-    volumes: ["./testdata/cassandra-auth-e2e.cql:/schema.cql:ro"]
-
   authd:
     build: {context: ../auth-master}
     environment:
@@ -57,10 +50,17 @@ services:
     environment:
       ENV_TYPE: NODB
       AUTH_MASTER_URL: http://authd:8080
-      CASSANDRA_HOST: cassandra
+      PG_USER: postgres
+      PG_PASSWORD: source
+      PG_DB: mydb
+      PG_HOST: source-postgres
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAIL: app@test.local
+      SMTP_TIMEOUT: "5s"
     depends_on:
       authd: {condition: service_started}
-      cassandra: {condition: service_started}
+      source-postgres: {condition: service_healthy}
 
   frontend:
     build: ./frontend

@@ -9,8 +9,8 @@ frontend_origin=${E2E_FRONTEND_ORIGIN:-http://localhost:5173}
 cleanup() {
   status=$?
   if [ "$status" -ne 0 ]; then
-    echo "==> failure diagnostics: backend + Cassandra"
-    for service in backend cassandra; do
+    echo "==> failure diagnostics: backend"
+    for service in backend; do
       $compose -f docker-compose.auth-test.yaml logs "$service" || true
     done
   fi
@@ -70,16 +70,9 @@ else
   $compose -f docker-compose.auth-test.yaml down -v >/dev/null 2>&1 || true
 fi
 $compose -f docker-compose.auth-test.yaml build auth-import authd backend
-$compose -f docker-compose.auth-test.yaml up -d auth-postgres source-postgres mailpit cassandra authd
+$compose -f docker-compose.auth-test.yaml up -d auth-postgres source-postgres mailpit authd
 i=0
 until $compose -f docker-compose.auth-test.yaml exec -T authd /healthcheck >/dev/null 2>&1; do i=$((i+1)); test "$i" -lt 90 || { $compose -f docker-compose.auth-test.yaml logs authd auth-postgres; exit 1; }; sleep 1; done
-i=0
-until $compose -f docker-compose.auth-test.yaml exec -T cassandra cqlsh -e 'DESCRIBE CLUSTER' >/dev/null 2>&1; do i=$((i+1)); test "$i" -lt 180 || { $compose -f docker-compose.auth-test.yaml logs cassandra; exit 1; }; sleep 1; done
-$compose -f docker-compose.auth-test.yaml exec -T cassandra cqlsh -f /schema.cql
-# Model an upgrade from the last production schema: the singleton activation
-# table is absent, while one Ready row is marked active in the legacy registry.
-$compose -f docker-compose.auth-test.yaml exec -T cassandra cqlsh -e \
-  "INSERT INTO chemdb.tables (created_at, name, version, table_meta, table_data, table_species, is_active, is_ok) VALUES ('2000-01-01T00:00:00Z', 'legacy-upgrade-fixture', 'v2', 'chemdb.upgrade_meta', 'chemdb.upgrade_data', 'chemdb.upgrade_species', true, true);"
 $compose -f docker-compose.auth-test.yaml stop authd
 $compose -f docker-compose.auth-test.yaml exec -T auth-postgres \
   psql -v ON_ERROR_STOP=1 -U auth -d auth -c \
@@ -97,18 +90,16 @@ $compose -f docker-compose.auth-test.yaml run --rm --no-deps auth-import
 $compose -f docker-compose.auth-test.yaml up -d authd backend
 i=0
 until curl -fsS http://localhost:8081/ping >/dev/null; do i=$((i+1)); test "$i" -lt 90 || { $compose -f docker-compose.auth-test.yaml logs; exit 1; }; sleep 1; done
-upgrade_state="$($compose -f docker-compose.auth-test.yaml exec -T cassandra cqlsh -e "SELECT active_created_at FROM chemdb.table_activation WHERE scope = 'current';")"
-printf '%s\n' "${upgrade_state}" | grep -Fq '2000-01-01' || {
-  echo "backend startup did not migrate the legacy active-table pointer" >&2
-  exit 1
-}
-# Remove the upgrade-only fixture. The first table-list request initializes an
-# empty pointer and the browser journey then imports its own real datasets.
-$compose -f docker-compose.auth-test.yaml exec -T cassandra cqlsh -e \
-  "DELETE FROM chemdb.tables WHERE created_at = '2000-01-01T00:00:00Z'; DELETE FROM chemdb.table_activation WHERE scope = 'current'; INSERT INTO chemdb.tables (created_at, name, version, table_meta, table_data, table_species, is_active, is_ok) VALUES ('2001-01-01T00:00:00Z', 'activation-not-ready-fixture', 'v2', 'chemdb.not_ready_meta', 'chemdb.not_ready_data', 'chemdb.not_ready_species', false, false);"
+# Exercise activation rejection against a real, non-ready PostgreSQL registry
+# row. It belongs solely to this disposable E2E project's application database.
+$compose -f docker-compose.auth-test.yaml exec -T source-postgres \
+  psql -v ON_ERROR_STOP=1 -U postgres -d mydb -c \
+  "INSERT INTO chemdb.tables(created_at,name,version,table_meta,table_data,table_species,is_ok,is_active)
+   VALUES ('2000-01-01T00:00:00Z','activation-not-ready-fixture','v2.0','chemdb.e2e_broken_meta','chemdb.e2e_broken_data','chemdb.e2e_broken_species',false,false);"
 # Vite validates the development-origin contract. Proxy mode uses the
 # production Caddy path, including forwarded cookies and same-origin storage.
 if [ "${frontend_mode}" = "proxy" ]; then
+  $compose -f docker-compose.auth-test.yaml build frontend
   $compose -f docker-compose.auth-test.yaml up -d frontend
 else
   (cd frontend && VITE_REACT_APP_BACKEND_SOURCE=http://localhost:8081 exec ./node_modules/.bin/vite --host localhost --port 5173 --strictPort) >/tmp/furanocoumarins-vite.log 2>&1 & vite_pid=$!

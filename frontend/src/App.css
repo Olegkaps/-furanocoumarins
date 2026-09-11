@@ -9,7 +9,7 @@ html {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: color-mix(in srgb, #f4f7fa 82%, transparent);
+  background: color-mix(in srgb, var(--color-page) 70%, transparent);
   border-left: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
   border-right: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
 }
@@ -126,7 +126,7 @@ select {
 input,
 textarea,
 select {
-  background-color: var(--color-surface);
+  background-color: var(--color-input-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   padding: 6px 10px;
@@ -148,7 +148,7 @@ select:focus {
   padding: 8px 14px;
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius);
-  background: var(--color-surface);
+  background: var(--color-button-bg);
   color: var(--color-ink);
   font-weight: 600;
   text-decoration: none;
@@ -167,9 +167,19 @@ select:focus {
 }
 
 .btn-primary:hover {
-  background: var(--color-accent-hover);
-  border-color: var(--color-accent-hover);
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
   color: var(--color-primary-text);
+}
+
+.btn-download {
+  background: var(--color-download-bg);
+  border-color: var(--color-border);
+}
+
+.btn-download:hover {
+  background: color-mix(in srgb, var(--color-download-bg) 78%, var(--color-surface));
+  border-color: var(--color-accent);
 }
 
 .btn-toggle {
@@ -177,13 +187,13 @@ select:focus {
   margin-left: 8px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  background: var(--color-surface);
+  background: var(--color-toggle-idle-bg);
   font-weight: 500;
 }
 
 .btn-toggle.is-active {
   border-color: var(--color-accent);
-  background: var(--color-surface-alt);
+  background: var(--color-toggle-active-bg);
   font-weight: 700;
   color: var(--color-accent);
 }
@@ -289,7 +299,11 @@ select:focus {
   color: var(--color-ink);
   font-size: 1rem;
   font-family: var(--font-sans);
-  background: var(--color-surface);
+  background: linear-gradient(
+    to right,
+    var(--color-search-bg-start),
+    var(--color-search-bg-end)
+  );
   border: none;
   border-radius: 0;
   margin: 0;
@@ -306,8 +320,8 @@ select:focus {
   width: 48px;
   border: none;
   border-left: 1px solid var(--color-border);
-  background: var(--color-primary);
-  color: var(--color-primary-text);
+  background: var(--color-search-button-bg);
+  color: var(--color-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -316,7 +330,7 @@ select:focus {
 }
 
 .search-submit:hover {
-  background: var(--color-accent-hover);
+  background: var(--color-query-button-bg);
 }
 
 .search-submit input[type="submit"] {
@@ -461,7 +475,7 @@ tfoot td {
   align-items: center;
   justify-content: center;
   padding: 8px;
-  background: var(--color-surface);
+  background: var(--color-nav-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   color: var(--color-accent) !important;
@@ -489,13 +503,13 @@ tfoot td {
 }
 
 .nav-icon-link:hover {
-  background: var(--color-surface-alt);
+  background: var(--color-toggle-active-bg);
   border-color: var(--color-accent);
   color: var(--color-accent-hover) !important;
 }
 
 .nav-icon-link.is-current {
-  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-nav-bg) 72%, var(--color-surface));
   border-color: var(--color-accent);
   color: var(--color-accent) !important;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 35%, transparent);
@@ -514,7 +528,7 @@ tfoot td {
   max-width: min(100%, 420px);
   margin: 12px auto 0;
   padding: 10px 16px;
-  background: var(--color-surface);
+  background: var(--color-goto-chip-bg);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -524,7 +538,7 @@ tfoot td {
 .goto-chip p {
   margin: 0;
   font-size: 0.85rem;
-  color: var(--color-muted);
+  color: color-mix(in srgb, var(--color-ink) 78%, var(--color-muted));
   font-weight: 600;
 }
 
@@ -594,7 +608,7 @@ tfoot td {
   padding: 4px 8px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
-  background: var(--color-surface);
+  background: var(--color-button-bg);
   color: var(--color-link);
   font-weight: 600;
   text-decoration: underline;
@@ -960,7 +974,7 @@ tfoot td {
   /* Vertically center the block on the branch line. */
   transform: translateY(-50%);
   padding: 3px 5px;
-  background: var(--color-surface);
+  background: var(--color-count-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   text-decoration: none;
@@ -999,7 +1013,7 @@ tfoot td {
 .tree-count-block--link:hover {
   border-style: solid;
   border-color: var(--color-accent);
-  background: var(--color-surface);
+  background: color-mix(in srgb, var(--color-count-bg) 70%, var(--color-surface));
 }
 
 .tree-count-block__frame {
@@ -1015,7 +1029,7 @@ tfoot td {
   right: -5px;
   padding: 1px;
   color: var(--color-accent);
-  background: var(--color-surface);
+  background: var(--color-count-bg);
   border-radius: 2px;
   opacity: 0.35;
 }

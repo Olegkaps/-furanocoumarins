@@ -18,9 +18,8 @@ Do not reintroduce duplicate :5000 scraping. Auth-master is private and its
 metrics require the metrics network. Scrape Swarm tasks and alert for absent
 jobs as well as `up == 0`.
 
-Do not claim TCP probes establish database query readiness. Cassandra remote JMX
-requires a separate authenticated setup; never disable authentication implicitly.
-Keep missing JMX visible. State Linux host/namespace and OOM attribution limits.
+Do not claim TCP probes establish database query readiness. State Linux
+host/namespace and OOM attribution limits.
 
 Every new alert needs unhealthy and healthy/absence boundary rule fixtures.
 Every dashboard expression must pass the live Prometheus smoke parser.

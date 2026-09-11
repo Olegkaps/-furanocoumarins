@@ -3,8 +3,10 @@ package create
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
@@ -63,6 +65,26 @@ func importTable(
 		return "", err
 	}
 	log.Info("read meta sheet %q: %d rows", MetaListName, len(meta_result))
+	// Only sheets contributing to the joined search view share public column
+	// metadata. Independent originals may
+	// legitimately reuse a column name with another definition.
+	publicSheets := map[string]bool{"main": true}
+	for changed := true; changed; {
+		changed = false
+		for _, row := range meta_result {
+			if strings.HasPrefix(row[0], "__") || !publicSheets[row[0]] {
+				continue
+			}
+			parsed, err := parseColumnType(row[2])
+			if err != nil {
+				return "", fmt.Errorf("preflight column %q: %w", row[1], err)
+			}
+			if parsed.hasExternal && !publicSheets[parsed.external] {
+				publicSheets[parsed.external] = true
+				changed = true
+			}
+		}
+	}
 
 	// insert meta in db
 
@@ -84,6 +106,9 @@ func importTable(
 		parsedType, err := parseColumnType(c_type)
 		if err != nil {
 			return "", fmt.Errorf("preflight column %q: %w", column, err)
+		}
+		if !publicSheets[sheet] {
+			continue
 		}
 
 		externalSheet, hasExternal := parsedType.external, parsedType.hasExternal
@@ -181,6 +206,9 @@ func importTable(
 		parsed_meta[name].ColumnTypes = append(parsed_meta[name].ColumnTypes, column_type)
 
 		if parsedType.hasToken("primary") {
+			if parsedType.hasToken("set") {
+				return "", fmt.Errorf("preflight sheet %q: primary column %q must be scalar, not set", name, column_name)
+			}
 			if parsed_meta[name].KeyColumn != "" {
 				return "", fmt.Errorf("preflight sheet %q has more than one primary column", name)
 			}
@@ -189,7 +217,7 @@ func importTable(
 	}
 
 	for name, v_sheet := range parsed_meta {
-		if v_sheet.KeyColumn == "" {
+		if v_sheet.KeyColumn == "" && name != "main" {
 			return "", fmt.Errorf("preflight sheet %q has no primary column", name)
 		}
 		err = v_sheet.ReadFile(TableFile)
@@ -367,6 +395,9 @@ func importTable(
 	}
 
 	data_primary_keys := []string{"uuid"}
+	if err := populateSetChoices(meta_data, data_columns, joined_data, sp_columns, sp_data); err != nil {
+		return "", err
+	}
 
 	// All workbook metadata and joins are validated before the first Cassandra
 	// mutation. Persistence failures after reserving the table intentionally leave the
@@ -398,21 +429,31 @@ func importTable(
 		return "", err
 	}
 	log.Info("inserted data rows: count=%d columns=%d", len(joined_data), len(data_columns))
+	if err := saveSourceSheets(imp, table, parsed_meta, meta_result); err != nil {
+		return "", err
+	}
 
-	// LIKE Index
+	// The PostgreSQL store creates a lower-case B-tree index for text and a
+	// GIN membership index for searchable sets.
 	for _, row := range meta_result {
 		// meta_names := []string{"sheet", "column", "type", "description", "show_name"}
+		if !publicSheets[row[0]] {
+			continue
+		}
 		_type := row[2]
 		parsedType, parseErr := parseColumnType(_type)
 		if parseErr != nil {
 			return "", parseErr
 		}
-		if parsedType.hasToken("search") && !parsedType.hasToken("set") && !parsedType.hasExternal {
+		if parsedType.hasToken("search") && !parsedType.hasExternal {
+			if !slices.ContainsFunc(data_columns, func(def string) bool { return strings.Fields(def)[0] == row[1] }) {
+				continue // searchable source-only columns are absent from the joined view
+			}
 			err = imp.CreateSASIIndex(table.TableData, row[1])
 			if err != nil {
 				return "", err
 			}
-			log.Info("created SASI index on column %q", row[1])
+			log.Info("created search index on column %q", row[1])
 		}
 	}
 
@@ -460,6 +501,55 @@ func importTable(
 		return "", err
 	}
 	return message, nil
+}
+
+// populateSetChoices enriches persisted metadata only. Choices come from the
+// final imported rows (after defaults and joins), never from spreadsheet edits
+// or unreferenced source rows. Explicit workbook choices remain authoritative.
+func populateSetChoices(meta [][]any, dataColumns []string, data [][]any, speciesColumns []string, species [][]any) error {
+	for _, row := range meta {
+		column, columnType := row[1].(string), row[2].(string)
+		parsed, err := parseColumnType(columnType)
+		if err != nil {
+			return err
+		}
+		if !parsed.hasToken("set") || parsed.hasSetChoices {
+			continue
+		}
+		unique := make(map[string]struct{})
+		collect := func(columns []string, rows [][]any) {
+			for index, definition := range columns {
+				if strings.Fields(definition)[0] != column {
+					continue
+				}
+				for _, values := range rows {
+					if set, ok := values[index].(map[string]struct{}); ok {
+						maps.Copy(unique, set)
+					}
+				}
+			}
+		}
+		collect(dataColumns, data)
+		collect(speciesColumns, species)
+		choices := make([]string, 0, len(unique))
+		for value := range unique {
+			// The legacy metadata grammar has no escaping. Reject ambiguity before
+			// reserving a table instead of publishing broken dropdown options.
+			if strings.ContainsAny(value, "[]") || strings.IndexFunc(value, func(r rune) bool {
+				return unicode.IsSpace(r) || unicode.IsControl(r)
+			}) >= 0 || value == "<>" {
+				return fmt.Errorf("preflight column %q: set value %q cannot be represented in set[choices] metadata", column, value)
+			}
+			choices = append(choices, value)
+		}
+		slices.Sort(choices)
+		declaration := "set"
+		if len(choices) != 0 {
+			declaration += "[" + strings.Join(choices, " ") + "]"
+		}
+		row[2] = columnType[:parsed.setStart] + declaration + columnType[parsed.setEnd:]
+	}
+	return nil
 }
 
 // equalColumnTypes compares semantic metadata tokens while ignoring the two

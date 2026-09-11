@@ -2,11 +2,13 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/gocql/gocql"
+	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 
 	appauth "admin/internal/application/auth"
@@ -51,7 +53,6 @@ type AuthMaster interface {
 type Options struct {
 	PostgresDSN    string
 	RedisOpts      *redis.Options
-	CassandraHost  string
 	SecretKey      []byte
 	DomainPref     string
 	EnvType        string
@@ -64,12 +65,11 @@ type Options struct {
 
 func DefaultOptions() Options {
 	return Options{
-		PostgresDSN:   settings.C.PostgresDSN(),
-		RedisOpts:     settings.C.RedisOptions(),
-		CassandraHost: settings.C.CassandraHost,
-		SecretKey:     settings.C.SecretKeyBytes(),
-		DomainPref:    settings.C.DomainPref,
-		EnvType:       settings.C.EnvType,
+		PostgresDSN: settings.C.PostgresDSN(),
+		RedisOpts:   settings.C.RedisOptions(),
+		SecretKey:   settings.C.SecretKeyBytes(),
+		DomainPref:  settings.C.DomainPref,
+		EnvType:     settings.C.EnvType,
 	}
 }
 
@@ -87,11 +87,14 @@ func New(opts Options) (*Container, error) {
 		return newTestContainer(opts)
 	}
 
-	c.Persistence.CQL = gocql.NewCluster(opts.CassandraHost)
+	db, err := sql.Open("postgres", opts.PostgresDSN)
+	if err != nil {
+		return nil, fmt.Errorf("open application postgres: %w", err)
+	}
 	if opts.CassandraStore != nil {
 		c.Cassandra = opts.CassandraStore
 	} else {
-		c.Cassandra = cassandra.NewStore(c.Persistence.CQL)
+		c.Cassandra = cassandra.NewPostgresStore(db)
 	}
 
 	s3Client, err := s3store.NewClient(opts.EnvType)
@@ -106,7 +109,7 @@ func New(opts Options) (*Container, error) {
 	}
 	c.Mail = mailSender
 
-	c.Closer = func() error { return nil }
+	c.Closer = db.Close
 
 	// auth-master is the only production identity/session provider. The legacy
 	// PostgreSQL user repository and Redis magic-link store stay available only

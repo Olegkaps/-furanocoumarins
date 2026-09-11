@@ -75,21 +75,22 @@ function deterministicImportWorkbook(): Buffer {
 		["__LIST__", "structures", "structures", "", ""],
 		["__LIST__", "classification", "classification", "", ""],
 		["main", "id", "primary", "", "ID"],
-		["main", "chemical_id", "external[structures]", "", "Chemical ID"],
-		["structures", "chemical_id", "primary", "", "Chemical ID"],
-		["structures", "chemical", "search", "", "Chemical"],
+		["main", "chemical_id", "external[structures] table_", "", "Chemical ID"],
+		["structures", "chemical_id", "primary table_", "", "Chemical ID"],
+		["structures", "chemical", "search table_", "", "Chemical"],
 		["structures", "smiles", "smiles table_chemical", "", "SMILES"],
-		["main", "species_id", "external[classification]", "", "Species ID"],
-		["classification", "species_id", "primary", "", "Species ID"],
-		["classification", "species", "search", "", "Species"],
+		["main", "species_id", "external[classification] table_", "", "Species ID"],
+		["classification", "species_id", "primary table_", "", "Species ID"],
+		["classification", "species", "search table_", "", "Species"],
 		["classification", "family", "clas[01][gbif] table_specie", "", "Family"],
 		["main", "references", "ref[]", "", "References"],
 		["main", "source_link", "link[https://example.test/articles/%s] table_", "", "Source"],
-		["main", "aliases", "set[Bergapten Psoralen] chemical", "", "Aliases"],
+		["main", "aliases", "set[<>] search chemical", "", "Aliases"],
+		["main", "tags", "set search chemical", "", "Tags"],
 	]), "meta");
 	XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
-		["id", "chemical_id", "species_id", "references", "source_link", "aliases"],
-		["1", "chem-1", "species-1", "ref-real", "ref-real", "Bergapten Psoralen"],
+		["id", "chemical_id", "species_id", "references", "source_link", "aliases", "tags"],
+		["1", "chem-1", "species-1", "ref-real", "ref-real", "Psoralen_Bergapten Bergapten", "O'Brien&A+B"],
 	]), "main");
 	XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
 		["chemical_id", "chemical", "smiles"],
@@ -272,7 +273,7 @@ test("passwordless migrated superuser has immediate authority, repeat magic logi
 	await expect(importedTable.getByText("Active", { exact: true })).toBeVisible({ timeout: 10_000 });
 
 	// This request is deliberately served by the real browser-driven backend
-	// and Cassandra stack. It proves that the visible Ready/Active card reflects
+	// and PostgreSQL stack. It proves that the visible Ready/Active card reflects
 	// persisted joins, searchable values, and the reference column—not only a
 	// successful registry mutation.
 	const importedSearch = await page.request.get("http://localhost:8081/search", {
@@ -299,10 +300,49 @@ test("passwordless migrated superuser has immediate authority, repeat magic logi
 		expect.objectContaining({ column: "references", type: "ref[]" }),
 		expect.objectContaining({ column: "family", type: "clas[01][gbif] table_specie specie" }),
 		expect.objectContaining({ column: "source_link", type: "link[https://example.test/articles/%s] table_" }),
-		expect.objectContaining({ column: "aliases", type: "set[Bergapten Psoralen] chemical" }),
+		expect.objectContaining({ column: "aliases", type: "set[Bergapten Psoralen] search chemical" }),
+		expect.objectContaining({ column: "tags", type: "set[O'Brien&A+B] search chemical" }),
 	]));
 
-	// An invalid or Broken activation is a checked Cassandra LWT failure and
+	// Exercise generated suggestions and CONTAINS using the actual imported
+	// dataset. The second field also checks query quoting and URL transport.
+	for (const [field, fragment, choice, expression] of [
+		["Aliases", "ps", "Psoralen", "aliases CONTAINS 'Psoralen'"],
+		["Tags", "O'", "O'Brien&A+B", "tags CONTAINS 'O''Brien&A+B'"],
+	]) {
+		await page.goto("/search");
+		await dismissAdminTour(page);
+		await page.getByRole("button", { name: "Chemicals", exact: true }).click();
+		await page.getByLabel(new RegExp(`${field}:`)).fill(fragment);
+		await page.locator(".suggestion-item").getByText(choice, { exact: true }).click();
+		// Opening another section and remounting the selected field must retain
+		// both the visible value and its predicate in the final AND expression.
+		await page.getByRole("button", { name: "Chemicals", exact: true }).click();
+		const speciesToggle = page.getByRole("button", { name: "Species", exact: true });
+		if (await speciesToggle.getAttribute("aria-expanded") !== "true") await speciesToggle.click();
+		await page.locator('[data-tour="search-autocomplete"] input').fill("Ruta graveolens");
+		await page.getByRole("button", { name: "Chemicals", exact: true }).click();
+		await expect(page.getByLabel(new RegExp(`${field}:`))).toHaveValue(choice);
+		const expectedPredicates = [expression, "species = 'Ruta graveolens'"].sort();
+		const searchResponse = page.waitForResponse((response) =>
+			new URL(response.url()).pathname === "/search" &&
+			JSON.stringify(new URL(response.url()).searchParams.get("q")?.split(" AND ").sort()) === JSON.stringify(expectedPredicates),
+		);
+		await page.getByRole("button", { name: "Search", exact: true }).click();
+		const result = await searchResponse;
+		expect(result.status()).toBe(200);
+		expect((await result.json()).data).toHaveLength(1);
+		await dismissAdminTour(page);
+		// A single chemical/species is selected automatically by ResultTable.
+		// Verify those real detail cards, rather than waiting for the list view.
+		await expect(page.locator('[data-tour="table-chemical-panel"]').getByRole("cell", { name: "Bergapten", exact: true })).toBeVisible();
+		await expect(page.locator('[data-tour="table-species-panel"]').getByRole("cell", { name: "Ruta graveolens", exact: true })).toBeVisible();
+		await expectScientificRowSet(page.locator('[data-tour="table-results"]'), ["species-1/chem-1"]);
+	}
+	await page.goto("/admin");
+	await dismissAdminTour(page);
+
+	// An invalid or Broken activation is rejected transactionally and
 	// must not clear the existing pointer. Two concurrent valid activations are
 	// serialized and finish with exactly one Ready dataset active.
 	await uploadMalformedTableThroughUI(page, "malformed-external-metadata");

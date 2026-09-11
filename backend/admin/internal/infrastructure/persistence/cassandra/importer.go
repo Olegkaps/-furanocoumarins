@@ -41,7 +41,22 @@ func (i *sessionImporter) CreateSASIIndex(tableName, column string) error {
 
 // WithImporter runs fn within a single Cassandra session.
 func (s *Store) WithImporter(fn func(TableImporter) error) error {
+	if s.db != nil {
+		return fn(&postgresImporter{store: s})
+	}
 	return s.withSession(func(session *gocql.Session) error {
 		return fn(&sessionImporter{session: session})
 	})
+}
+
+type postgresImporter struct{ store *Store }
+
+func (i *postgresImporter) ReserveTable(t *Table) (bool, error) { return i.store.pgReserveTable(t) }
+func (i *postgresImporter) CreateAndBatchInsert(n string, d, k []string, rows [][]any) error {
+	return i.store.pgCreateAndBatchInsert(n, d, k, rows)
+}
+func (i *postgresImporter) SetTableOk(t *Table) error                 { return i.store.pgSetTableOk(t) }
+func (i *postgresImporter) GetArticleIds() (map[string]string, error) { return i.store.pgArticleIDs() }
+func (i *postgresImporter) CreateSASIIndex(n, c string) error {
+	return i.store.pgCreateSearchIndex(n, c)
 }

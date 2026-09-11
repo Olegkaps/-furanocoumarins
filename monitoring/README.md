@@ -20,7 +20,6 @@ preserved to avoid silently downgrading persistent stores; test images are pinne
 - Both application and auth-master PostgreSQL connection health, connection
   counts/utilization, database size, transactions, cache hits and deadlocks.
 - Redis health, memory, clients, command rate, cache hit ratio and evictions.
-- Cassandra CQL port 9042 TCP reachability and an explicit missing-JMX indicator.
 - Linux VM CPU, memory, filesystem space/inodes, disk throughput and kernel OOM
   kills. Go process restarts, CPU, RSS, heap, allocations, goroutines and GC pauses.
 
@@ -34,18 +33,8 @@ Application `/metrics` remains privately scrapeable and is blocked at public ngi
 
 ## Health and platform limits
 
-HTTP `/ping`, `/healthz` and `/nginx-health` are liveness checks. Cassandra TCP
-success means that a socket accepts connections; it does not authenticate or
-execute CQL and does not establish query readiness. PostgreSQL and Redis
-exporters separately check their database connections.
-
-Cassandra 3.11's existing localhost-only JMX configuration is deliberately
-unchanged. The corrected Criteo exporter uses its documented configuration file,
-image and `cassandra_stats{name="..."}` metric schema. Detailed JVM/compaction and
-latency panels remain empty, and `CassandraJMXUnavailable` fires, until operators
-configure **authenticated remote JMX** and exporter credentials. Do not disable
-JMX authentication to make a dashboard green. This task does not configure JMX
-secrets or change the database's management interface.
+HTTP `/ping`, `/healthz` and `/nginx-health` are liveness checks. PostgreSQL and
+Redis exporters separately check their database connections.
 
 Swarm task DNS discovery scrapes individual replicas; task IPs are the `instance`
 identity and can change after rescheduling. Missing-target alerts cover services
@@ -95,14 +84,11 @@ own containers and volumes. It has no production secrets, host mounts or public
 ports. Synthetic DB/VM data is not supplied; empty DB/VM results are expected.
 The application E2E suite separately tests real Go/Fiber telemetry behavior.
 
-This smoke does not validate a production Swarm deployment, Cassandra JMX,
-physical VM metrics, real database exporter versions or notification delivery.
+This smoke does not validate a production Swarm deployment, physical VM metrics,
+real database exporter versions or notification delivery.
 Those require post-deployment acceptance checks on the intended environment.
 
 ## Verified upstream contracts
 
 - [nginxlog exporter metrics and relabel configuration](https://github.com/martin-helmich/prometheus-nginxlog-exporter/tree/v1.11.0)
 - [nginxlog multi-upstream parsing](https://github.com/martin-helmich/prometheus-nginxlog-exporter/blob/v1.11.0/main.go)
-- [Criteo Cassandra exporter configuration and metric schema](https://github.com/criteo/cassandra_exporter)
-- [Criteo image version and filesystem paths](https://github.com/criteo/cassandra_exporter/blob/master/docker/Dockerfile)
-- [Criteo supported environment overrides](https://github.com/criteo/cassandra_exporter/blob/master/docker/run.sh)

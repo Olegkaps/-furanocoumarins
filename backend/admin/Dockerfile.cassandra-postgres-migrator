@@ -1,0 +1,15 @@
+FROM golang:alpine AS compiler
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . ./
+ENV CGO_ENABLED=0 GOOS=linux
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    go build -trimpath -ldflags="-s -w" -o /out/migrate-cassandra-postgres ./cmd/migrate-cassandra-postgres
+
+FROM alpine:3.22
+RUN apk add --no-cache ca-certificates
+COPY --from=compiler /out/migrate-cassandra-postgres /migrate-cassandra-postgres
+USER 65532:65532
+ENTRYPOINT ["/migrate-cassandra-postgres"]

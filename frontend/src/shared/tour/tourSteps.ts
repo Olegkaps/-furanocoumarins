@@ -173,8 +173,8 @@ export const TOUR_STEPS: Record<TourId, TourStep[]> = {
     },
     {
       target: "tree-count-mode",
-      title: "Count by",
-      body: "Show chemicals, articles, or all records on each node.",
+      title: "Number of",
+      body: "Select what each node number represents: unique chemicals, articles, or all records.",
       placement: "side",
     },
     {
@@ -204,7 +204,7 @@ export const TOUR_STEPS: Record<TourId, TourStep[]> = {
     {
       target: "tree-subtree-link",
       title: "Open subtree",
-      body: "The dashed count chip opens a filtered subtree for that clade.",
+      body: "The dashed count chip is the selected count for that clade and its descendants. It opens a filtered subtree for that clade.",
       placement: "side",
     },
     {

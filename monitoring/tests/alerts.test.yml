@@ -677,22 +677,6 @@ tests:
         summary: Redis is evicting keys
         description: Inspect cache sizing and eviction policy.
 - interval: 1m
-  input_series: []
-  alert_rule_test:
-  - eval_time: 0m
-    alertname: CassandraJMXUnavailable
-    exp_alerts: []
-  - eval_time: 20m
-    alertname: CassandraJMXUnavailable
-    exp_alerts:
-    - exp_labels:
-        job: cassandra
-        severity: warning
-      exp_annotations:
-        summary: Cassandra JMX metrics are unavailable
-        description: CQL TCP probes are separate. Detailed JMX metrics require authenticated
-          remote JMX setup; see monitoring/README.md.
-- interval: 1m
   input_series:
   - series: nginx_up{job="nginx",instance="nginx"}
     values: '0x30'
@@ -930,30 +914,6 @@ tests:
   input_series: []
   alert_rule_test:
   - eval_time: 0m
-    alertname: MissingScrapeTargetsCassandra
-    exp_alerts: []
-  - eval_time: 5m
-    alertname: MissingScrapeTargetsCassandra
-    exp_alerts:
-    - exp_labels:
-        job: cassandra
-        severity: critical
-      exp_annotations:
-        summary: No scrape targets discovered for cassandra
-        description: Check Swarm replicas and tasks DNS discovery. A removed last
-          task produces no up series and must not appear healthy.
-- interval: 1m
-  input_series:
-  - series: up{job="cassandra",instance="task"}
-    values: 1x10
-  alert_rule_test:
-  - eval_time: 5m
-    alertname: MissingScrapeTargetsCassandra
-    exp_alerts: []
-- interval: 1m
-  input_series: []
-  alert_rule_test:
-  - eval_time: 0m
     alertname: MissingScrapeTargetsAlertmanager
     exp_alerts: []
   - eval_time: 5m
@@ -973,30 +933,6 @@ tests:
   alert_rule_test:
   - eval_time: 5m
     alertname: MissingScrapeTargetsAlertmanager
-    exp_alerts: []
-- interval: 1m
-  input_series:
-  - series: probe_success{job="tcp-probe",instance="cassandra:9042"}
-    values: '0x10'
-  alert_rule_test:
-  - eval_time: 5m
-    alertname: CassandraTCPProbeFailed
-    exp_alerts:
-    - exp_labels:
-        job: tcp-probe
-        instance: cassandra:9042
-        severity: critical
-      exp_annotations:
-        summary: Cassandra CQL TCP port is unreachable
-        description: Check Cassandra service and networking. A successful TCP probe
-          does not authenticate or execute a CQL query.
-- interval: 1m
-  input_series:
-  - series: probe_success{job="tcp-probe",instance="cassandra:9042"}
-    values: 1x10
-  alert_rule_test:
-  - eval_time: 5m
-    alertname: CassandraTCPProbeFailed
     exp_alerts: []
 - interval: 1m
   input_series:
@@ -1023,14 +959,6 @@ tests:
   alert_rule_test:
   - eval_time: 20m
     alertname: RedisEvictions
-    exp_alerts: []
-- interval: 1m
-  input_series:
-  - series: cassandra_stats{job="cassandra",name="known"}
-    values: 1x30
-  alert_rule_test:
-  - eval_time: 20m
-    alertname: CassandraJMXUnavailable
     exp_alerts: []
 - interval: 1m
   input_series:

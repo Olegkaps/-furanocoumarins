@@ -33,8 +33,6 @@ load_production_config "${TEST_DIR}/valid.conf"
 [[ "${STACK_NAME}" == "furanocoumarins" ]] || fail "default stack name was not applied"
 [[ "${AUTH_SMTP_PORT}" == "587" ]] || fail "default SMTP port was not applied"
 [[ -z "${AUTH_SMTP_USER}" ]] || fail "optional SMTP user was not empty"
-[[ "${LEGACY_CASSANDRA_VOLUME}" == "furanocoumarins_cassandra3_data" ]] || fail "legacy Cassandra volume default changed"
-[[ "${SWARM_CASSANDRA_VOLUME}" == "furanocoumarins_swarm_cassandra3_data" ]] || fail "Swarm Cassandra volume default changed"
 [[ "${AUTH_MASTER_IMAGE}" == registry.example.test/auth@sha256:* ]] || fail "environment overrode the file"
 [[ "${FURANO_SUPERUSER}" == "Admin@Example.Test" ]] || fail "selector casing changed"
 [[ "${LEGACY_POSTGRES_CONTAINER_ID}" == "0123456789ab" ]] || fail "legacy PostgreSQL container ID was not loaded"
@@ -49,12 +47,6 @@ cp "${TEST_DIR}/valid.conf" "${TEST_DIR}/quoted.conf"
 sed -i.bak 's|PUBLIC_APP_ORIGIN=https://front.example.test|PUBLIC_APP_ORIGIN="https://front.example.test"|' "${TEST_DIR}/quoted.conf"
 if (load_production_config "${TEST_DIR}/quoted.conf") >/dev/null 2>&1; then
   fail "quoted shell value was accepted"
-fi
-
-cp "${TEST_DIR}/valid.conf" "${TEST_DIR}/same-volume.conf"
-printf 'LEGACY_CASSANDRA_VOLUME=shared\nSWARM_CASSANDRA_VOLUME=shared\n' >>"${TEST_DIR}/same-volume.conf"
-if (load_production_config "${TEST_DIR}/same-volume.conf") >/dev/null 2>&1; then
-  fail "identical source and target Cassandra volumes were accepted"
 fi
 
 echo "production config tests passed"

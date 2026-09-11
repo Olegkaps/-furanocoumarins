@@ -23,5 +23,3 @@ LEGACY_POSTGRES_CONTAINER_ID=0123456789ab
 # STACK_NAME=furanocoumarins
 # AUTH_SMTP_PORT=587
 # AUTH_SMTP_USER uses MAIL from env/.env when omitted.
-# LEGACY_CASSANDRA_VOLUME=furanocoumarins_cassandra3_data
-# SWARM_CASSANDRA_VOLUME defaults to STACK_NAME_swarm_cassandra3_data.

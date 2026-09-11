@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import config from '../config';
 
 interface AutocompleteProps {
+  value?: string;
   fetchSuggestions: (query: string) => Promise<string[]>;
   onSelect: (value: string) => void;
   onChange: (value: string) => void;
@@ -9,7 +10,7 @@ interface AutocompleteProps {
   style: React.CSSProperties
 }
 
-const Autocomplete = ({ fetchSuggestions, onSelect, onChange, placeholder, style }: AutocompleteProps) => {
+const Autocomplete = ({ value, fetchSuggestions, onSelect, onChange, placeholder, style }: AutocompleteProps) => {
   const [inputValue, setInputValue] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -72,7 +73,7 @@ const Autocomplete = ({ fetchSuggestions, onSelect, onChange, placeholder, style
     <div className="autocomplete-container" ref={containerRef} style={style}>
       <input
         type="text"
-        value={inputValue}
+        value={value ?? inputValue}
         onChange={handleInputChange}
         placeholder={placeholder}
         className="autocomplete-input"
