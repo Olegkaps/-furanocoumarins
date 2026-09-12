@@ -5,6 +5,7 @@ package cassandrapostgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -31,12 +32,16 @@ type Target interface {
 	Validate(context.Context, Table) error
 }
 
-func Run(ctx context.Context, source Source, target Target) error {
+func Run(ctx context.Context, source Source, target Target) (resultErr error) {
 	unlock, err := target.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("acquire PostgreSQL migration lock: %w", err)
 	}
-	defer unlock()
+	defer func() {
+		if err := unlock(); err != nil {
+			resultErr = errors.Join(resultErr, fmt.Errorf("release PostgreSQL migration lock: %w", err))
+		}
+	}()
 	tables, err := source.Tables(ctx)
 	if err != nil {
 		return fmt.Errorf("read Cassandra registry: %w", err)

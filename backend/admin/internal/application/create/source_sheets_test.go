@@ -175,7 +175,7 @@ func TestSourcePersistenceFailureNeverPublishesReady(t *testing.T) {
 		f := sourceWorkbook(t)
 		imp := &sourceCapture{mockImporter: mockImporter{batchErr: assertSourceError{}, batchErrOn: failure}}
 		_, err := appcreate.ImportTable(&mockStore{imp: imp}, f, "meta", "broken-sources", logging.Nop{})
-		f.Close()
+		require.NoError(t, f.Close())
 		require.Error(t, err)
 		require.Zero(t, imp.setOkCalls)
 	}

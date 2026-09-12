@@ -81,7 +81,7 @@ func (s *Store) SaveMetadata(ctx context.Context, base int64, document metadata.
 	if err != nil {
 		return MetadataVersion{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // Preserve the operation error; after commit the transaction is already closed.
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, metadataLock); err != nil {
 		return MetadataVersion{}, err
 	}
@@ -110,7 +110,7 @@ func (s *Store) BackfillMetadata(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // Preserve the operation error; after commit the transaction is already closed.
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, metadataLock); err != nil {
 		return err
 	}
@@ -127,13 +127,11 @@ func (s *Store) BackfillMetadata(ctx context.Context) error {
 	for rows.Next() {
 		var t oldTable
 		if err = rows.Scan(&t.timestamp, &t.meta, &t.data, &t.active); err != nil {
-			rows.Close()
-			return err
+			return errors.Join(err, rows.Close())
 		}
 		tables = append(tables, t)
 	}
-	err = rows.Err()
-	rows.Close()
+	err = errors.Join(rows.Err(), rows.Close())
 	if err != nil {
 		return err
 	}
@@ -200,8 +198,7 @@ func recoverMetadata(ctx context.Context, tx *sql.Tx, meta, data string) (metada
 			var s metadata.Sheet
 			var raw string
 			if e = rows.Scan(&s.Name, pq.Array(&s.SourceSheets), &raw); e != nil {
-				rows.Close()
-				return d, "", e
+				return d, "", errors.Join(e, rows.Close())
 			}
 			sort.Strings(s.SourceSheets)
 			if len(s.SourceSheets) > 1 {
@@ -209,8 +206,7 @@ func recoverMetadata(ctx context.Context, tx *sql.Tx, meta, data string) (metada
 			}
 			var legacy [][]string
 			if e = json.Unmarshal([]byte(raw), &legacy); e != nil {
-				rows.Close()
-				return d, "", e
+				return d, "", errors.Join(e, rows.Close())
 			}
 			originalRows = append(originalRows, legacy...)
 			for _, source := range s.SourceSheets {
@@ -226,8 +222,7 @@ func recoverMetadata(ctx context.Context, tx *sql.Tx, meta, data string) (metada
 			}
 			d.Sheets = append(d.Sheets, s)
 		}
-		e = rows.Err()
-		rows.Close()
+		e = errors.Join(rows.Err(), rows.Close())
 		if e != nil {
 			return d, "", e
 		}

@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -36,7 +37,7 @@ func quotedQualified(name string) (string, error) {
 			return "", fmt.Errorf("invalid legacy table name %q", name)
 		}
 		for _, r := range p {
-			if !(r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') {
+			if r != '_' && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
 				return "", fmt.Errorf("unsafe legacy identifier %q", name)
 			}
 		}
@@ -152,7 +153,7 @@ func copyDynamicTable(ctx context.Context, session *gocql.Session, db *sql.DB, n
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // Preserve the operation error; after commit the transaction is already closed.
 	args := make([]any, len(cols))
 	params := make([]string, len(cols))
 	for i := range params {
@@ -165,13 +166,11 @@ func copyDynamicTable(ctx context.Context, session *gocql.Session, db *sql.DB, n
 		for i, c := range cols {
 			args[i], err = postgresValue(c, row[c.name])
 			if err != nil {
-				iter.Close()
-				return 0, err
+				return 0, errors.Join(err, iter.Close())
 			}
 		}
 		if _, err = tx.ExecContext(ctx, insert, args...); err != nil {
-			iter.Close()
-			return 0, err
+			return 0, errors.Join(err, iter.Close())
 		}
 		count++
 		row = map[string]interface{}{}
@@ -279,7 +278,7 @@ func postgresArray(value any) (any, error) {
 // RunCassandraToPostgres copies the complete chemdb snapshot while holding a
 // PostgreSQL advisory lock. It is safe to rerun only for the same registry
 // snapshot and refuses conflicting partial/cutover state.
-func RunCassandraToPostgres(ctx context.Context, session *gocql.Session, db *sql.DB) error {
+func RunCassandraToPostgres(ctx context.Context, session *gocql.Session, db *sql.DB) (resultErr error) {
 	if err := session.Query("SELECT cluster_name FROM system.local").WithContext(ctx).Exec(); err != nil {
 		return fmt.Errorf("connect Cassandra source: %w", err)
 	}
@@ -289,7 +288,11 @@ func RunCassandraToPostgres(ctx context.Context, session *gocql.Session, db *sql
 	if _, err := db.ExecContext(ctx, `SELECT pg_advisory_lock(604260); CREATE SCHEMA IF NOT EXISTS chemdb; CREATE TABLE IF NOT EXISTS chemdb.cassandra_migrations (table_name text PRIMARY KEY, checksum text NOT NULL, rows bigint NOT NULL, completed_at timestamptz NOT NULL DEFAULT now())`); err != nil {
 		return err
 	}
-	defer db.ExecContext(context.Background(), "SELECT pg_advisory_unlock(604260)")
+	defer func() {
+		if _, err := db.ExecContext(context.Background(), "SELECT pg_advisory_unlock(604260)"); err != nil {
+			resultErr = errors.Join(resultErr, fmt.Errorf("release PostgreSQL migration lock: %w", err))
+		}
+	}()
 	// Static tables use exactly the same dynamic-copy path, including their
 	// primary keys and all rows. Their schemas are part of the legacy snapshot.
 	registryRows := []struct {
@@ -380,8 +383,7 @@ func discoverSourceTables(ctx context.Context, session *gocql.Session, data, spe
 	var virtual, physical string
 	for iter.Scan(&virtual, &physical) {
 		if err := cassandra.ValidateSourceTable(data, species, virtual, physical); err != nil {
-			iter.Close()
-			return nil, err
+			return nil, errors.Join(err, iter.Close())
 		}
 		names = append(names, physical)
 	}

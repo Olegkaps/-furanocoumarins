@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -69,7 +70,7 @@ func (s *Store) pgBatchInsertBibtex(rows [][]any) error {
 	if e != nil {
 		return e
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // Preserve the operation error; after commit the transaction is already closed.
 	for _, r := range rows {
 		if len(r) != 2 {
 			return fmt.Errorf("bibtex row requires id and text")
@@ -109,7 +110,7 @@ func (s *Store) pgActivateTable(timestamp time.Time) error {
 	if e != nil {
 		return e
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // Preserve the operation error; after commit the transaction is already closed.
 	// Serialize active-table changes and deletion before taking individual row
 	// locks, so competing activations cannot deadlock or violate the unique index.
 	if _, e = tx.Exec(`SELECT pg_advisory_xact_lock(684321090)`); e != nil {
@@ -138,7 +139,7 @@ func (s *Store) pgDeleteTable(c *fiber.Ctx, timestamp time.Time) error {
 	if e != nil {
 		return e
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // Preserve the operation error; after commit the transaction is already closed.
 	if _, e = tx.Exec(`SELECT pg_advisory_xact_lock(684321090)`); e != nil {
 		return e
 	}
@@ -175,18 +176,15 @@ func (s *Store) pgDeleteTable(c *fiber.Ctx, timestamp time.Time) error {
 				err = ValidateSourceTable(t.TableData, t.TableSpecies, virtual, physical)
 			}
 			if err != nil {
-				rows.Close()
-				return err
+				return errors.Join(err, rows.Close())
 			}
 			if physical != t.TableSpecies {
 				names = append(names, physical)
 			}
 		}
-		if err = rows.Err(); err != nil {
-			rows.Close()
+		if err = errors.Join(rows.Err(), rows.Close()); err != nil {
 			return err
 		}
-		rows.Close()
 		names = append(names, catalog)
 	}
 	for _, n := range names {
@@ -321,11 +319,12 @@ func pgWhere(raw string) (string, []any, error) {
 			return "", nil, e
 		}
 		v := strings.ReplaceAll(m[3], "''", "'")
-		if m[2] == "CONTAINS" {
+		switch m[2] {
+		case "CONTAINS":
 			clauses = append(clauses, col+" @> ARRAY[$"+fmt.Sprint(len(args)+1)+"]::text[]")
-		} else if m[2] == "LIKE" {
+		case "LIKE":
 			clauses = append(clauses, col+" ILIKE $"+fmt.Sprint(len(args)+1))
-		} else {
+		default:
 			clauses = append(clauses, col+" "+m[2]+" $"+fmt.Sprint(len(args)+1))
 		}
 		args = append(args, v)
@@ -470,7 +469,7 @@ func (s *Store) pgCreateAndBatchInsert(table string, defs, keys []string, data [
 	if e != nil {
 		return e
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // Preserve the operation error; after commit the transaction is already closed.
 	ph := make([]string, len(cols))
 	for i := range ph {
 		ph[i] = fmt.Sprintf("$%d", i+1)

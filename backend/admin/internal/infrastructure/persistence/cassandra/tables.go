@@ -430,7 +430,7 @@ func deleteTableLocked(session *gocql.Session, timestamp time.Time) error {
 		var virtual, physical string
 		for iter.Scan(&virtual, &physical) {
 			if err := ValidateSourceTable(metadata.TableData, metadata.TableSpecies, virtual, physical); err != nil {
-				iter.Close()
+				_ = iter.Close() // Preserve the source-table validation error.
 				return err
 			}
 			if physical != metadata.TableSpecies {
