@@ -57,6 +57,12 @@ test-entity-migration:
 	@test -n "$(TEST_CASSANDRA_HOST)" || { echo 'TEST_CASSANDRA_HOST must select a disposable Cassandra fixture'; exit 1; }
 	cd backend/admin && ENV_TYPE=TEST go test -tags=integration -p 1 ./internal/application/create ./internal/infrastructure/persistence/cassandra ./internal/migration/cassandrapostgres -count=1
 
+# PostgreSQL-only metadata versioning, backfill, and HTTP persistence checks.
+.PHONY: test-metadata
+test-metadata:
+	@test -n "$(TEST_POSTGRES_DSN)" || { echo 'TEST_POSTGRES_DSN must select a disposable test database'; exit 1; }
+	cd backend/admin && ENV_TYPE=TEST go test -tags=integration -p 1 ./internal/pkg/metadata ./internal/application/create ./internal/infrastructure/persistence/cassandra ./internal/presentation/http/create -run 'Metadata|Document' -count=1
+
 test-frontend-container:
 	@set -eu; \
 	image=furanocoumarins-frontend-test:local; \

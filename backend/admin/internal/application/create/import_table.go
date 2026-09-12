@@ -16,6 +16,7 @@ import (
 	"admin/internal/infrastructure/logging"
 	"admin/internal/infrastructure/persistence"
 	"admin/internal/infrastructure/persistence/cassandra"
+	"admin/internal/pkg/metadata"
 	"admin/settings"
 )
 
@@ -51,13 +52,6 @@ func importTable(
 	MetaListName, FileName string,
 	log logging.Logger,
 ) (string, error) {
-	table := &cassandra.Table{
-		Name:     FileName,
-		Version:  settings.BackVersion,
-		IsOk:     false,
-		IsActive: false,
-	}
-
 	// read data
 	meta_columns := []string{"sheet", "column", "type", "description", "show_name"}
 	meta_result, err := excel.ReadXLSXToMap(TableFile, MetaListName, meta_columns, "")
@@ -65,6 +59,31 @@ func importTable(
 		return "", err
 	}
 	log.Info("read meta sheet %q: %d rows", MetaListName, len(meta_result))
+	return importRows(imp, TableFile, FileName, meta_result, nil, log)
+}
+
+// ImportTableWithMetadata consumes the immutable definition captured at HTTP
+// admission. Later metadata saves cannot affect an already accepted workbook.
+func ImportTableWithMetadata(store importerStore, file *excelize.File, document metadata.Document, version int64, name string, log logging.Logger) (string, error) {
+	rows, err := document.Rows()
+	if err != nil {
+		return "", err
+	}
+	if version <= 0 {
+		return "", fmt.Errorf("metadata version is required")
+	}
+	var message string
+	err = store.WithImporter(func(imp cassandra.TableImporter) error {
+		var e error
+		message, e = importRows(imp, file, name, rows, &version, log)
+		return e
+	})
+	return message, err
+}
+
+func importRows(imp cassandra.TableImporter, TableFile *excelize.File, FileName string, meta_result map[string][]string, metadataVersion *int64, log logging.Logger) (string, error) {
+	table := &cassandra.Table{Name: FileName, Version: settings.BackVersion, MetadataVersion: metadataVersion}
+	var err error
 	// Only sheets contributing to the joined search view share public column
 	// metadata. Independent originals may
 	// legitimately reuse a column name with another definition.

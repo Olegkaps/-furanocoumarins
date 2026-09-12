@@ -17,17 +17,18 @@ const (
 	ready     importState = "ready"
 	broken    importState = "broken"
 
-	importJobRetention      = time.Hour
-	maxCompletedImportJobs  = 128
-	maxImportJobNameBytes   = 256
+	importJobRetention     = time.Hour
+	maxCompletedImportJobs = 128
+	maxImportJobNameBytes  = 256
 )
 
 type importJob struct {
-	ID          string      `json:"import_id"`
-	Name        string      `json:"name"`
-	State       importState `json:"state"`
-	StartedAt   time.Time   `json:"started_at"`
-	CompletedAt *time.Time  `json:"completed_at,omitempty"`
+	ID              string      `json:"import_id"`
+	Name            string      `json:"name"`
+	MetadataVersion int64       `json:"metadata_version"`
+	State           importState `json:"state"`
+	StartedAt       time.Time   `json:"started_at"`
+	CompletedAt     *time.Time  `json:"completed_at,omitempty"`
 }
 
 type importTracker struct {
@@ -122,6 +123,15 @@ func (t *importTracker) discard(id string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	delete(t.jobs, id)
+}
+
+func (t *importTracker) pin(id string, version int64) importJob {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	job := t.jobs[id]
+	job.MetadataVersion = version
+	t.jobs[id] = job
+	return job
 }
 
 func (t *importTracker) get(id string) (importJob, bool) {

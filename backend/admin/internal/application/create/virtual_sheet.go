@@ -312,11 +312,7 @@ func (v_sheet *VirtualSheet) Postprocess() error {
 	if len(v_sheet.ColumnNames) != len(v_sheet.ColumnTypes) {
 		return fmt.Errorf("column names/types length mismatch")
 	}
-	type defaultColumns struct {
-		defaultIndex int
-		custom       []int
-	}
-	metaDefaults := make(map[string]*defaultColumns)
+	defaultSources := make(map[int]int)
 	externalNames := make([]string, len(v_sheet.ColumnTypes))
 	parsedTypes := make([]columnModifiers, len(v_sheet.ColumnTypes))
 
@@ -343,10 +339,34 @@ func (v_sheet *VirtualSheet) Postprocess() error {
 			continue
 		}
 
-		if _, exist := metaDefaults[default_col]; !exist {
-			metaDefaults[default_col] = &defaultColumns{defaultIndex: default_ind}
+		defaultSources[i] = default_ind
+	}
+	// Resolve defaults in dependency order, including chains, independent of Go
+	// map iteration order. Cycles are invalid in both JSON and legacy workbooks.
+	defaultOrder := []int{}
+	defaultState := make(map[int]int)
+	var visitDefault func(int) error
+	visitDefault = func(column int) error {
+		if defaultState[column] == 1 {
+			return fmt.Errorf("cyclic default columns at %s", v_sheet.ColumnNames[column])
 		}
-		metaDefaults[default_col].custom = append(metaDefaults[default_col].custom, i)
+		if defaultState[column] == 2 {
+			return nil
+		}
+		defaultState[column] = 1
+		if source, ok := defaultSources[column]; ok {
+			if err := visitDefault(source); err != nil {
+				return err
+			}
+			defaultOrder = append(defaultOrder, column)
+		}
+		defaultState[column] = 2
+		return nil
+	}
+	for column := range v_sheet.ColumnNames {
+		if err := visitDefault(column); err != nil {
+			return err
+		}
 	}
 
 	for key, row := range v_sheet.Rows {
@@ -355,12 +375,9 @@ func (v_sheet *VirtualSheet) Postprocess() error {
 			continue
 		}
 		// default cols
-		for _, m := range metaDefaults {
-			for _, custom_col := range m.custom {
-				if row[custom_col] != "" {
-					continue
-				}
-				row[custom_col] = row[m.defaultIndex]
+		for _, column := range defaultOrder {
+			if row[column] == "" {
+				row[column] = row[defaultSources[column]]
 			}
 		}
 

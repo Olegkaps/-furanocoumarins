@@ -67,27 +67,55 @@ async function findExactRole(request: APIRequestContext, headers: Record<string,
 	throw new Error(`exact role ${name} was not found`);
 }
 
+const importMetadata = {
+	schema_version: 2, importable: true, sheets: [
+		{ name: "main", source_sheets: ["main"], columns: [
+			{ name: "id", data_type: "text", primary_key: true, label: "ID" },
+			{ name: "chemical_id", data_type: "text", external_sheet: "structures", show_in_results: true, label: "Chemical ID" },
+			{ name: "species_id", data_type: "text", external_sheet: "classification", show_in_results: true, label: "Species ID" },
+			{ name: "references", data_type: "text", reference: true, label: "References" },
+			{ name: "source_link", data_type: "text", link_template: "https://example.test/articles/%s", show_in_results: true, label: "Source" },
+			{ name: "aliases", data_type: "set", search: true, domain: "chemical", label: "Aliases" },
+			{ name: "tags", data_type: "set", search: true, domain: "chemical", label: "Tags" },
+		] },
+		{ name: "structures", source_sheets: ["structures"], columns: [
+			{ name: "chemical_id", data_type: "text", primary_key: true, show_in_results: true, label: "Chemical ID" },
+			{ name: "chemical", data_type: "text", search: true, show_in_results: true, label: "Chemical" },
+			{ name: "smiles", data_type: "text", smiles: true, show_in_results: true, domain: "chemical", label: "SMILES" },
+		] },
+		{ name: "classification", source_sheets: ["classification"], columns: [
+			{ name: "species_id", data_type: "text", primary_key: true, show_in_results: true, label: "Species ID" },
+			{ name: "species", data_type: "text", search: true, show_in_results: true, label: "Species" },
+			{ name: "family", data_type: "text", classification: { level: 1, tag: "gbif" }, show_in_results: true, domain: "species", label: "Family" },
+		] },
+	],
+};
+
+async function publishMetadataThroughUI(page: Page) {
+	await page.getByRole("link", { name: "Import metadata", exact: true }).click();
+	await expect(page).toHaveURL(/\/admin\/metadata$/);
+	await page.getByRole("button", { name: "Open editor", exact: true }).click();
+	await page.getByRole("button", { name: "JSON editor", exact: true }).click();
+	await page.getByLabel("Metadata JSON", { exact: true }).fill(JSON.stringify(importMetadata, null, 2));
+	await page.getByRole("button", { name: "UI editor", exact: true }).click();
+	const main = page.locator(".metadata-sheet").filter({ has: page.locator("summary").filter({ hasText: /^main / }) }).first();
+	await main.locator("summary").first().click();
+	await main.locator('[data-column="id"] > summary').click();
+	const id = main.getByRole("group", { name: "id · Primary key", exact: true });
+	await id.getByLabel("Display label", { exact: true }).fill("Observation ID");
+	await page.getByRole("button", { name: "JSON editor", exact: true }).click();
+	expect(JSON.parse(await page.getByLabel("Metadata JSON", { exact: true }).inputValue()).sheets[0].columns[0].label).toBe("Observation ID");
+	const saved = page.waitForResponse(response => response.url().endsWith("/metadata-versions") && response.request().method() === "POST");
+	await page.getByRole("button", { name: "Save as new version" }).click();
+	const response = await saved;
+	expect(response.status()).toBe(201);
+	const version = (await response.json()).version as number;
+	await page.getByRole("link", { name: "Back to administration" }).click();
+	return version;
+}
+
 function deterministicImportWorkbook(): Buffer {
 	const workbook = XLSX.utils.book_new();
-	XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
-		["sheet", "column", "type", "description", "show_name"],
-		["__LIST__", "main", "main", "", ""],
-		["__LIST__", "structures", "structures", "", ""],
-		["__LIST__", "classification", "classification", "", ""],
-		["main", "id", "primary", "", "ID"],
-		["main", "chemical_id", "external[structures] table_", "", "Chemical ID"],
-		["structures", "chemical_id", "primary table_", "", "Chemical ID"],
-		["structures", "chemical", "search table_", "", "Chemical"],
-		["structures", "smiles", "smiles table_chemical", "", "SMILES"],
-		["main", "species_id", "external[classification] table_", "", "Species ID"],
-		["classification", "species_id", "primary table_", "", "Species ID"],
-		["classification", "species", "search table_", "", "Species"],
-		["classification", "family", "clas[01][gbif] table_specie", "", "Family"],
-		["main", "references", "ref[]", "", "References"],
-		["main", "source_link", "link[https://example.test/articles/%s] table_", "", "Source"],
-		["main", "aliases", "set[<>] search chemical", "", "Aliases"],
-		["main", "tags", "set search chemical", "", "Tags"],
-	]), "meta");
 	XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
 		["id", "chemical_id", "species_id", "references", "source_link", "aliases", "tags"],
 		["1", "chem-1", "species-1", "ref-real", "ref-real", "Psoralen_Bergapten Bergapten", "O'Brien&A+B"],
@@ -128,13 +156,13 @@ async function uploadTableThroughUI(page: Page, name: string) {
 	await expect(spreadsheetInput).toHaveValue(/deterministic\.xlsx$/);
 	expect(await spreadsheetInput.evaluate((input: HTMLInputElement) => input.files?.[0]?.size ?? 0)).toBe(workbook.length);
 	await page.getByLabel("Table name").fill(name);
-	await page.getByLabel("Metadata list").fill("meta");
 	await page.getByRole("button", { name: "Create", exact: true }).click();
 	const [mutationRequest, mutationResponse] = await Promise.all([requestPromise, responsePromise]);
 	expect(await mutationRequest.headerValue("content-type")).toContain("multipart/form-data");
 	expect(mutationResponse.status()).toBe(200);
 	const accepted = await mutationResponse.json();
 	expect(accepted.import_id).toMatch(/^[0-9a-f-]{36}$/);
+	expect(accepted.metadata_version).toBeGreaterThan(0);
 	const notice = page.getByTestId("table-notice");
 	await expect.poll(async () => {
 		const text = await notice.textContent();
@@ -155,7 +183,6 @@ async function uploadMalformedTableThroughUI(page: Page, name: string) {
 		buffer: malformedImportWorkbook(),
 	});
 	await page.getByLabel("Table name").fill(name);
-	await page.getByLabel("Metadata list").fill("meta");
 	const accepted = page.waitForResponse((response) => response.url().endsWith("/create-table") && response.request().method() === "POST");
 	await page.getByRole("button", { name: "Create", exact: true }).click();
 	expect((await accepted).status()).toBe(200);
@@ -189,6 +216,9 @@ async function openMockedAdmin(page: Page) {
 		localStorage.setItem("name", "mock-admin");
 	}, `eyJhbGciOiJub25lIn0.${payload}.signature`);
 	await page.route("**/get-tables-list", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
+	await page.route("**/metadata-versions", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([{ version: 1, document: importMetadata, published: true, provenance: "test", created_at: "2026-09-11", created_by: "admin" }]) }));
+	await page.route("**/metadata-versions/latest", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ version: 1, document: importMetadata, published: true }) }));
+	await page.route("**/metadata-versions/validate", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ valid: true, resolved_document: route.request().postDataJSON().document }) }));
 	await page.route("**/auth/me", (route) => route.fulfill({ status: 200, contentType: "application/json", body: '{"id":"11111111-1111-4111-8111-111111111111","login":"mock-admin","kind":"human","superuser":true}' }));
 	await page.route("**/auth/sessions", (route) => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
 	await page.route("**/auth/admin/roles?*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: '{"roles":[]}' }));
@@ -202,9 +232,135 @@ async function submitMockedImport(page: Page, name: string) {
 	await page.getByRole("button", { name: "Create table" }).click();
 	await page.getByLabel("Spreadsheet file").setInputFiles({ name: "mock.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: deterministicImportWorkbook() });
 	await page.getByLabel("Table name").fill(name);
-	await page.getByLabel("Metadata list").fill("meta");
 	await page.getByRole("button", { name: "Create", exact: true }).click();
 }
+
+test("metadata editors preserve invalid drafts, conflicts, and in-flight saves", async ({ page }) => {
+	await openMockedAdmin(page);
+	await page.getByRole("link", { name: "Import metadata", exact: true }).click();
+	await page.getByRole("button", { name: "Open editor", exact: true }).click();
+	await page.getByRole("button", { name: "JSON editor", exact: true }).click();
+	const json = page.getByLabel("Metadata JSON", { exact: true });
+	await json.fill('{"schema_version":');
+	await page.getByRole("button", { name: "UI editor", exact: true }).click();
+	await expect(json).toHaveValue('{"schema_version":');
+	await expect(page.getByRole("button", { name: "JSON editor", exact: true })).toHaveAttribute("aria-pressed", "true");
+	const draft = JSON.stringify(importMetadata, null, 2);
+	await json.fill(draft);
+	await page.route("**/metadata-versions", route => route.fulfill({ status: 409, contentType: "application/json", body: '{"error":"stale"}' }));
+	await page.getByRole("button", { name: "Save as new version" }).click();
+	await expect(page.locator(".metadata-notice")).toContainText("Another admin published");
+	await expect(json).toHaveValue(draft);
+	let release!: () => void;
+	const gate = new Promise<void>(resolve => { release = resolve; });
+	await page.route("**/metadata-versions", async route => {
+		await gate;
+		await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ version: 2, document: importMetadata, published: true, created_at: "2026-09-11", created_by: "admin", provenance: "admin" }) });
+	});
+	await page.getByRole("button", { name: "Save as new version" }).click();
+	await expect(json).toBeDisabled();
+	await expect(page.getByRole("button", { name: "UI editor", exact: true })).toBeDisabled();
+	release();
+	await expect(json).toBeEnabled();
+	await expect(page.locator(".metadata-notice")).toContainText("Published metadata v2");
+	expect(JSON.parse(await json.inputValue())).toEqual(importMetadata);
+});
+
+test("metadata group controls enforce one key and scoped entity options", async ({ page }) => {
+	await openMockedAdmin(page);
+	await page.getByRole("link", { name: "Import metadata", exact: true }).click();
+	await page.getByRole("button", { name: "Open editor", exact: true }).click();
+	const main = page.locator(".metadata-sheet").first();
+	await main.locator("summary").first().click();
+	await expect(main.getByLabel("Sheets group name", { exact: true })).toBeDisabled();
+	await expect(main.getByLabel("Workbook sheet 1", { exact: true })).toHaveValue("main");
+	await main.getByRole("button", { name: "Add workbook sheet", exact: true }).click();
+	await main.getByLabel("Workbook sheet 2", { exact: true }).fill("Observations");
+	await main.getByRole("button", { name: "Move sheet 2 up", exact: true }).click();
+	await expect(main.getByLabel("Workbook sheet 1", { exact: true })).toHaveValue("Observations");
+	await main.getByLabel("Group primary key", { exact: true }).selectOption("4");
+	await main.locator('[data-column="source_link"] > summary').click();
+	await expect(main.getByRole("group", { name: "source_link · Primary key", exact: true })).toBeVisible();
+	await main.locator('[data-column="id"] > summary').click();
+	const id = main.getByRole("group", { name: "id", exact: true });
+	await expect(id.getByLabel("Classification level (optional)")).toHaveCount(0);
+	await expect(id.getByLabel("SMILES structure")).toHaveCount(0);
+	await expect(id.getByLabel("Entity", { exact: true }).getByRole("option", { name: "Publication (future use)" })).toHaveCount(1);
+	await id.getByLabel("Example (optional)").fill("sample-id");
+	const columnSection = main.locator("details.metadata-column").filter({ has: page.locator("summary").filter({ hasText: /^id$/ }) });
+	await columnSection.locator(":scope > summary").click();
+	await expect(id.getByLabel("Example (optional)")).toBeHidden();
+	await columnSection.locator(":scope > summary").click();
+	await expect(id.getByLabel("Example (optional)")).toHaveValue("sample-id");
+	await page.getByRole("button", { name: "JSON editor", exact: true }).click();
+	const json = page.getByLabel("Metadata JSON", { exact: true });
+	const draft = JSON.parse(await json.inputValue());
+	expect(draft.sheets[0].columns.filter((c: { primary_key?: boolean }) => c.primary_key).map((c: { name: string }) => c.name)).toEqual(["source_link"]);
+	expect(draft.sheets[0].columns[0].example).toBe("sample-id");
+	expect(draft.sheets[0].source_sheets).toEqual(["Observations", "main"]);
+	await page.route("**/metadata-versions/validate", route => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "sheet main requires exactly one primary key" }) }));
+	draft.sheets[0].columns[0].primary_key = true;
+	await json.fill(JSON.stringify(draft));
+	await expect(page.locator(".metadata-validation")).toContainText("requires exactly one primary key");
+	await expect(page.getByRole("button", { name: "Save as new version" })).toBeDisabled();
+});
+
+test("metadata has its own page with live, read-only draft previews", async ({ page }) => {
+	await openMockedAdmin(page);
+	await expect(page.getByRole("button", { name: "JSON editor", exact: true })).toHaveCount(0);
+	let writes = 0;
+	page.on("request", req => { if (req.url().endsWith("/metadata-versions") && req.method() === "POST") writes++; });
+	await page.getByRole("link", { name: "Import metadata", exact: true }).click();
+	await expect(page).toHaveURL(/\/admin\/metadata$/);
+	const preview = page.locator(".metadata-preview");
+	await expect(page.locator(".metadata-editor")).toBeHidden();
+	await preview.getByRole("textbox", { name: "Chemical", exact: true }).fill("O'Brien");
+	await expect(preview.locator("output")).toHaveText("chemical = 'O''Brien'");
+	await preview.getByRole("button", { name: "Open editor", exact: true }).click();
+	await expect(page.locator(".metadata-column[open]")).toHaveCount(0);
+	await page.getByRole("button", { name: "JSON editor", exact: true }).click();
+	const draft = structuredClone(importMetadata);
+	draft.sheets[0].columns.find(c => c.name === "source_link")!.label = "Record link";
+	const family = draft.sheets[2].columns.find(c => c.name === "family")!;
+	draft.sheets[2].columns.push({ ...family, name: "family_alt", label: "Alternate family", classification: { level: 1, tag: "default" } });
+	draft.sheets[2].columns.push({ ...family, name: "order", label: "Order", classification: { level: 2, tag: "gbif" } });
+	await page.getByLabel("Metadata JSON", { exact: true }).fill(JSON.stringify(draft));
+	await page.getByRole("button", { name: "Close editor", exact: true }).click();
+	await expect(page.locator(".metadata-editor")).toBeHidden();
+	await preview.getByRole("button", { name: "Results table", exact: true }).click();
+	await expect(preview.getByRole("region", { name: "Before selection", exact: true })).toBeVisible();
+	const selectedPreview = preview.getByRole("region", { name: "After selection", exact: true });
+	await expect(selectedPreview.locator(".side-panel__header")).toHaveCount(2);
+	await expect(selectedPreview.getByRole("heading", { name: "References", exact: true })).toBeVisible();
+	await expect(selectedPreview).toContainText("value from column smiles");
+	await expect(preview.getByRole("button", { name: "Edit main.source_link", exact: true }).filter({ hasText: "Record link" })).toBeVisible();
+	await expect(preview.getByRole("button", { name: "Entity details", exact: true })).toHaveCount(0);
+	await expect(selectedPreview.getByText("value from column chemical", { exact: true })).toBeVisible();
+	await preview.getByRole("button", { name: "Classification", exact: true }).click();
+	await expect(preview.locator('[data-classification-level="1"]')).toContainText("gbif");
+	const sameLevel = preview.locator('[data-classification-level="1"] .metadata-taxonomy-node');
+	await expect(sameLevel).toHaveCount(2);
+	const [firstNode, secondNode, upperNode] = await Promise.all([sameLevel.nth(0).boundingBox(), sameLevel.nth(1).boundingBox(), preview.locator('[data-classification-level="2"] .metadata-taxonomy-node').boundingBox()]);
+	expect(firstNode).not.toBeNull(); expect(secondNode).not.toBeNull(); expect(upperNode).not.toBeNull();
+	expect(Math.abs(firstNode!.y - secondNode!.y)).toBeLessThanOrEqual(1);
+	expect(upperNode!.y).toBeLessThan(firstNode!.y);
+	expect(Math.abs(upperNode!.x + upperNode!.width / 2 - (firstNode!.x + secondNode!.x + secondNode!.width) / 2)).toBeLessThanOrEqual(1);
+	await preview.getByRole("button", { name: "Edit classification.family", exact: true }).click();
+	const target = page.locator('.metadata-column[data-sheet="classification"][data-column="family"]');
+	await expect(target).toHaveAttribute("open", "");
+	await expect(target.locator(":scope > summary")).toBeFocused();
+	await expect(target.getByLabel("Display label", { exact: true })).toHaveValue("Family");
+	await page.getByRole("button", { name: "JSON editor", exact: true }).click();
+	expect(JSON.parse(await page.getByLabel("Metadata JSON", { exact: true }).inputValue())).toEqual(draft);
+	await page.getByLabel("Metadata JSON", { exact: true }).fill("{");
+	await expect(preview.getByRole("heading", { name: "Preview unavailable" })).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(page.locator(".metadata-editor")).toBeHidden();
+	await expect(preview.getByRole("button", { name: "Open editor", exact: true })).toBeFocused();
+	await preview.getByRole("button", { name: "Open editor", exact: true }).click();
+	await expect(page.getByLabel("Metadata JSON", { exact: true })).toHaveValue("{");
+	expect(writes).toBe(0);
+});
 
 for (const scenario of [
 	{ name: "ready", response: { status: 200, body: '{"state":"ready"}' }, notice: "mock-ready is Ready" },
@@ -229,7 +385,7 @@ test("busy import preserves the selected workbook and form values", async ({ pag
 	await expect(page.getByRole("dialog")).toBeVisible();
 	await expect(page.getByLabel("Spreadsheet file")).toHaveValue(/mock\.xlsx$/);
 	await expect(page.getByLabel("Table name")).toHaveValue("preserved-name");
-	await expect(page.getByLabel("Metadata list")).toHaveValue("meta");
+	await expect(page.getByRole("dialog")).toContainText("Latest metadata: v1");
 	await expect(page.getByTestId("table-notice")).toContainText("Your file and form values are preserved");
 });
 
@@ -266,7 +422,9 @@ test("passwordless migrated superuser has immediate authority, repeat magic logi
 	await dismissAdminTour(page);
 	await expect.poll(() => adminRoleQueries.some((raw) => new URL(raw).searchParams.get("q") === "admin" && new URL(raw).searchParams.get("page_size") === "25")).toBe(true);
 	await expect.poll(() => adminRoleQueries.some((raw) => Boolean(new URL(raw).searchParams.get("cursor")))).toBe(true);
+	const pinnedMetadata = await publishMetadataThroughUI(page);
 	const importedTable = await uploadTableThroughUI(page, "passwordless-authority");
+	await expect(importedTable).toContainText(`Metadata: v${pinnedMetadata}`);
 	const activationResponse = page.waitForResponse((response) => response.url().includes("/make-table-active/") && response.request().method() === "POST");
 	await importedTable.getByRole("button", { name: "Activate" }).click();
 	expect((await activationResponse).status()).toBe(200);
@@ -295,13 +453,13 @@ test("passwordless migrated superuser has immediate authority, repeat magic logi
 	});
 	expect(importedPayload.metadata).toEqual(expect.arrayContaining([
 		expect.objectContaining({ column: "chemical", type: expect.stringContaining("chemical") }),
-		expect.objectContaining({ column: "smiles", type: "smiles table_chemical chemical" }),
+		expect.objectContaining({ column: "smiles", type: expect.stringContaining("SMILES") }),
 		expect.objectContaining({ column: "species", type: expect.stringContaining("specie") }),
 		expect.objectContaining({ column: "references", type: "ref[]" }),
-		expect.objectContaining({ column: "family", type: "clas[01][gbif] table_specie specie" }),
-		expect.objectContaining({ column: "source_link", type: "link[https://example.test/articles/%s] table_" }),
-		expect.objectContaining({ column: "aliases", type: "set[Bergapten Psoralen] search chemical" }),
-		expect.objectContaining({ column: "tags", type: "set[O'Brien&A+B] search chemical" }),
+		expect.objectContaining({ column: "family", type: expect.stringContaining("clas[1][gbif]") }),
+		expect.objectContaining({ column: "source_link", type: expect.stringContaining("link[https://example.test/articles/%s]") }),
+		expect.objectContaining({ column: "aliases", type: expect.stringContaining("set[Bergapten Psoralen]") }),
+		expect.objectContaining({ column: "tags", type: expect.stringContaining("set[O'Brien&A+B]") }),
 	]));
 
 	// Exercise generated suggestions and CONTAINS using the actual imported

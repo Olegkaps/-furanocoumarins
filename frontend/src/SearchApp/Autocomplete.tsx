@@ -7,10 +7,11 @@ interface AutocompleteProps {
   onSelect: (value: string) => void;
   onChange: (value: string) => void;
   placeholder?: string;
+  ariaLabel?: string;
   style: React.CSSProperties
 }
 
-const Autocomplete = ({ value, fetchSuggestions, onSelect, onChange, placeholder, style }: AutocompleteProps) => {
+const Autocomplete = ({ value, fetchSuggestions, onSelect, onChange, placeholder, ariaLabel, style }: AutocompleteProps) => {
   const [inputValue, setInputValue] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -73,6 +74,7 @@ const Autocomplete = ({ value, fetchSuggestions, onSelect, onChange, placeholder
     <div className="autocomplete-container" ref={containerRef} style={style}>
       <input
         type="text"
+        aria-label={ariaLabel}
         value={value ?? inputValue}
         onChange={handleInputChange}
         placeholder={placeholder}

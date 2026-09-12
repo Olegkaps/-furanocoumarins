@@ -97,6 +97,10 @@ func NewApp(container *app.Container) *fiber.App {
 
 	app.Post("/get-tables-list", authmasterhandler.RequireUser(container), tables.GetTablesList)
 	admin := authmasterhandler.RequireAdmin(container)
+	app.Get("/metadata-versions", admin, create.MetadataVersions)
+	app.Get("/metadata-versions/latest", admin, create.LatestMetadata)
+	app.Post("/metadata-versions", admin, create.SaveMetadata)
+	app.Post("/metadata-versions/validate", admin, create.ValidateMetadata)
 	app.Post("/create-table", admin, create.CreateTable)
 	app.Get("/table-imports/:importID", admin, create.ImportStatus)
 	app.Post("/make-table-active/:timestamp", admin, tables.ActivateTable)

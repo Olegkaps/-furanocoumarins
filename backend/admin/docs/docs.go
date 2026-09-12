@@ -435,13 +435,6 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "example": "meta",
-                        "description": "Meta sheet name",
-                        "name": "meta",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "string",
                         "example": "furanocoumarins_v2",
                         "description": "Table name",
                         "name": "name",

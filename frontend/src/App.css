@@ -974,7 +974,7 @@ tfoot td {
   /* Vertically center the block on the branch line. */
   transform: translateY(-50%);
   padding: 3px 5px;
-  background: var(--color-count-bg);
+  background: var(--color-surface-alt);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   text-decoration: none;
@@ -1013,7 +1013,7 @@ tfoot td {
 .tree-count-block--link:hover {
   border-style: solid;
   border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-count-bg) 70%, var(--color-surface));
+  background: var(--color-surface-alt);
 }
 
 .tree-count-block__frame {
@@ -1029,7 +1029,7 @@ tfoot td {
   right: -5px;
   padding: 1px;
   color: var(--color-accent);
-  background: var(--color-count-bg);
+  background: var(--color-surface-alt);
   border-radius: 2px;
   opacity: 0.35;
 }

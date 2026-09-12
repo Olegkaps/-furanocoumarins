@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { api, getToken, isTokenExists, delToken } from "./utils";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   CirclePlus,
   TrashBin,
@@ -12,6 +12,7 @@ import "./Admin.css";
 
 class Table {
   version: string;
+  metadata_version?: number;
   name: string;
   created_at: string;
   is_active: boolean;
@@ -55,7 +56,8 @@ const AdminPage: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [googleSheetFile, setGoogleSheetFile] = useState<File>();
   const [googleSheetName, setGoogleSheetName] = useState("");
-  const [googleMetaList, setGoogleMetaList] = useState("");
+  const [metadataVersion, setMetadataVersion] = useState<number | null>(null);
+  const [metadataLoading, setMetadataLoading] = useState(true);
   const [showSaveBibtex, setShowSaveBibtex] = useState(false);
   const [bibtexFile, setBibtexFile] = useState<File>();
   const [tokenBroken, setTokenBroken] = useState(false);
@@ -97,6 +99,20 @@ const AdminPage: React.FC = () => {
 	if (token && !tokenBroken) void fetchTables().catch(() => setTableNotice("Could not load tables; retry the page."));
   }, [token, tokenBroken]);
 
+  useEffect(() => {
+    if (!token || tokenBroken) return;
+    const controller = new AbortController();
+    setMetadataLoading(true);
+    void api.get("/metadata-versions/latest", { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
+      .then(({ data }) => setMetadataVersion(data.version))
+      .catch(error => {
+        if (controller.signal.aborted) return;
+        setMetadataVersion(null);
+        if (error.response?.status !== 404) setTableNotice("Could not load import metadata. Retry opening the import form.");
+      }).finally(() => { if (!controller.signal.aborted) setMetadataLoading(false); });
+    return () => controller.abort();
+  }, [token, tokenBroken, showCreateForm]);
+
 	useEffect(() => () => importPoll.current?.abort(), []);
 
   if (!isTokenExists() || tokenBroken) {
@@ -113,7 +129,6 @@ const AdminPage: React.FC = () => {
       return;
     }
     bodyFormData.append("file", googleSheetFile);
-    bodyFormData.append("meta", googleMetaList);
     bodyFormData.append("name", googleSheetName);
 	const submittedName = googleSheetName;
 	setTableNotice(`Uploading ${submittedName}…`);
@@ -130,7 +145,7 @@ const AdminPage: React.FC = () => {
 		setShowCreateForm(false);
 		const importID = String(response.data?.import_id ?? "");
 		if (!importID) throw new Error("missing import identifier");
-		setTableNotice(`Importing ${submittedName}…`);
+		setTableNotice(`Importing ${submittedName} with metadata v${response.data?.metadata_version}…`);
 		await waitForImport(importID, submittedName, controller.signal);
 	} catch (error: unknown) {
 		if (controller.signal.aborted) return;
@@ -142,7 +157,7 @@ const AdminPage: React.FC = () => {
 		}
 		setTableNotice(accepted
 			? `Could not determine the final status of ${submittedName}. Reload the table list before retrying.`
-			: `Upload failed for ${submittedName}; check the file and retry.`);
+			: String((error as { response?: { data?: { error?: string } } }).response?.data?.error || `Upload failed for ${submittedName}; check the file and retry.`));
 	}
   };
 
@@ -276,6 +291,7 @@ const AdminPage: React.FC = () => {
           </p>
         </div>
         <div className="admin-topbar__actions">
+          <Link to="/admin/metadata" className="btn">Import metadata</Link>
           <button
             type="button"
             className="btn"
@@ -320,18 +336,9 @@ const AdminPage: React.FC = () => {
                 placeholder="Name of table"
               />
             </label>
-            <label>
-              Metadata list
-              <input
-                type="text"
-                required
-                value={googleMetaList}
-                onChange={(e) => setGoogleMetaList(e.target.value)}
-                placeholder="List with metadata"
-              />
-            </label>
+            <p>{metadataLoading ? "Loading latest metadata…" : metadataVersion ? `Latest metadata: v${metadataVersion}. The server pins the latest published version when it accepts this import.` : "Publish an import metadata definition before uploading."} <Link to="/admin/metadata">Edit metadata and preview</Link></p>
             <div className="admin-modal__actions">
-              <button type="submit" className="btn btn-primary">
+              <button type="submit" className="btn btn-primary" disabled={!metadataVersion || metadataLoading}>
                 Create
               </button>
               <button
@@ -408,6 +415,7 @@ const AdminPage: React.FC = () => {
                   {table.created_at.replace("T", " ").replace("Z", "")}
                 </p>
                 <p>Version: {table.version}</p>
+                <p>Metadata: {table.metadata_version ? `v${table.metadata_version}` : "Legacy (not yet migrated)"}</p>
 
                 {!table.is_active && (
                   <div className="admin-table-card__actions">

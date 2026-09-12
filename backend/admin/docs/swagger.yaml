@@ -377,11 +377,6 @@ paths:
         name: file
         required: true
         type: file
-      - description: Meta sheet name
-        example: meta
-        in: formData
-        name: meta
-        type: string
       - description: Table name
         example: furanocoumarins_v2
         in: formData

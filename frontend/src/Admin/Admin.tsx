@@ -10,17 +10,19 @@ import FullNavigation from "../FullNavigation/FullNavigation";
 import "./Admin.css";
 import { PageTour } from "../shared/tour/PageTour";
 import AccountSecurity from "./AccountSecurity";
+import MetadataEditor from "./MetadataEditor";
 
-export function AdminApp() {
+export function AdminApp({ metadataPage = false }: { metadataPage?: boolean }) {
   const username = getName();
+  if (!isTokenExists()) return <Navigate to="/login" />;
   return (
     <div>
-      <FullNavigation pageName="admin" />
-      <PageTour tourId="admin" />
+      <FullNavigation pageName={metadataPage ? "metadata" : "admin"} />
+      {!metadataPage && <PageTour tourId="admin" />}
       <div className="admin-page" style={{ paddingTop: 8 }}>
         <div className="admin-topbar" style={{ marginBottom: 8 }} data-tour="admin-header">
           <h1 className="admin-topbar__title" style={{ fontSize: "1.75rem" }}>
-            Administration
+            {metadataPage ? "Import metadata" : "Administration"}
           </h1>
           <div className="admin-user">
             <p className="admin-user__name">{username}</p>
@@ -30,8 +32,10 @@ export function AdminApp() {
           </div>
         </div>
       </div>
-      <AdminPage />
-	  <AccountSecurity />
+      {metadataPage ? <div className="admin-page metadata-page">
+        <Link to="/admin" className="btn">Back to administration</Link>
+        <MetadataEditor />
+      </div> : <><AdminPage /><AccountSecurity /></>}
     </div>
   );
 }

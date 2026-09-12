@@ -11,30 +11,89 @@ import (
 	appcreate "admin/internal/application/create"
 	"admin/internal/infrastructure/logging"
 	"admin/internal/infrastructure/persistence/cassandra"
+	"admin/internal/pkg/metadata"
 )
 
 type mockImporter struct {
-	insertErr      error
-	batchErr       error
-	batchErrOn     int
-	batchCalls     int
-	setOkErr       error
-	sasiErr        error
-	articleIDs     map[string]string
-	getArticleErr  error
-	lastBatchCols  []string
-	dataBatchCols  []string
-	lastBatchTable string
-	insertCalls    int
-	setOkCalls     int
-	panicArticle   bool
-	calls          []string
+	metadataVersion *int64
+	insertErr       error
+	batchErr        error
+	batchErrOn      int
+	batchCalls      int
+	setOkErr        error
+	sasiErr         error
+	articleIDs      map[string]string
+	getArticleErr   error
+	lastBatchCols   []string
+	dataBatchCols   []string
+	dataBatchRows   [][]any
+	lastBatchTable  string
+	insertCalls     int
+	setOkCalls      int
+	panicArticle    bool
+	calls           []string
 }
 
-func (m *mockImporter) ReserveTable(_ *cassandra.Table) (bool, error) {
+func (m *mockImporter) ReserveTable(table *cassandra.Table) (bool, error) {
+	m.metadataVersion = table.MetadataVersion
 	m.insertCalls++
 	m.calls = append(m.calls, "reserve")
 	return m.insertErr == nil, m.insertErr
+}
+
+func TestImportVersionedDocumentWithoutMetadataWorksheet(t *testing.T) {
+	f := fullImportWorkbook(t)
+	defer f.Close()
+	require.NoError(t, f.DeleteSheet("meta"))
+	d := metadata.Document{SchemaVersion: 1, Importable: true, Sheets: []metadata.Sheet{
+		{Name: "main", SourceSheets: []string{"main"}, Columns: []metadata.Column{{Name: "id", DataType: "text", PrimaryKey: true}, {Name: "name", DataType: "text", Search: true, ShowInResults: true}}},
+		{Name: "classification", SourceSheets: []string{"classification"}, Columns: []metadata.Column{{Name: "cid", DataType: "text", PrimaryKey: true}, {Name: "species", DataType: "text"}}},
+	}}
+	imp := &mockImporter{}
+	_, err := appcreate.ImportTableWithMetadata(&mockStore{imp: imp}, f, d, 42, "versioned", logging.Nop{})
+	require.NoError(t, err)
+	require.NotNil(t, imp.metadataVersion)
+	require.Equal(t, int64(42), *imp.metadataVersion)
+	require.Equal(t, 1, imp.setOkCalls)
+	_, err = appcreate.ImportTableWithMetadata(&mockStore{imp: imp}, f, d, 0, "missing pin", logging.Nop{})
+	require.ErrorContains(t, err, "version")
+}
+
+func TestImportV2InfersSpeciesAndPublicationJoins(t *testing.T) {
+	f := fullImportWorkbook(t)
+	defer f.Close()
+	require.NoError(t, f.DeleteSheet("meta"))
+	require.NoError(t, f.SetSheetRow("main", "A1", &[]any{"cid", "publicationid"}))
+	require.NoError(t, f.SetSheetRow("main", "A2", &[]any{"1", "paper1"}))
+	_, err := f.NewSheet("Publications")
+	require.NoError(t, err)
+	require.NoError(t, f.SetSheetRow("Publications", "A1", &[]any{"publicationid", "title"}))
+	require.NoError(t, f.SetSheetRow("Publications", "A2", &[]any{"paper1", "A real title"}))
+	example := "Preview only"
+	d := metadata.Document{SchemaVersion: 2, Importable: true, Sheets: []metadata.Sheet{
+		{Name: "main", SourceSheets: []string{"main"}, Columns: []metadata.Column{{Name: "cid", DataType: "text"}, {Name: "publicationid", DataType: "text"}}},
+		{Name: "classification", SourceSheets: []string{"classification"}, Columns: []metadata.Column{{Name: "cid", DataType: "text", PrimaryKey: true}, {Name: "species", DataType: "text"}}},
+		{Name: "publications", SourceSheets: []string{"Publications"}, Columns: []metadata.Column{{Name: "publicationid", DataType: "text", PrimaryKey: true}, {Name: "title", DataType: "text", Example: &example}}},
+	}}
+	imp := &metadataCaptureImporter{}
+	_, err = appcreate.ImportTableWithMetadata(&mockStore{imp: imp}, f, d, 43, "shared columns", logging.Nop{})
+	require.NoError(t, err)
+	require.Equal(t, 1, imp.setOkCalls)
+	require.Contains(t, imp.dataBatchCols, "species TEXT")
+	require.Contains(t, imp.dataBatchCols, "title TEXT")
+	require.Len(t, imp.dataBatchRows, 1)
+	for index, column := range imp.dataBatchCols {
+		switch column {
+		case "species TEXT":
+			require.Equal(t, "sp1", imp.dataBatchRows[0][index])
+		case "title TEXT":
+			require.Equal(t, "A real title", imp.dataBatchRows[0][index])
+		}
+	}
+	require.Empty(t, d.Sheets[0].Columns[0].ExternalSheet)
+	for _, row := range imp.metadata {
+		require.NotContains(t, row, example)
+	}
 }
 
 func (m *mockImporter) CreateAndBatchInsert(tableName string, columnDefs, primaryKeys []string, data [][]any) error {
@@ -44,6 +103,7 @@ func (m *mockImporter) CreateAndBatchInsert(tableName string, columnDefs, primar
 	m.lastBatchCols = columnDefs
 	if strings.HasPrefix(tableName, "chemdb.data_") && !strings.HasSuffix(tableName, "_sources") {
 		m.dataBatchCols = columnDefs
+		m.dataBatchRows = data
 	}
 	if m.batchErr != nil && m.batchCalls == m.batchErrOn {
 		return m.batchErr

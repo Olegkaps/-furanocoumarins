@@ -5,6 +5,7 @@ import {
   CircleInfo,
   ClockArrowRotateLeft,
   Database,
+  FileCode,
   Gear,
   Magnifier,
 } from "@gravity-ui/icons";
@@ -51,7 +52,7 @@ function NavIcon({
 
 export interface FullNavigationProps {
   /** Mark this page’s icon as selected and non-clickable */
-  pageName?: "home" | "about" | "history" | "cache" | "admin";
+  pageName?: "home" | "about" | "history" | "cache" | "admin" | "metadata";
 }
 
 export default function FullNavigation({ pageName }: FullNavigationProps) {
@@ -102,6 +103,14 @@ export default function FullNavigation({ pageName }: FullNavigationProps) {
             className="nav-icon-link--admin"
           >
             <Gear width={28} height={28} />
+          </NavIcon>
+          <NavIcon
+            to="/admin/metadata"
+            title="Metadata"
+            current={pageName === "metadata"}
+            className="nav-icon-link--admin"
+          >
+            <FileCode width={28} height={28} />
           </NavIcon>
         </div>
       )}

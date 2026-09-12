@@ -1,6 +1,8 @@
 :8080 {
     @backend path \
         /metadata \
+        /metadata-versions \
+        /metadata-versions/* \
         /autocomplete/* \
         /article/* \
         /pages/* \

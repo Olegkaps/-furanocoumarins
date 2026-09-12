@@ -55,6 +55,7 @@ function App() {
 			  <Route path="/admit" element={<AdminMagicCallback />}/>
 			  <Route path="/register" element={<Register />}/>
               <Route path="/admin" element={<AdminApp />}/>
+              <Route path="/admin/metadata" element={<AdminApp metadataPage />}/>
               <Route path="/reference/:article_id" element={<Reference />}/>
           </Routes>
         </div>

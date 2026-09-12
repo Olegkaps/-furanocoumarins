@@ -1,8 +1,11 @@
 package create
 
 import (
+	"admin/internal/infrastructure/persistence/cassandra"
 	"archive/zip"
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -51,7 +54,7 @@ func multipartWorkbookBytesRequest(t *testing.T, xlsx []byte) *http.Request {
 
 func TestCreateTableReturnsConflictWhileImportingAndAcceptsAfterCompletion(t *testing.T) {
 	mailer := mailmemory.NewSender()
-	h := &Handler{Handler: deps.New(&app.Container{Mail: mailer}), imports: newImportTracker()}
+	h := &Handler{Handler: deps.New(&app.Container{Mail: mailer}), latestMetadata: fixtureLatestMetadata, imports: newImportTracker()}
 	var workbookOpens atomic.Int32
 	h.openWorkbook = func(reader io.Reader) (*excelize.File, error) {
 		workbookOpens.Add(1)
@@ -59,7 +62,7 @@ func TestCreateTableReturnsConflictWhileImportingAndAcceptsAfterCompletion(t *te
 	}
 	started := make(chan struct{}, 2)
 	release := make(chan struct{}, 2)
-	h.importTable = func(*excelize.File, string, string, logging.Logger) (string, error) {
+	h.importTable = func(*excelize.File, cassandra.MetadataVersion, string, logging.Logger) (string, error) {
 		started <- struct{}{}
 		<-release
 		return "ready", nil
@@ -133,9 +136,9 @@ func TestCreateTableRejectsOverExpandedWorkbookAndReleasesAdmission(t *testing.T
 	require.Less(t, expanded.Len(), 1<<20, "fixture must exercise compressed expansion, not request-body size")
 
 	mailer := mailmemory.NewSender()
-	h := &Handler{Handler: deps.New(&app.Container{Mail: mailer}), imports: newImportTracker(), openWorkbook: openWorkbook}
+	h := &Handler{Handler: deps.New(&app.Container{Mail: mailer}), latestMetadata: fixtureLatestMetadata, imports: newImportTracker(), openWorkbook: openWorkbook}
 	var imports atomic.Int32
-	h.importTable = func(*excelize.File, string, string, logging.Logger) (string, error) {
+	h.importTable = func(*excelize.File, cassandra.MetadataVersion, string, logging.Logger) (string, error) {
 		imports.Add(1)
 		return "", nil
 	}
@@ -167,9 +170,10 @@ func TestCreateTableRejectsOverExpandedWorkbookAndReleasesAdmission(t *testing.T
 
 func TestCreateTableInvalidWorkbookFloodLeavesNoUnreachableJobs(t *testing.T) {
 	h := &Handler{
-		Handler:      deps.New(&app.Container{Mail: mailmemory.NewSender()}),
-		imports:      newImportTracker(),
-		openWorkbook: openWorkbook,
+		Handler:        deps.New(&app.Container{Mail: mailmemory.NewSender()}),
+		latestMetadata: fixtureLatestMetadata,
+		imports:        newImportTracker(),
+		openWorkbook:   openWorkbook,
 	}
 	application := fiber.New()
 	application.Post("/create-table", func(c *fiber.Ctx) error {
@@ -199,22 +203,26 @@ func (zeroReader) Read(buffer []byte) (int, error) {
 func TestRunCreateTableRecordsEveryTerminalOutcomeAndRecoversPanic(t *testing.T) {
 	for _, test := range []struct {
 		name      string
-		importer  func(*excelize.File, string, string, logging.Logger) (string, error)
+		importer  func(*excelize.File, cassandra.MetadataVersion, string, logging.Logger) (string, error)
 		wantState importState
 		secret    string
 	}{
-		{"success", func(*excelize.File, string, string, logging.Logger) (string, error) { return "ok", nil }, ready, ""},
-		{"error", func(*excelize.File, string, string, logging.Logger) (string, error) {
+		{"success", func(*excelize.File, cassandra.MetadataVersion, string, logging.Logger) (string, error) {
+			return "ok", nil
+		}, ready, ""},
+		{"error", func(*excelize.File, cassandra.MetadataVersion, string, logging.Logger) (string, error) {
 			return "", errors.New("workbook rejected")
 		}, broken, ""},
-		{"panic", func(*excelize.File, string, string, logging.Logger) (string, error) { panic("panic-secret-value") }, broken, "panic-secret-value"},
+		{"panic", func(*excelize.File, cassandra.MetadataVersion, string, logging.Logger) (string, error) {
+			panic("panic-secret-value")
+		}, broken, "panic-secret-value"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			mailer := mailmemory.NewSender()
-			h := &Handler{Handler: deps.New(&app.Container{Mail: mailer}), imports: newImportTracker(), importTable: test.importer}
+			h := &Handler{Handler: deps.New(&app.Container{Mail: mailer}), latestMetadata: fixtureLatestMetadata, imports: newImportTracker(), importTable: test.importer}
 			job, accepted := h.imports.tryStart(test.name)
 			require.True(t, accepted)
-			h.runCreateTable(logging.RequestFields{}, excelize.NewFile(), "meta", "author@example.test", test.name, "fixture.xlsx", job.ID)
+			h.runCreateTable(logging.RequestFields{}, excelize.NewFile(), cassandra.MetadataVersion{Version: 1}, "author@example.test", test.name, "fixture.xlsx", job.ID)
 			terminal, ok := h.imports.get(job.ID)
 			require.True(t, ok)
 			require.Equal(t, test.wantState, terminal.State)
@@ -229,4 +237,62 @@ func TestRunCreateTableRecordsEveryTerminalOutcomeAndRecoversPanic(t *testing.T)
 			}
 		})
 	}
+}
+
+func fixtureLatestMetadata(context.Context) (cassandra.MetadataVersion, error) {
+	return cassandra.MetadataVersion{Version: 1}, nil
+}
+
+func TestCreateTablePinsMetadataBeforeOpeningWorkbook(t *testing.T) {
+	var latest atomic.Int64
+	latest.Store(7)
+	captured := make(chan int64, 1)
+	h := &Handler{Handler: deps.New(&app.Container{Mail: mailmemory.NewSender()}), imports: newImportTracker()}
+	h.latestMetadata = func(context.Context) (cassandra.MetadataVersion, error) {
+		return cassandra.MetadataVersion{Version: latest.Load()}, nil
+	}
+	h.openWorkbook = func(r io.Reader) (*excelize.File, error) { latest.Store(8); return openWorkbook(r) }
+	h.importTable = func(_ *excelize.File, v cassandra.MetadataVersion, _ string, _ logging.Logger) (string, error) {
+		captured <- v.Version
+		return "", nil
+	}
+	application := fiber.New()
+	application.Post("/create-table", func(c *fiber.Ctx) error {
+		email := "admin@example.test"
+		c.Locals("auth-master-user", infraauth.User{Email: &email})
+		return h.CreateTable(c)
+	})
+	response, err := application.Test(multipartWorkbookRequest(t))
+	require.NoError(t, err)
+	defer response.Body.Close()
+	require.Equal(t, 200, response.StatusCode)
+	var job importJob
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&job))
+	require.Equal(t, int64(7), job.MetadataVersion)
+	select {
+	case pin := <-captured:
+		require.Equal(t, int64(7), pin)
+	case <-time.After(time.Second):
+		t.Fatal("import not started")
+	}
+}
+
+func TestCreateTableWithoutPublishedMetadataDoesNotInflateWorkbook(t *testing.T) {
+	h := &Handler{imports: newImportTracker(), latestMetadata: func(context.Context) (cassandra.MetadataVersion, error) {
+		return cassandra.MetadataVersion{}, sql.ErrNoRows
+	}, openWorkbook: func(io.Reader) (*excelize.File, error) {
+		t.Error("must not inflate before metadata exists")
+		return nil, errors.New("unexpected")
+	}}
+	application := fiber.New()
+	application.Post("/create-table", func(c *fiber.Ctx) error {
+		email := "admin@example.test"
+		c.Locals("auth-master-user", infraauth.User{Email: &email})
+		return h.CreateTable(c)
+	})
+	response, err := application.Test(multipartWorkbookRequest(t))
+	require.NoError(t, err)
+	defer response.Body.Close()
+	require.Equal(t, 412, response.StatusCode)
+	require.Empty(t, h.imports.jobs)
 }

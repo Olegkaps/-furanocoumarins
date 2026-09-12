@@ -187,3 +187,15 @@ export function safeMetadataLink(template, value) {
 export function getMetadataTypeModifier(columnType, marker) {
   return parseMetadataType(columnType)?.modifiers.get(marker) ?? null;
 }
+
+/** Explicit result positions are numeric and independent of other modifiers. */
+export function compareMetadataResultTypes(left, right) {
+  const position = type => {
+    const tokens = parseMetadataType(type)?.tokens ?? [];
+    for (const token of tokens) if (/^table_[0-9]+$/.test(token)) return Number(token.slice(6));
+    return Infinity;
+  };
+  const a = position(left), b = position(right);
+  if (a !== b) return a < b ? -1 : 1;
+  return left === right ? 0 : left < right ? -1 : 1;
+}

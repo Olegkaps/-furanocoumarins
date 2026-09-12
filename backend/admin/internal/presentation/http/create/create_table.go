@@ -2,6 +2,8 @@ package create
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 
@@ -14,15 +16,17 @@ import (
 	appcreate "admin/internal/application/create"
 	domainmail "admin/internal/domain/mail"
 	"admin/internal/infrastructure/logging"
+	"admin/internal/infrastructure/persistence/cassandra"
 	"admin/internal/presentation/http/deps"
 	"admin/internal/presentation/http/response"
 )
 
 type Handler struct {
 	deps.Handler
-	imports      *importTracker
-	openWorkbook func(io.Reader) (*excelize.File, error)
-	importTable  func(*excelize.File, string, string, logging.Logger) (string, error)
+	imports        *importTracker
+	openWorkbook   func(io.Reader) (*excelize.File, error)
+	importTable    func(*excelize.File, cassandra.MetadataVersion, string, logging.Logger) (string, error)
+	latestMetadata func(context.Context) (cassandra.MetadataVersion, error)
 }
 
 const (
@@ -41,20 +45,20 @@ func openWorkbook(reader io.Reader) (*excelize.File, error) {
 
 func NewHandler(container *app.Container) *Handler {
 	h := &Handler{Handler: deps.New(container), imports: newImportTracker(), openWorkbook: openWorkbook}
-	h.importTable = func(file *excelize.File, meta, name string, log logging.Logger) (string, error) {
-		return appcreate.ImportTable(container.Cassandra, file, meta, name, log)
+	h.latestMetadata = container.Cassandra.LatestMetadata
+	h.importTable = func(file *excelize.File, version cassandra.MetadataVersion, name string, log logging.Logger) (string, error) {
+		return appcreate.ImportTableWithMetadata(container.Cassandra, file, version.Document, version.Version, name, log)
 	}
 	return h
 }
 
 // CreateTable godoc
 // @Summary      Create table from Excel file
-// @Description  Uploads Excel file and creates a new table
+// @Description  Imports an Excel workbook using the latest published metadata version, pinned before workbook parsing. No metadata worksheet is read. Save metadata first if no published version exists.
 // @Tags         tables
 // @Security     BearerAuth
 // @Accept       multipart/form-data
 // @Param        file formData file true "Excel file"
-// @Param        meta formData string false "Meta sheet name" example(meta)
 // @Param        name formData string false "Table name" example(furanocoumarins_v2)
 // @Success      200
 // @Failure      400,500 {object} response.ErrorResponse
@@ -70,18 +74,27 @@ func (h *Handler) CreateTable(c *fiber.Ctx) error {
 		return response.Resp400(c, err)
 	}
 
-	meta := c.FormValue("meta")
 	tableName := c.FormValue("name")
 	displayPath := file.Filename
 
-	logging.Info(c, "accepted create-table request: file=%s table=%s meta=%s user=%s",
-		displayPath, tableName, meta, authorEmail)
+	logging.Info(c, "accepted create-table request: file=%s table=%s user=%s",
+		displayPath, tableName, authorEmail)
 
 	reqLog := logging.CopyRequestFields(c)
 	job, accepted := h.imports.tryStart(tableName)
 	if !accepted {
 		return c.Status(fiber.StatusConflict).JSON(response.ErrorResponse{Error: "another import is already running; wait and retry"})
 	}
+	version, err := h.latestMetadata(c.UserContext())
+	if err != nil {
+		h.imports.discard(job.ID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return c.Status(fiber.StatusPreconditionFailed).JSON(response.ErrorResponse{Error: "save an importable metadata version before importing a workbook"})
+		}
+		logging.Error(c, "load import metadata: %s", err)
+		return c.Status(fiber.StatusServiceUnavailable).JSON(response.ErrorResponse{Error: "metadata is temporarily unavailable"})
+	}
+	job = h.imports.pin(job.ID, version.Version)
 
 	// Admission precedes opening and inflating the archive so a busy service
 	// never holds multiple decompressed workbooks in its 128 MiB process.
@@ -101,7 +114,7 @@ func (h *Handler) CreateTable(c *fiber.Ctx) error {
 		h.imports.discard(job.ID)
 		return response.Resp400(c, fmt.Errorf("invalid or over-expanded workbook: %w", err))
 	}
-	go h.runCreateTable(reqLog, xlsx, meta, authorEmail, tableName, displayPath, job.ID)
+	go h.runCreateTable(reqLog, xlsx, version, authorEmail, tableName, displayPath, job.ID)
 
 	return response.JSON(c, job)
 }
@@ -120,7 +133,8 @@ func (h *Handler) ImportStatus(c *fiber.Ctx) error {
 func (h *Handler) runCreateTable(
 	reqLog logging.RequestFields,
 	tableFile *excelize.File,
-	metaListName, authorMail, fileName, displayPath, importID string,
+	version cassandra.MetadataVersion,
+	authorMail, fileName, displayPath, importID string,
 ) {
 	defer func() {
 		if err := tableFile.Close(); err != nil {
@@ -139,7 +153,7 @@ func (h *Handler) runCreateTable(
 			}
 		}
 	}()
-	reqLog.Info("starting async table import: file=%s table=%s meta=%s", displayPath, fileName, metaListName)
+	reqLog.Info("starting async table import: file=%s table=%s metadata_version=%d", displayPath, fileName, version.Version)
 
 	sendErrorMail := func(err error) {
 		reqLog.Warn("create table %s failed: %s", displayPath, err.Error())
@@ -152,7 +166,7 @@ func (h *Handler) runCreateTable(
 		}
 	}
 
-	message, err := h.importTable(tableFile, metaListName, fileName, reqLog)
+	message, err := h.importTable(tableFile, version, fileName, reqLog)
 	if err != nil {
 		h.imports.finish(importID, broken)
 		sendErrorMail(err)

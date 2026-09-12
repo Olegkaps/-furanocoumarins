@@ -48,8 +48,13 @@ func (s *Store) ensurePostgresSchema(ctx context.Context) error {
 CREATE TABLE IF NOT EXISTS chemdb.tables (created_at timestamptz PRIMARY KEY, name text NOT NULL, version text NOT NULL, table_meta text NOT NULL, table_data text NOT NULL, table_species text NOT NULL, is_ok boolean NOT NULL DEFAULT false, is_active boolean NOT NULL DEFAULT false);
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_chemdb_table ON chemdb.tables ((is_active)) WHERE is_active;
 CREATE TABLE IF NOT EXISTS chemdb.bibtex (article_id text PRIMARY KEY, bibtex_text text NOT NULL);
-CREATE TABLE IF NOT EXISTS chemdb.pages (name text PRIMARY KEY, url text NOT NULL);`)
-	return err
+CREATE TABLE IF NOT EXISTS chemdb.pages (name text PRIMARY KEY, url text NOT NULL);
+CREATE TABLE IF NOT EXISTS chemdb.metadata_versions (version bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, document jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), created_by text NOT NULL, provenance text NOT NULL, published boolean NOT NULL DEFAULT false);
+ALTER TABLE chemdb.tables ADD COLUMN IF NOT EXISTS metadata_version bigint REFERENCES chemdb.metadata_versions(version);`)
+	if err != nil {
+		return err
+	}
+	return s.BackfillMetadata(ctx)
 }
 func (s *Store) pgGetArticle(id string) (string, error) {
 	var x string
@@ -76,7 +81,7 @@ func (s *Store) pgBatchInsertBibtex(rows [][]any) error {
 	return tx.Commit()
 }
 func (s *Store) pgGetAllTables() ([]*Table, error) {
-	rows, e := s.db.Query(`SELECT created_at,name,version,table_meta,table_data,table_species,is_ok,is_active FROM chemdb.tables ORDER BY created_at DESC`)
+	rows, e := s.db.Query(`SELECT created_at,name,version,table_meta,table_data,table_species,is_ok,is_active,metadata_version FROM chemdb.tables ORDER BY created_at DESC`)
 	if e != nil {
 		return nil, e
 	}
@@ -84,7 +89,7 @@ func (s *Store) pgGetAllTables() ([]*Table, error) {
 	out := []*Table{}
 	for rows.Next() {
 		t := new(Table)
-		if e = rows.Scan(&t.Timestamp, &t.Name, &t.Version, &t.TableMeta, &t.TableData, &t.TableSpecies, &t.IsOk, &t.IsActive); e != nil {
+		if e = rows.Scan(&t.Timestamp, &t.Name, &t.Version, &t.TableMeta, &t.TableData, &t.TableSpecies, &t.IsOk, &t.IsActive, &t.MetadataVersion); e != nil {
 			return nil, e
 		}
 		out = append(out, t)
@@ -93,7 +98,7 @@ func (s *Store) pgGetAllTables() ([]*Table, error) {
 }
 func (s *Store) pgGetActiveTable(_ *fiber.Ctx) (*Table, error) {
 	t := new(Table)
-	e := s.db.QueryRow(`SELECT created_at,name,version,table_meta,table_data,table_species,is_ok,is_active FROM chemdb.tables WHERE is_active AND is_ok`).Scan(&t.Timestamp, &t.Name, &t.Version, &t.TableMeta, &t.TableData, &t.TableSpecies, &t.IsOk, &t.IsActive)
+	e := s.db.QueryRow(`SELECT created_at,name,version,table_meta,table_data,table_species,is_ok,is_active,metadata_version FROM chemdb.tables WHERE is_active AND is_ok`).Scan(&t.Timestamp, &t.Name, &t.Version, &t.TableMeta, &t.TableData, &t.TableSpecies, &t.IsOk, &t.IsActive, &t.MetadataVersion)
 	if e == sql.ErrNoRows {
 		return nil, &response.UserError{E: fmt.Errorf("no active table found")}
 	}
@@ -491,7 +496,7 @@ func (s *Store) pgCreateAndBatchInsert(table string, defs, keys []string, data [
 	return tx.Commit()
 }
 func (s *Store) pgReserveTable(t *Table) (bool, error) {
-	r, e := s.db.Exec(`INSERT INTO chemdb.tables(created_at,name,version,table_meta,table_data,table_species,is_active,is_ok) VALUES($1,$2,$3,$4,$5,$6,false,false) ON CONFLICT(created_at) DO NOTHING`, t.Timestamp, t.Name, t.Version, t.TableMeta, t.TableData, t.TableSpecies)
+	r, e := s.db.Exec(`INSERT INTO chemdb.tables(created_at,name,version,table_meta,table_data,table_species,is_active,is_ok,metadata_version) VALUES($1,$2,$3,$4,$5,$6,false,false,$7) ON CONFLICT(created_at) DO NOTHING`, t.Timestamp, t.Name, t.Version, t.TableMeta, t.TableData, t.TableSpecies, t.MetadataVersion)
 	if e != nil {
 		return false, e
 	}

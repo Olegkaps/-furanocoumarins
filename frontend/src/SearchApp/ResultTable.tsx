@@ -18,7 +18,7 @@ import { InfoTip } from "../shared/ui/InfoTip";
 import { substancePagePath } from "../shared/substanceUrl";
 import { QueryCompareBar, type CompareSeries } from "./QueryCompareBar";
 import { CitationPopover } from "../shared/ui/CitationPopover";
-import { getMetadataTypeModifier, hasMetadataTypeToken } from "../shared/metadataType";
+import { compareMetadataResultTypes, getMetadataTypeModifier, hasMetadataTypeToken } from "../shared/metadataType";
 import { resultGroupIdentity, resultRowIdentity } from "./resultRowIdentity";
 import * as XLSX from "xlsx";
 
@@ -1514,15 +1514,12 @@ function ResultTableOrNull({
   let chem_key_column = "";
   let specie_key_column = "";
 
-  const metadata = response["metadata"].sort(
+  const metadata = [...response["metadata"]].sort(
     (
       meta_1: { [index: string]: any },
       meta_2: { [index: string]: any },
     ) => {
-      if (meta_1["type"] > meta_2["type"]) {
-        return 1;
-      }
-      return -1;
+      return compareMetadataResultTypes(meta_1["type"], meta_2["type"]);
     },
   );
   metadata.forEach((meta_item: { [index: string]: any }) => {

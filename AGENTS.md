@@ -21,6 +21,8 @@ accounts, invitations, bans, roles, sessions, and signing-key rotation.
   `backend/admin/cmd/import-furanocoumarins` — side-owned offline identity import.
 - `backend/admin/internal/application/create` — workbook validation, unjoined
   source preservation, and joined search-table construction.
+- `backend/admin/internal/pkg/metadata` — structured import definitions and
+  legacy declaration conversion; independent of persistence and presentation.
 - `backend/admin/internal/migration/cassandrapostgres` and
   `backend/admin/cmd/migrate-cassandra-postgres` — offline scientific-data cutover;
   Cassandra is not a runtime dependency.
@@ -100,6 +102,46 @@ joined data, and bibliography. Do not claim original chemical/publication sheets
 were recovered from joins: unreferenced rows may already have been lost. Reimport
 the workbook to obtain complete unjoined sources.
 
+## Versioned import metadata
+
+`chemdb.metadata_versions` stores immutable JSON definitions. The schema format
+(`schema_version`) and metadata version are separate from the backend's existing
+`tables.version`. All metadata-management endpoints require `RequireAdmin`.
+Publication creates a new version and rejects a stale `base_version`; it never
+changes definitions already pinned by datasets.
+
+New drafts require schema format 2; pinned format-1 definitions retain explicit
+join semantics. Format 2 resolves shared non-primary column names against other
+groups' primary keys, starting at `main`; ambiguous targets require an explicit
+JSON override. Each non-main group has one key; main may use a generated row key.
+The admin validation endpoint returns the resolved copy without persisting it.
+Use that copy for join and public-view previews, not a second join algorithm.
+Classification belongs only to species, SMILES only to chemicals. Publication
+is a supported future entity, not a new public search category. Column examples
+are optional presentation values; absent/null examples show column placeholders.
+
+Normal admin imports snapshot the latest published version before asynchronous
+processing, persist its ID in `tables.metadata_version`, and use its worksheet
+mappings instead of reading a workbook metadata sheet. Structured and raw JSON
+editors modify the same document. Physical column types are text and text sets;
+search, result placement, SMILES, references and classification are semantics,
+not extra SQL types. Empty set choices are derived from imported values.
+
+The editor lives at `/admin/metadata`; `/admin` only fetches the latest version
+for uploads. Its draft previews project the sheets reachable from `main` into
+search, observation results, entity panels, and classification. Preview values
+are explicitly synthetic; previews must not publish, import, navigate to sample
+links, or query active data as if it belonged to an unpublished definition.
+
+Startup and scientific-data migration backfill historical dataset definitions
+idempotently without rewriting scientific rows. Source catalogs can recover
+original declarations and worksheet names, but not the order of multiple names
+stored in a legacy set. Joined-only metadata is an incomplete, unpublished
+archive: do not invent original worksheet mappings or keys. Preserve provenance
+and raw declarations, and require completion before publication. Initially prefer
+the active dataset's usable definition; never replace an admin-published latest
+version during repeated backfill. Shared versions survive dataset deletion.
+
 ## Testing
 
 Run tests through the root `Makefile`:
@@ -107,6 +149,8 @@ Run tests through the root `Makefile`:
 - `make lint` — Go vet plus frontend lint.
 - `make test-unit` — backend unit/regression suite and frontend production build.
 - `make test-backend-container` — CI-equivalent backend coverage/integration container.
+- `make test-metadata` — PostgreSQL-only metadata versions, backfill, and HTTP
+  persistence; requires an explicit disposable `TEST_POSTGRES_DSN`.
 - `make test-entity-migration` — unjoined entities and real Cassandra/PostgreSQL
   migration tests; explicit disposable `TEST_POSTGRES_DSN` and
   `TEST_CASSANDRA_HOST` required, optional `TEST_CASSANDRA_PORT`.

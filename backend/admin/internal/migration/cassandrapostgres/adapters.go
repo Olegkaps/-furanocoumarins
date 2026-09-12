@@ -356,7 +356,7 @@ func RunCassandraToPostgres(ctx context.Context, session *gocql.Session, db *sql
 			return fmt.Errorf("row-count changed while copying %s", name)
 		}
 	}
-	return nil
+	return cassandra.NewPostgresStore(db).EnsureActivationSchema(ctx)
 }
 
 // Older Cassandra snapshots have no catalog: preserve their joined data,

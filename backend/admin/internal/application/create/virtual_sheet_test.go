@@ -17,6 +17,22 @@ func TestNewVirtualSheetPositive(t *testing.T) {
 	assert.NotNil(t, sheet.Rows)
 }
 
+func TestVirtualSheetDefaultChainsAreDeterministicAndRejectCycles(t *testing.T) {
+	for range 30 {
+		s := appcreate.NewVirtualSheet()
+		s.ColumnNames = []string{"first", "second", "third"}
+		s.ColumnTypes = []string{"default[second]", "default[third]", ""}
+		s.Rows = map[string][]any{"row": {"", "", "value"}}
+		require.NoError(t, s.Postprocess())
+		require.Equal(t, []any{"value", "value", "value"}, s.Rows["row"])
+	}
+	s := appcreate.NewVirtualSheet()
+	s.ColumnNames = []string{"first", "second"}
+	s.ColumnTypes = []string{"default[second]", "default[first]"}
+	s.Rows = map[string][]any{"row": {"", ""}}
+	require.ErrorContains(t, s.Postprocess(), "cyclic default")
+}
+
 func TestVirtualSheetPostprocessPositive(t *testing.T) {
 	sheet := appcreate.NewVirtualSheet()
 	sheet.ColumnNames = []string{"name", "tags"}

@@ -13,7 +13,8 @@ import {
 } from "@gravity-ui/icons";
 import { InfoTip } from "../shared/ui/InfoTip";
 import { QueryCompareBar, type CompareSeries } from "./QueryCompareBar";
-import { getMetadataTypeModifier, hasMetadataTypeToken } from "../shared/metadataType";
+import { hasMetadataTypeToken } from "../shared/metadataType";
+import { selectTreeTaxonomy } from "./treeTaxonomy";
 import {
   appendCladeClause,
   readCompareQueriesFromParams,
@@ -1529,60 +1530,12 @@ function PhilogeneticTreeOrNull({
     return <div></div>;
   }
 
-  const metadata_response = response["metadata"];
-  metadata_response.sort(
-    (a: { [x: string]: string }, b: { [x: string]: string }) => {
-      let t_a = a["type"];
-      if (t_a.startsWith("table_")) {
-        t_a = t_a.split(" ")[1];
-      }
-
-      let t_b = b["type"];
-      if (t_b.startsWith("table_")) {
-        t_b = t_b.split(" ")[1];
-      }
-
-      if (t_a === t_b) {
-        return 0;
-      } else if (t_a < t_b) {
-        return 1;
-      }
-      return -1;
-    },
+  const taxonomy = selectTreeTaxonomy(
+    response["metadata"] as Array<{ type: string; column: string; name: string }>,
+    tag,
   );
-
-  const species_meta = ["__root__"];
-  const meta_names = ["__root__"];
-  const class_num_to_tag: { [val: string]: string } = {};
-
-  const all_tags = new Set<string>();
-  all_tags.add("original");
-  all_tags.add(tag);
-
-  metadata_response.forEach((meta_item: { [index: string]: any }) => {
-    const classification = getMetadataTypeModifier(String(meta_item["type"]), "clas");
-    if (!classification) {
-      return;
-    }
-
-    const curr_num = classification[0];
-    const curr_tag = classification[1] ?? "original";
-
-    all_tags.add(curr_tag);
-    if (curr_tag === "original" && !(curr_num in class_num_to_tag)) {
-      //
-    } else if (curr_tag === tag && curr_num in class_num_to_tag) {
-      species_meta.pop();
-      meta_names.pop();
-    } else if (curr_tag !== tag) {
-      return;
-    }
-
-    const clade_name = meta_item["column"];
-    species_meta.push(clade_name);
-    meta_names.push(meta_item["name"]);
-    class_num_to_tag[curr_num] = curr_tag;
-  });
+  const species_meta = ["__root__", ...taxonomy.columns.map((column) => column.column)];
+  const meta_names = ["__root__", ...taxonomy.columns.map((column) => column.name)];
 
   const cladeLevels = meta_names.slice(1).map((name, index) => ({
     index,
@@ -1666,9 +1619,7 @@ function PhilogeneticTreeOrNull({
           <InfoTip text={TAXONOMY_INFO} label="About taxonomy sources" />
         </span>
         <div className="tree-toolbar__buttons">
-          {Array(...all_tags)
-            .sort()
-            .map((item) => (
+          {taxonomy.tags.map((item) => (
               <button
                 key={item}
                 type="button"
