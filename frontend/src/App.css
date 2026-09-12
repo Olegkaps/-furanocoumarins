@@ -1216,6 +1216,15 @@ tfoot td {
   border: 1px solid var(--color-border);
 }
 
+.query-compare-bar__item.is-hidden {
+  opacity: 0.58;
+}
+
+.query-compare-bar__item.is-hidden .query-compare-bar__text {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
 .query-compare-bar__swatch {
   width: 12px;
   height: 12px;
@@ -1245,7 +1254,7 @@ tfoot td {
   margin-top: 3px;
 }
 
-.query-compare-bar__remove {
+.query-compare-bar__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1261,9 +1270,18 @@ tfoot td {
   flex-shrink: 0;
 }
 
-.query-compare-bar__remove:hover {
-  color: var(--color-danger);
+.query-compare-bar__icon:hover:not(:disabled) {
+  color: var(--color-ink);
   background: var(--color-surface);
+}
+
+.query-compare-bar__icon:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.query-compare-bar__icon[aria-label^="Remove"]:hover {
+  color: var(--color-danger);
 }
 
 .query-compare-bar__add {

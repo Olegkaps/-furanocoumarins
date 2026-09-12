@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, Xmark } from "@gravity-ui/icons";
+import { Eye, EyeSlash, Plus, Xmark } from "@gravity-ui/icons";
 import config from "../config";
 import { NewFeatureHint } from "../shared/ui/NewFeatureHint";
 import {
   readCompareQueriesFromParams,
+  readHiddenCompareQueriesFromParams,
   syncCompareColors,
+  writeHiddenCompareQueriesToParams,
   writeCompareQueriesToParams,
 } from "./compareQueries";
 import { fetchSearchData, filterResponse } from "./searchApi";
@@ -112,6 +114,7 @@ export function useCompareSeries(primaryQuery: string): {
   extraQueries: string[];
   /** Raw (unfiltered) primary response for page chrome / empty states. */
   primaryRaw: { [index: string]: any };
+  hiddenQueries: string[];
   loading: boolean;
 } {
   const [searchParams] = useSearchParams();
@@ -119,7 +122,6 @@ export function useCompareSeries(primaryQuery: string): {
     () => readCompareQueriesFromParams(searchParams),
     [searchParams],
   );
-
   const allQueries = useMemo(() => {
     const list: string[] = [];
     const primary = primaryQuery.trim();
@@ -131,6 +133,12 @@ export function useCompareSeries(primaryQuery: string): {
   }, [primaryQuery, extraQueries]);
 
   const queriesKey = allQueries.join("\u0001");
+  const hiddenQueries = useMemo(() => {
+    const active = new Set(allQueries);
+    return readHiddenCompareQueriesFromParams(searchParams).filter((q) =>
+      active.has(q),
+    );
+  }, [searchParams, queriesKey]);
 
   const [colorsByQuery, setColorsByQuery] = useState<Record<string, string>>(
     {},
@@ -200,27 +208,67 @@ export function useCompareSeries(primaryQuery: string): {
     [queriesKey, rawByQuery, colorsByQuery, fetchedAtByQuery],
   );
 
-  return { series, colorsByQuery, extraQueries, primaryRaw, loading };
+  return {
+    series,
+    colorsByQuery,
+    extraQueries,
+    primaryRaw,
+    hiddenQueries,
+    loading,
+  };
 }
 
 export function CompareQueriesDisplay({
   queries,
   colorsByQuery,
+  hiddenQueries = [],
+  onToggleHidden,
   onRemove,
 }: {
   /** Primary first, then extras. */
   queries: string[];
   colorsByQuery: Record<string, string>;
+  hiddenQueries?: string[];
+  onToggleHidden?: (query: string) => void;
   /** When set, extras (not primary) show a remove control. */
   onRemove?: (query: string) => void;
 }) {
   if (queries.length === 0) return null;
   const [primary, ...extras] = queries;
+  const hidden = new Set(hiddenQueries);
+  const visibleCount = queries.filter((q) => !hidden.has(q)).length;
+  const HiddenButton = ({ query }: { query: string }) => {
+    if (!onToggleHidden) return null;
+    const isHidden = hidden.has(query);
+    const disabled = !isHidden && visibleCount <= 1;
+    const Icon = isHidden ? EyeSlash : Eye;
+    return (
+      <button
+        type="button"
+        className="query-compare-bar__icon"
+        title={
+          isHidden
+            ? "Show query"
+            : disabled
+              ? "At least one query must stay visible"
+              : "Hide query"
+        }
+        aria-label={isHidden ? `Show ${query}` : `Hide ${query}`}
+        aria-pressed={isHidden}
+        disabled={disabled}
+        onClick={() => onToggleHidden(query)}
+      >
+        <Icon width={14} height={14} />
+      </button>
+    );
+  };
 
   return (
     <ul className="query-compare-bar__list">
       {primary !== "" && (
-        <li className="query-compare-bar__item">
+        <li
+          className={`query-compare-bar__item${hidden.has(primary) ? " is-hidden" : ""}`}
+        >
           <span
             className="query-compare-bar__swatch"
             style={{ background: colorsByQuery[primary] }}
@@ -229,10 +277,14 @@ export function CompareQueriesDisplay({
             {primary}
           </span>
           <span className="query-compare-bar__tag">primary</span>
+          <HiddenButton query={primary} />
         </li>
       )}
       {extras.map((q) => (
-        <li key={q} className="query-compare-bar__item">
+        <li
+          key={q}
+          className={`query-compare-bar__item${hidden.has(q) ? " is-hidden" : ""}`}
+        >
           <span
             className="query-compare-bar__swatch"
             style={{ background: colorsByQuery[q] }}
@@ -240,10 +292,11 @@ export function CompareQueriesDisplay({
           <span className="query-compare-bar__text" title={q}>
             {q}
           </span>
+          <HiddenButton query={q} />
           {onRemove && (
             <button
               type="button"
-              className="query-compare-bar__remove"
+              className="query-compare-bar__icon"
               title="Remove query"
               aria-label={`Remove ${q}`}
               onClick={() => onRemove(q)}
@@ -266,6 +319,7 @@ export function QueryCompareBar({
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const extras = readCompareQueriesFromParams(searchParams);
+  const hiddenQueries = readHiddenCompareQueriesFromParams(searchParams);
   const [draft, setDraft] = useState("");
   const maxExtra = Math.max(0, config["MAX_COMPARE_QUERIES"] - 1);
   const primary = primaryQuery.trim();
@@ -289,6 +343,19 @@ export function QueryCompareBar({
         prev,
         extras.filter((x) => x !== q),
       ),
+    );
+  };
+
+  const toggleHidden = (q: string) => {
+    setSearchParams(
+      (prev) => {
+        const current = readHiddenCompareQueriesFromParams(prev);
+        const nextHidden = current.includes(q)
+          ? current.filter((x) => x !== q)
+          : [...current, q];
+        return writeHiddenCompareQueriesToParams(prev, nextHidden);
+      },
+      { replace: true },
     );
   };
 
@@ -339,6 +406,8 @@ export function QueryCompareBar({
         <CompareQueriesDisplay
           queries={listQueries}
           colorsByQuery={colorsByQuery}
+          hiddenQueries={hiddenQueries}
+          onToggleHidden={toggleHidden}
           onRemove={remove}
         />
       </div>

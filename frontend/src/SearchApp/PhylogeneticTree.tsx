@@ -18,7 +18,7 @@ import { selectTreeTaxonomy } from "./treeTaxonomy";
 import {
   appendCladeClause,
   readCompareQueriesFromParams,
-  writeCompareQueriesToParams,
+  writeCompareQuerySetToParams,
 } from "./compareQueries";
 
 class Specie {
@@ -707,14 +707,17 @@ function CountButton({
   }
 
   let next = new URLSearchParams(searchParams);
-  next.set(
-    "query",
-    appendCladeClause(next.get("query") ?? "", clade_key, clade_val),
+  const nextPrimary = appendCladeClause(
+    next.get("query") ?? "",
+    clade_key,
+    clade_val,
   );
+  next.set("query", nextPrimary);
   const extras = readCompareQueriesFromParams(searchParams);
   if (extras.length > 0) {
-    next = writeCompareQueriesToParams(
-      next,
+    next = writeCompareQuerySetToParams(
+      searchParams,
+      nextPrimary,
       extras.map((q) => appendCladeClause(q, clade_key, clade_val)),
     );
   }
@@ -1496,11 +1499,13 @@ function PhilogeneticTreeOrNull({
   compareSeries = [],
   colorsByQuery = {},
   primaryQuery = "",
+  compareBarPrimaryQuery = primaryQuery,
 }: {
   response: { [index: string]: any };
   compareSeries?: CompareSeries[];
   colorsByQuery?: Record<string, string>;
   primaryQuery?: string;
+  compareBarPrimaryQuery?: string;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -1722,7 +1727,7 @@ function PhilogeneticTreeOrNull({
         data-tour="tree-compare"
       >
         <QueryCompareBar
-          primaryQuery={primaryQuery}
+          primaryQuery={compareBarPrimaryQuery}
           colorsByQuery={colorsByQuery}
         />
       </div>

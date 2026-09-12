@@ -139,3 +139,34 @@ test("compare series side lists include labels from every query", () => {
   assert.doesNotMatch(html, />chem-extra</);
   assert.doesNotMatch(html, />sp-extra</);
 });
+
+test("compare bar keeps URL primary query when displayed rows come from a visible comparison", () => {
+  const urlPrimary = "type_structure CONTAINS 'ang'";
+  const visibleComparison = "type_structure CONTAINS 'lin'";
+  const params = new URLSearchParams();
+  params.set("query", urlPrimary);
+  params.set("cmp", JSON.stringify([visibleComparison]));
+  params.set("cmp_hidden", JSON.stringify([urlPrimary]));
+
+  const html = renderToStaticMarkup(
+    createElement(
+      MemoryRouter,
+      { initialEntries: [`/table?${params.toString()}`] },
+      createElement(ResultTable, {
+        metadata,
+        data,
+        colorsByQuery: {
+          [urlPrimary]: "#1E3A8A",
+          [visibleComparison]: "#B45309",
+        },
+        primaryQuery: visibleComparison,
+        compareBarPrimaryQuery: urlPrimary,
+      }),
+    ),
+  );
+
+  assert.match(html, /<li class="query-compare-bar__item is-hidden">/);
+  assert.match(html, new RegExp(`title="${urlPrimary.replaceAll("'", "&#x27;")}"`));
+  assert.match(html, new RegExp(`aria-label="Show ${urlPrimary.replaceAll("'", "&#x27;")}"`));
+  assert.match(html, new RegExp(`title="${visibleComparison.replaceAll("'", "&#x27;")}"`));
+});

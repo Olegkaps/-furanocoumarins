@@ -1224,6 +1224,7 @@ function TableStateBar({
   chemicalCount,
   referenceCount,
   primaryQuery = "",
+  compareBarPrimaryQuery = primaryQuery,
   colorsByQuery = {},
 }: {
   rows: DataRows[];
@@ -1238,6 +1239,7 @@ function TableStateBar({
   chemicalCount: number;
   referenceCount: number;
   primaryQuery?: string;
+  compareBarPrimaryQuery?: string;
   colorsByQuery?: Record<string, string>;
 }) {
   let total_rows = 0;
@@ -1284,7 +1286,7 @@ function TableStateBar({
 
       <div className="panel-toolbar__compare" data-tour="table-compare">
         <QueryCompareBar
-          primaryQuery={primaryQuery}
+          primaryQuery={compareBarPrimaryQuery}
           colorsByQuery={colorsByQuery}
         />
       </div>
@@ -1342,12 +1344,14 @@ function ResultTableWrapper({
   compareSeries = [],
   colorsByQuery = {},
   primaryQuery = "",
+  compareBarPrimaryQuery = primaryQuery,
 }: {
   rows: Array<DataRows>;
   meta: Array<DataMeta>;
   compareSeries?: CompareSeries[];
   colorsByQuery?: Record<string, string>;
   primaryQuery?: string;
+  compareBarPrimaryQuery?: string;
 }) {
   if (rows.length === 0) {
     return <></>;
@@ -1504,6 +1508,7 @@ function ResultTableWrapper({
         chemicalCount={chemicalCount}
         referenceCount={referenceCount}
         primaryQuery={primaryQuery}
+        compareBarPrimaryQuery={compareBarPrimaryQuery}
         colorsByQuery={colorsByQuery}
       />
       <ResultsWorkspace
@@ -1525,11 +1530,13 @@ function ResultTableOrNull({
   compareSeries = [],
   colorsByQuery = {},
   primaryQuery = "",
+  compareBarPrimaryQuery = primaryQuery,
   ...response
 }: {
   compareSeries?: CompareSeries[];
   colorsByQuery?: Record<string, string>;
   primaryQuery?: string;
+  compareBarPrimaryQuery?: string;
   [key: string]: any;
 }) {
   if (isEmpty(response)) {
@@ -1620,6 +1627,7 @@ function ResultTableOrNull({
       compareSeries={compareSeries}
       colorsByQuery={colorsByQuery}
       primaryQuery={primaryQuery}
+      compareBarPrimaryQuery={compareBarPrimaryQuery}
     />
   );
 }
