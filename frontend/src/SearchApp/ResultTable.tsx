@@ -88,6 +88,7 @@ function countLabelForChemical(
 
 type SelectOption = {
   value: string;
+  label: string;
   count: number;
   seriesCounts?: Array<{ color: string; n: number }>;
 };
@@ -109,6 +110,7 @@ function buildOptions(
   kind: "specie" | "chemical",
   mode: CountMode,
   refColumns: string[],
+  meta: DataMeta[],
 ): SelectOption[] {
   const values: string[] = [];
   const seen = new Set<string>();
@@ -122,6 +124,7 @@ function buildOptions(
   return values
     .map((value) => ({
       value,
+      label: labelForEntity(rows, meta, kind, value),
       count:
         kind === "specie"
           ? countLabelForSpecie(rows, value, mode, refColumns)
@@ -136,10 +139,11 @@ function buildOptionsWithSeries(
   kind: "specie" | "chemical",
   mode: CountMode,
   refColumns: string[],
+  meta: DataMeta[],
   series: Array<{ color: string; rows: DataRows[] | "primary" }>,
 ): SelectOption[] {
   if (series.length <= 1) {
-    return buildOptions(primaryRows, kind, mode, refColumns);
+    return buildOptions(primaryRows, kind, mode, refColumns, meta);
   }
   const resolved = series.map(({ color, rows: srows }) => ({
     color,
@@ -162,11 +166,60 @@ function buildOptionsWithSeries(
       }));
       return {
         value,
+        label: labelForEntity(resolved.flatMap(({ rows }) => rows), meta, kind, value),
         count: seriesCounts.reduce((acc, s) => acc + s.n, 0),
         seriesCounts,
       };
     })
     .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+}
+
+function firstNonEmpty(values: Array<string | undefined>): string {
+  return values.map((value) => (value ?? "").trim()).find(Boolean) ?? "";
+}
+
+function chemicalListLabel(value: string | undefined, fallback: string): string {
+  if (!value) return fallback;
+  return value.split("=")[0]?.trim() || fallback;
+}
+
+function speciesListLabel(row: Map<string, string>, meta: DataMeta[], fallback: string): string {
+  const columns = meta
+    .filter((m) => m.is_specie && m.classification_level != null && (row.get(m.name) ?? "").trim() !== "")
+    .sort((a, b) => (b.classification_level ?? 0) - (a.classification_level ?? 0));
+  const preferred = [1, 0]
+    .map((level) => columns.find((m) => m.classification_level === level))
+    .filter((m): m is DataMeta => Boolean(m));
+  const selected = preferred.length > 0 ? preferred : columns.slice(-2);
+  const parts = selected.map((column) => (row.get(column.name) ?? "").trim()).filter(Boolean);
+  const label = parts.join(" ").trim();
+  return label || fallback;
+}
+
+function labelForEntity(
+  rows: DataRows[],
+  meta: DataMeta[],
+  kind: "specie" | "chemical",
+  value: string,
+): string {
+  const candidates = rows.filter((dr) =>
+    kind === "specie" ? dr.specie_val === value : dr.chemical_val === value,
+  );
+  if (kind === "chemical") {
+    const markedColumn = meta.find((m) => m.is_chemical && m.is_list_name)?.name;
+    return firstNonEmpty(
+      candidates.map((dr) => {
+        if (markedColumn) {
+          const marked = chemicalListLabel(dr.chemical_row.get(markedColumn), "");
+          if (marked) return marked;
+        }
+        return chemicalListLabel(dr.chemical_row.get("trivial_names"), "");
+      }),
+    ) || value;
+  }
+  return firstNonEmpty(
+    candidates.map((dr) => speciesListLabel(dr.specie_row, meta, "")),
+  ) || value;
 }
 
 /** Build DataRows from raw search rows using already-parsed meta + key columns. */
@@ -568,7 +621,7 @@ function RankedSelectList({
             onBlur={() => onHover?.(null)}
           >
             <span className="ranked-select-list__index">{i + 1}.</span>
-            <span className="ranked-select-list__value">{opt.value}</span>
+            <span className="ranked-select-list__value">{opt.label}</span>
             <span className="ranked-select-list__count">
               {(() => {
                 const visible = (opt.seriesCounts ?? []).filter((s) => s.n > 0);
@@ -806,6 +859,7 @@ function ResultsWorkspace({
     "specie",
     speciesCountMode,
     refColumns,
+    meta,
     seriesRowSets.map(({ color, rows: srows }) => ({
       color,
       rows:
@@ -821,6 +875,7 @@ function ResultsWorkspace({
     "chemical",
     chemicalsCountMode,
     refColumns,
+    meta,
     seriesRowSets.map(({ color, rows: srows }) => ({
       color,
       rows:
@@ -880,6 +935,7 @@ function ResultsWorkspace({
     "specie",
     countMode,
     refColumns,
+    meta,
     seriesRowSets.map(({ color, rows: srows }) => ({
       color,
       rows:
@@ -899,6 +955,7 @@ function ResultsWorkspace({
     "chemical",
     countMode,
     refColumns,
+    meta,
     seriesRowSets.map(({ color, rows: srows }) => ({
       color,
       rows:
@@ -1328,8 +1385,8 @@ function ResultTableWrapper({
     .filter((m) => m.type === "reference")
     .map((m) => m.name);
 
-  const allSpecies = buildOptions(rows, "specie", "chemicals", refColumns);
-  const allChemicals = buildOptions(rows, "chemical", "chemicals", refColumns);
+  const allSpecies = buildOptions(rows, "specie", "chemicals", refColumns, meta);
+  const allChemicals = buildOptions(rows, "chemical", "chemicals", refColumns, meta);
 
   const [countMode, setCountMode] = useState<CountMode>("chemicals");
   const [currentSpecie, setCurrentSpecie] = useState(
@@ -1391,6 +1448,7 @@ function ResultTableWrapper({
           "specie",
           effectiveCountMode,
           refColumns,
+          meta,
           seriesRowSets.map(({ color, rows: srows }, i) => ({
             color,
             rows:
@@ -1407,6 +1465,7 @@ function ResultTableWrapper({
           "chemical",
           effectiveCountMode,
           refColumns,
+          meta,
           seriesRowSets.map(({ color, rows: srows }, i) => ({
             color,
             rows:
@@ -1526,18 +1585,23 @@ function ResultTableOrNull({
     const data_name = meta_item["column"];
     let data_type = "";
     let additional_data = "";
+    let classificationLevel: number | null = null;
 
     const full_type = meta_item["type"];
     const linkModifier = getMetadataTypeModifier(full_type, "link");
+    const classificationModifier = getMetadataTypeModifier(full_type, "clas");
     if (linkModifier) {
       data_type = "link";
       additional_data = linkModifier[0];
-    } else if (getMetadataTypeModifier(full_type, "clas")) {
+    } else if (classificationModifier) {
       data_type = "clas";
     } else if (hasMetadataTypeToken(full_type, "SMILES")) {
       data_type = "smiles";
     } else if (hasMetadataTypeToken(full_type, "ref[]")) {
       data_type = "reference";
+    }
+    if (classificationModifier && /^\d+$/.test(classificationModifier[0])) {
+      classificationLevel = Number(classificationModifier[0]);
     }
 
     if (hasMetadataTypeToken(full_type, "chemical")) {
@@ -1553,10 +1617,10 @@ function ResultTableOrNull({
     let group_type = "";
     if (hasMetadataTypeToken(full_type, "chemical")) {
       group_type = "chemical";
-    } else if (hasMetadataTypeToken(full_type, "specie")) {
+    } else if (hasMetadataTypeToken(full_type, "specie") || classificationModifier) {
       group_type = "specie";
     }
-    if (!hasMetadataTypeToken(full_type, "table_")) {
+    if (!hasMetadataTypeToken(full_type, "table_") && !classificationModifier) {
       group_type = "ignore";
     }
     data_meta.push(
@@ -1567,6 +1631,10 @@ function ResultTableOrNull({
         meta_item["description"],
         additional_data,
         group_type,
+        {
+          isListName: hasMetadataTypeToken(full_type, "list_name"),
+          classificationLevel,
+        },
       ),
     );
   });

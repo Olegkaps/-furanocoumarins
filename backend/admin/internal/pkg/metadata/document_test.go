@@ -39,7 +39,7 @@ func TestDocumentRejectsInvalidContracts(t *testing.T) {
 	}
 }
 func TestDocumentRoundTripLegacyModifiers(t *testing.T) {
-	for _, legacy := range []string{"", "search table_2 chemical", "primary invisible", "set[alpha beta] search", "set[<>]", "ref[] link[/reference/%s]", "clas[3][powo] table_specie", "external[classification] default[speciesid]", "text keycolumn"} {
+	for _, legacy := range []string{"", "search table_2 chemical", "primary invisible", "set[alpha beta] search", "set[<>]", "ref[] link[/reference/%s]", "clas[3][powo] table_specie", "external[classification] default[speciesid]", "text keycolumn", "table_chemical list_name"} {
 		c, err := ColumnFromLegacy([]string{"main", "value", legacy, "description", "Label"})
 		require.NoError(t, err)
 		again, err := ColumnFromLegacy([]string{"main", "value", c.LegacyType(), "description", "Label"})
@@ -109,7 +109,8 @@ func TestV2EntitySemanticsAndRootRules(t *testing.T) {
 		"classification chemical": func(d *Document) {
 			d.Sheets[0].Columns = append(d.Sheets[0].Columns, Column{Name: "bad", DataType: "text", Domain: "chemical", Classification: &Classification{Level: 1}})
 		},
-		"species smiles": func(d *Document) { d.Sheets[1].Columns[1].Smiles = true },
+		"species smiles":    func(d *Document) { d.Sheets[1].Columns[1].Smiles = true },
+		"species list name": func(d *Document) { d.Sheets[1].Columns[1].ListName = true },
 		"join main": func(d *Document) {
 			d.Sheets[0].Columns[0].PrimaryKey = true
 			d.Sheets[1].Columns[0].ExternalSheet = "main"

@@ -2,7 +2,7 @@ export type MetadataColumn = {
   name: string; label?: string; description?: string; data_type: "text" | "set";
   primary_key?: boolean; external_sheet?: string; default_column?: string;
   search?: boolean; show_in_results?: boolean; result_order?: number | null;
-  domain?: "chemical" | "species" | "publication"; reference?: boolean; smiles?: boolean; hidden?: boolean;
+  domain?: "chemical" | "species" | "publication"; reference?: boolean; smiles?: boolean; list_name?: boolean; hidden?: boolean;
   example?: string | null;
   classification?: { level: number; tag?: string }; link_template?: string;
   set_choices?: string[]; legacy_flags?: string[];

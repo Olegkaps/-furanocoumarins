@@ -49,6 +49,7 @@ type Column struct {
 	Domain         string          `json:"domain,omitempty"`
 	Reference      bool            `json:"reference,omitempty"`
 	Smiles         bool            `json:"smiles,omitempty"`
+	ListName       bool            `json:"list_name,omitempty"`
 	Hidden         bool            `json:"hidden,omitempty"`
 	Classification *Classification `json:"classification,omitempty"`
 	LinkTemplate   string          `json:"link_template,omitempty"`
@@ -225,6 +226,9 @@ func (d Document) Validate() error {
 				if c.Smiles && domain != "chemical" {
 					return fmt.Errorf("SMILES is only available for chemical column %s.%s", s.Name, c.Name)
 				}
+				if c.ListName && domain != "chemical" {
+					return fmt.Errorf("list_name is only available for chemical column %s.%s", s.Name, c.Name)
+				}
 				if c.ExternalSheet == "main" {
 					return fmt.Errorf("main is the root sheets group and cannot be a join target")
 				}
@@ -398,7 +402,7 @@ func inferredDomain(sheet, external string) string {
 
 func reservedFlag(s string) bool {
 	switch s {
-	case "primary", "search", "invisible", "set", "SMILES", "smiles", "chemical", "specie", "publication", "external", "default", "clas", "link":
+	case "primary", "search", "invisible", "set", "SMILES", "smiles", "list_name", "chemical", "specie", "publication", "external", "default", "clas", "link":
 		return true
 	}
 	return strings.HasPrefix(s, "table_")
@@ -474,6 +478,7 @@ func (c Column) LegacyType() string {
 	add(c.Hidden, "invisible")
 	add(c.Reference, "ref[]")
 	add(c.Smiles, "SMILES")
+	add(c.ListName, "list_name")
 	if c.DataType == "set" {
 		if len(c.SetChoices) > 0 {
 			flags = append(flags, "set["+strings.Join(c.SetChoices, " ")+"]")
@@ -527,6 +532,8 @@ func ColumnFromLegacy(row []string) (Column, error) {
 			c.Hidden = true
 		case "SMILES", "smiles":
 			c.Smiles = true
+		case "list_name":
+			c.ListName = true
 		case "chemical":
 			c.Domain = "chemical"
 		case "specie":

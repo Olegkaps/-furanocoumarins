@@ -64,6 +64,7 @@ func TestIsTypesEqualPositive(t *testing.T) {
 	assert.True(t, search.IsTypesEqual("link[https://example.test/%s] table_", "table_ link[https://example.test/%s]"))
 	assert.True(t, search.IsTypesEqual("set[Bergapten Psoralen] chemical", "chemical set[Bergapten Psoralen]"))
 	assert.True(t, search.IsTypesEqual("table_chemical SMILES", "table_chemical smiles"))
+	assert.True(t, search.IsTypesEqual("table_chemical list_name", "list_name table_chemical"))
 }
 
 func TestIsTypesEqualNegative(t *testing.T) {
@@ -74,6 +75,7 @@ func TestIsTypesEqualNegative(t *testing.T) {
 	assert.False(t, search.IsTypesEqual("set[one two]", "set[one three]"))
 	assert.False(t, search.IsTypesEqual("external[sunset]", "set"))
 	assert.False(t, search.IsTypesEqual("table_chemical SMILES", "table_chemical Smiles"))
+	assert.False(t, search.IsTypesEqual("table_chemical", "table_chemical list_name"))
 }
 
 func TestValidateRequestSQLInjectionNegative(t *testing.T) {

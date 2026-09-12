@@ -99,8 +99,18 @@ class DataMeta {
   is_grouping: boolean
   is_chemical: boolean
   is_specie: boolean
+  is_list_name: boolean
+  classification_level: number | null
 
-  constructor(type: string, name: string, show_name: string, description: string, data: string, group_type: string) {
+  constructor(
+    type: string,
+    name: string,
+    show_name: string,
+    description: string,
+    data: string,
+    group_type: string,
+    options: { isListName?: boolean; classificationLevel?: number | null } = {},
+  ) {
     // TO DO: validate type
     this.type = type
     this.name = name
@@ -111,6 +121,8 @@ class DataMeta {
     this.is_chemical = group_type == "chemical"
     this.is_specie = group_type == "specie"
     this.is_grouping = this.is_chemical || this.is_specie
+    this.is_list_name = options.isListName ?? false
+    this.classification_level = options.classificationLevel ?? null
   }
 
   render(value: string | undefined) { // rewrite to classes

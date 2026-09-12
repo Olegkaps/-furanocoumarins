@@ -154,6 +154,8 @@ test("metadata labels use exact tokens outside modifier arguments", () => {
   assert.equal(hasMetadataTypeToken("table_chemical smiles", "SMILES"), true);
   assert.equal(hasMetadataTypeToken("table_chemical SMILES", "smiles"), true);
   assert.equal(hasMetadataTypeToken("table_chemical Smiles", "SMILES"), false);
+  assert.equal(hasMetadataTypeToken("table_chemical list_name", "list_name"), true);
+  assert.equal(hasMetadataTypeToken("link[/fields/list_name/%s]", "list_name"), false);
 });
 
 test("metadata links allow HTTPS and safe relative destinations only", () => {

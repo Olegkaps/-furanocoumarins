@@ -45,7 +45,7 @@ export function buildMetadataPreview(document) {
       const c = { ...column, domain: inferred || column.domain, sheet: sheet.name };
       const signature = JSON.stringify([
         c.data_type, c.description || "", c.domain || "", c.default_column || "", !!c.search, !!c.show_in_results,
-        c.result_order ?? null, !!c.hidden, !!c.reference, !!c.smiles, c.classification?.level ?? null,
+        c.result_order ?? null, !!c.hidden, !!c.reference, !!c.smiles, !!c.list_name, c.classification?.level ?? null,
         c.classification?.tag || "", c.link_template || "", c.set_choices ?? [],
         (c.legacy_flags ?? []).filter(flag => flag !== "keycolumn").sort(),
       ]);

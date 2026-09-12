@@ -33,7 +33,7 @@ function parseDraft(raw: string): Document {
     s && typeof s.name === "string" && Array.isArray(s.source_sheets) && s.source_sheets.every(v => typeof v === "string") &&
     Array.isArray(s.columns) && s.columns.every(c => c && typeof c.name === "string" && ["text", "set"].includes(c.data_type) &&
       (["label", "description", "external_sheet", "default_column", "domain", "link_template"] as const).every(key => c[key] === undefined || typeof c[key] === "string") &&
-      (["primary_key", "search", "show_in_results", "reference", "smiles", "hidden"] as const).every(key => c[key] === undefined || typeof c[key] === "boolean") &&
+      (["primary_key", "search", "show_in_results", "reference", "smiles", "list_name", "hidden"] as const).every(key => c[key] === undefined || typeof c[key] === "boolean") &&
       (c.result_order == null || typeof c.result_order === "number") &&
       (c.example == null || typeof c.example === "string") &&
       (c.legacy_flags === undefined || Array.isArray(c.legacy_flags) && c.legacy_flags.every(v => typeof v === "string")) &&
@@ -236,7 +236,7 @@ function ColumnEditor({ column: c, resolvedColumn, sheet, sheets, onChange, onRe
   const inferredDomain = columnDomain(sheet.name, { ...c, external_sheet: target, domain: undefined });
   const domain = inferredDomain || c.domain;
   const text = (key: "name" | "label" | "description" | "link_template", label: string) => <label>{label}<input value={c[key] ?? ""} onChange={e => onChange({ ...c, [key]: e.target.value })} /></label>;
-  const flags: [keyof Column, string][] = [["search", "Use in search"], ["show_in_results", "Show in results table"], ["reference", "Publication references"], ...(domain === "chemical" ? [["smiles", "SMILES structure"] as [keyof Column, string]] : []), ["hidden", "Hide from all result views (overrides display)"]];
+  const flags: [keyof Column, string][] = [["search", "Use in search"], ["show_in_results", "Show in results table"], ["reference", "Publication references"], ...(domain === "chemical" ? [["smiles", "SMILES structure"] as [keyof Column, string], ["list_name", "Use as chemical list name"] as [keyof Column, string]] : []), ["hidden", "Hide from all result views (overrides display)"]];
   const title = `${c.name || "New column"}${c.primary_key ? " · Primary key" : ""}`;
   return <details className="metadata-column" data-sheet={sheet.name} data-column={c.name}>
     <summary>{title}</summary>
@@ -245,13 +245,14 @@ function ColumnEditor({ column: c, resolvedColumn, sheet, sheets, onChange, onRe
     <div className="metadata-fields">
       {text("name", "Column name")}{text("label", "Display label")}{text("description", "Description")}
       <label>Data type<select value={c.data_type} onChange={e => onChange({ ...c, data_type: e.target.value as Column["data_type"], set_choices: e.target.value === "set" ? c.set_choices : undefined })}><option value="text">Text</option><option value="set" disabled={c.primary_key || Boolean(target)}>Set of text values</option></select></label>
-      <label>Entity<select value={c.domain ?? ""} onChange={e => { const next = e.target.value || undefined; const effective = inferredDomain || next; onChange({ ...c, domain: next as Column["domain"], classification: effective === "species" ? c.classification : undefined, smiles: effective === "chemical" ? c.smiles : undefined }); }}><option value="">{inferredDomain ? `Automatic (${inferredDomain})` : "General"}</option>{(["chemical", "species", "publication"] as const).map(entity => <option key={entity} value={entity} disabled={Boolean(inferredDomain) && inferredDomain !== entity}>{entity === "publication" ? "Publication (future use)" : entity === "chemical" ? "Chemical" : "Species"}</option>)}</select></label>
+      <label>Entity<select value={c.domain ?? ""} onChange={e => { const next = e.target.value || undefined; const effective = inferredDomain || next; onChange({ ...c, domain: next as Column["domain"], classification: effective === "species" ? c.classification : undefined, smiles: effective === "chemical" ? c.smiles : undefined, list_name: effective === "chemical" ? c.list_name : undefined }); }}><option value="">{inferredDomain ? `Automatic (${inferredDomain})` : "General"}</option>{(["chemical", "species", "publication"] as const).map(entity => <option key={entity} value={entity} disabled={Boolean(inferredDomain) && inferredDomain !== entity}>{entity === "publication" ? "Publication (future use)" : entity === "chemical" ? "Chemical" : "Species"}</option>)}</select></label>
       <label>Example (optional)<input value={c.example ?? ""} placeholder={`value from column ${c.name || "X"}`} onChange={e => onChange({ ...c, example: e.target.value === "" ? null : e.target.value })} /><small>Empty is stored as null. It never prevents a preview.</small></label>
       {c.show_in_results && <label>Result position (optional, starts at 0)<input type="number" min="0" step="1" value={c.result_order ?? ""} onChange={e => onChange({ ...c, result_order: e.target.value === "" ? undefined : Number(e.target.value) })} /></label>}
     </div>
     <div className="metadata-flags">{flags.map(([key, label]) => <label key={key}><input type="checkbox" checked={Boolean(c[key])} onChange={e => onChange({ ...c, [key]: e.target.checked, ...(key === "show_in_results" && !e.target.checked ? { result_order: undefined } : {}) })} />{label}</label>)}</div>
     {c.data_type === "set" && <label>Fixed choices (one per line; leave empty to derive from imported data)<textarea value={(c.set_choices ?? []).join("\n")} onChange={e => onChange({ ...c, set_choices: e.target.value ? e.target.value.split("\n") : undefined })} /></label>}
     {c.smiles && domain !== "chemical" && <p role="alert">SMILES is only allowed for chemicals. <button type="button" className="btn" onClick={() => onChange({ ...c, smiles: undefined })}>Remove SMILES setting</button></p>}
+    {c.list_name && domain !== "chemical" && <p role="alert">Chemical list names are only allowed for chemicals. <button type="button" className="btn" onClick={() => onChange({ ...c, list_name: undefined })}>Remove list-name setting</button></p>}
     {c.classification && domain !== "species" && <p role="alert">Classification is only allowed for species. <button type="button" className="btn" onClick={() => onChange({ ...c, classification: undefined })}>Remove classification setting</button></p>}
     <details><summary>Defaults, links{domain === "species" ? " and classification" : ""}</summary>
       {c.legacy_flags && c.legacy_flags.length > 0 && <p>Preserved legacy flags: {c.legacy_flags.join(", ")}. Edit these in JSON if needed.</p>}
