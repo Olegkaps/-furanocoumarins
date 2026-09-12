@@ -103,6 +103,7 @@ func TestValidateRequestSQLInjectionPositiveSafeQueries(t *testing.T) {
 	columns := columnsFixture()
 	safe := []string{
 		"name = 'O''Brien'",
+		"name = 'O''Brien `complex`'",
 		"name LIKE 'prefix%' AND second_name CONTAINS 'token'",
 		"name = 'value' AND surname = 'ref'",
 	}

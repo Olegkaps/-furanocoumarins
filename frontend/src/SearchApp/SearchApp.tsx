@@ -9,6 +9,7 @@ import FullNavigation from "../FullNavigation/FullNavigation";
 import { InfoTip } from "../shared/ui/InfoTip";
 import { PageTour } from "../shared/tour/PageTour";
 import { getMetadataTypeModifier, hasMetadataTypeToken } from "../shared/metadataType";
+import { searchLiteral } from "./compareQueries";
 
 const fetchAutocomplete = (column: string): any => {
   return async (query: string): Promise<string[]> => {
@@ -133,7 +134,7 @@ function SearchApp() {
       if (hasMetadataTypeToken(String(key["type"]), "set")) {
         op = " CONTAINS "
       }
-      search_params.push(key["column"] + op + "'" + val.replaceAll("'", "''") + "'")
+      search_params.push(key["column"] + op + searchLiteral(val))
     })
 
     if (search_params.length === 0) {

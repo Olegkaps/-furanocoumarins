@@ -72,26 +72,6 @@ func buildCreateTableDDL(tableName string, columnDefs, primaryKeys []string) str
 	}, " ")
 }
 
-func TestGetColumnWhereQueryShape(t *testing.T) {
-	// Documents that WHERE clause is interpolated — ValidateRequest must gate user input.
-	table := "chemdb.data_2026"
-	columns := "name, surname"
-	where := "name = 'safe'"
-
-	query := buildSelectWhereQuery(table, columns, where)
-	assert.Equal(t, "SELECT name, surname FROM chemdb.data_2026 WHERE name = 'safe' ALLOW FILTERING", query)
-
-	malicious := "name = 'x' OR 1=1"
-	badQuery := buildSelectWhereQuery(table, columns, malicious)
-	assert.Contains(t, badQuery, malicious)
-}
-
-func buildSelectWhereQuery(table, columns, where string) string {
-	return strings.Join([]string{
-		"SELECT", columns, "FROM", table, "WHERE", where, "ALLOW FILTERING",
-	}, " ")
-}
-
 func TestReserveTableUsesParameterizedLWTQueryPositive(t *testing.T) {
 	// Table registration must bind values, not embed user-controlled strings.
 	name := "'; DELETE FROM chemdb.tables; --"

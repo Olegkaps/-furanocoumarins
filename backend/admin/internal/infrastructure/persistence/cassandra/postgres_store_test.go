@@ -8,12 +8,13 @@ import (
 )
 
 func TestPostgresWhereBindsValuesAndQuotesColumns(t *testing.T) {
-	where, args, err := pgWhere("species LIKE 'Angelica%' AND name = 'O''Brien'")
+	where, args, err := pgWhere("species LIKE 'Angelica%' AND name = 'O''Brien `complex`'")
 	require.NoError(t, err)
 	assert.Equal(t, `"species" ILIKE $1 AND "name" = $2`, where)
-	assert.Equal(t, []any{"Angelica%", "O'Brien"}, args)
+	assert.Equal(t, []any{"Angelica%", "O'Brien `complex`"}, args)
 	assert.NotContains(t, where, "Angelica")
 	assert.NotContains(t, where, "Brien")
+	assert.NotContains(t, where, "`complex`")
 }
 
 func TestPostgresWhereRejectsSQLInjection(t *testing.T) {

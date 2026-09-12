@@ -3,6 +3,7 @@ package cassandra
 import (
 	"admin/internal/presentation/http/response"
 	"fmt"
+	"strings"
 
 	"github.com/gocql/gocql"
 )
@@ -31,18 +32,15 @@ func CreateSASIIndex(session *gocql.Session, table string, column string) error 
 }
 
 func GetPrefix(session *gocql.Session, table string, column string, prefix string) ([]string, error) {
-	Query := fmt.Sprintf(
-		`SELECT %s FROM %s WHERE %s LIKE '%s%%' LIMIT 1000`,
-		column,
-		table,
-		column,
-		prefix,
-	)
+	query, err := cqlPrefixQuery(table, column)
+	if err != nil {
+		return nil, err
+	}
 
 	results := make(map[string]struct{}, 70)
 
 	var v string
-	iter := session.Query(Query).Iter()
+	iter := session.Query(query, prefix+"%").Iter()
 	for iter.Scan(&v) {
 		results[v] = struct{}{}
 		if len(results) >= 50 {
@@ -62,6 +60,12 @@ func GetPrefix(session *gocql.Session, table string, column string, prefix strin
 }
 
 func GetColumn(session *gocql.Session, table string, column string) ([]string, error) {
+	if err := validateQualifiedIdentifier(table); err != nil {
+		return nil, err
+	}
+	if err := ValidateIdentifier(column); err != nil {
+		return nil, err
+	}
 	iter := session.Query(`
 		SELECT ` + column + `
 		FROM ` + table + `
@@ -82,15 +86,13 @@ func GetColumn(session *gocql.Session, table string, column string) ([]string, e
 }
 
 func GetColumnWhere(session *gocql.Session, table string, column string, where string) ([]map[string]any, error) {
-	Query := fmt.Sprintf(
-		"SELECT %s FROM %s WHERE %s ALLOW FILTERING",
-		column,
-		table,
-		where,
-	)
+	query, args, err := cqlSelectWhereQuery(table, column, where)
+	if err != nil {
+		return nil, err
+	}
 
 	results := make([]map[string]any, 0)
-	iter := session.Query(Query).Iter()
+	iter := session.Query(query, args...).Iter()
 
 	row := make(map[string]interface{})
 
@@ -104,4 +106,60 @@ func GetColumnWhere(session *gocql.Session, table string, column string, where s
 	}
 
 	return results, nil
+}
+
+func cqlPrefixQuery(table, column string) (string, error) {
+	if err := validateQualifiedIdentifier(table); err != nil {
+		return "", err
+	}
+	if err := ValidateIdentifier(column); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("SELECT %s FROM %s WHERE %s LIKE ? LIMIT 1000", column, table, column), nil
+}
+
+func cqlSelectWhereQuery(table, selectClause, where string) (string, []any, error) {
+	if err := validateQualifiedIdentifier(table); err != nil {
+		return "", nil, err
+	}
+	cols := strings.Split(selectClause, ",")
+	selected := make([]string, len(cols))
+	for i, col := range cols {
+		selected[i] = strings.TrimSpace(col)
+		if err := ValidateIdentifier(selected[i]); err != nil {
+			return "", nil, err
+		}
+	}
+	condition, args, err := cqlWhere(where)
+	if err != nil {
+		return "", nil, err
+	}
+	return fmt.Sprintf("SELECT %s FROM %s WHERE %s ALLOW FILTERING", strings.Join(selected, ", "), table, condition), args, nil
+}
+
+func cqlWhere(raw string) (string, []any, error) {
+	raw = strings.TrimSpace(raw)
+	clauses := []string{}
+	args := []any{}
+	for {
+		m := pgCondition.FindStringSubmatch(raw)
+		if m == nil {
+			return "", nil, fmt.Errorf("unsupported search expression")
+		}
+		if err := ValidateIdentifier(m[1]); err != nil {
+			return "", nil, err
+		}
+		clauses = append(clauses, m[1]+" "+m[2]+" ?")
+		args = append(args, strings.ReplaceAll(m[3], "''", "'"))
+		raw = raw[len(m[0]):]
+		if raw == "" {
+			break
+		}
+		separator := pgConjunction.FindString(raw)
+		if separator == "" {
+			return "", nil, fmt.Errorf("unsupported search expression")
+		}
+		raw = raw[len(separator):]
+	}
+	return strings.Join(clauses, " AND "), args, nil
 }

@@ -114,12 +114,16 @@ export function syncCompareColors(
 }
 
 /** Append `key = 'val'` to a search query unless that key is already constrained. */
+export function searchLiteral(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
 export function appendCladeClause(
   query: string,
   cladeKey: string,
   cladeVal: string,
 ): string {
-  const clause = `${cladeKey} = '${cladeVal}'`;
+  const clause = `${cladeKey} = ${searchLiteral(cladeVal)}`;
   if (query.includes(clause) || query.includes(`${cladeKey} =`)) {
     return query;
   }
