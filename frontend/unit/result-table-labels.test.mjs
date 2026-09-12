@@ -100,3 +100,42 @@ test("chemical list_name marker can use any chemical column", () => {
   assert.doesNotMatch(html, />chem-1</);
   assert.doesNotMatch(html, /synonym/);
 });
+
+test("compare series side lists include labels from every query", () => {
+  const extraData = [
+    {
+      chemical_id: "chem-extra",
+      trivial_names: "Imperatorin=ignored synonym",
+      classification_id: "sp-extra",
+      family: "Apiaceae",
+      genus: "Levisticum",
+      species: "officinale",
+      referenceid: "paper-extra",
+    },
+  ];
+  const compareSeries = [
+    {
+      query: "type_structure CONTAINS 'ang'",
+      color: "#1E3A8A",
+      response: { metadata, data },
+      fetchedAt: "2026-09-12T00:00:00.000Z",
+    },
+    {
+      query: "familia = 'Apiaceae'",
+      color: "#B45309",
+      response: { metadata, data: extraData },
+      fetchedAt: "2026-09-12T00:01:00.000Z",
+    },
+  ];
+
+  const html = renderToStaticMarkup(createElement(MemoryRouter, {}, createElement(ResultTable, {
+    metadata,
+    data,
+    compareSeries,
+  })));
+
+  assert.match(html, />Imperatorin</);
+  assert.match(html, />Levisticum officinale</);
+  assert.doesNotMatch(html, />chem-extra</);
+  assert.doesNotMatch(html, />sp-extra</);
+});

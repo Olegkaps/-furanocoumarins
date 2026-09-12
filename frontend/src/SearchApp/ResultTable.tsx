@@ -53,44 +53,19 @@ function uniqueArticleCountInRows(
   return merged.size;
 }
 
-function countLabelForSpecie(
-  rows: DataRows[],
-  specie: string,
-  mode: CountMode,
-  refColumns: string[],
-): number {
-  const subset = rows.filter((dr) => dr.specie_val === specie);
-  if (mode === "chemicals") {
-    return new Set(subset.map((dr) => dr.chemical_val)).size;
-  }
-  if (mode === "articles") {
-    return uniqueArticleCountInRows(subset, refColumns);
-  }
-  return subset.reduce((acc, dr) => acc + dr.total_length, 0);
-}
-
-function countLabelForChemical(
-  rows: DataRows[],
-  chemical: string,
-  mode: CountMode,
-  refColumns: string[],
-): number {
-  const subset = rows.filter((dr) => dr.chemical_val === chemical);
-  if (mode === "chemicals") {
-    // counterpart entities: species linked to this chemical
-    return new Set(subset.map((dr) => dr.specie_val)).size;
-  }
-  if (mode === "articles") {
-    return uniqueArticleCountInRows(subset, refColumns);
-  }
-  return subset.reduce((acc, dr) => acc + dr.total_length, 0);
-}
-
 type SelectOption = {
   value: string;
   label: string;
   count: number;
   seriesCounts?: Array<{ color: string; n: number }>;
+};
+
+type OptionAggregate = {
+  value: string;
+  label: string;
+  total: number;
+  counterparts: Set<string>;
+  articles: Set<string>;
 };
 
 function filterRows(
@@ -112,23 +87,41 @@ function buildOptions(
   refColumns: string[],
   meta: DataMeta[],
 ): SelectOption[] {
-  const values: string[] = [];
-  const seen = new Set<string>();
+  const aggregates = new Map<string, OptionAggregate>();
   rows.forEach((dr) => {
     const v = kind === "specie" ? dr.specie_val : dr.chemical_val;
-    if (!seen.has(v)) {
-      seen.add(v);
-      values.push(v);
+    let agg = aggregates.get(v);
+    if (!agg) {
+      agg = {
+        value: v,
+        label: labelForDataRow(dr, meta, kind) || v,
+        total: 0,
+        counterparts: new Set<string>(),
+        articles: new Set<string>(),
+      };
+      aggregates.set(v, agg);
+    } else if (agg.label === v) {
+      const label = labelForDataRow(dr, meta, kind);
+      if (label) agg.label = label;
+    }
+    agg.total += dr.total_length;
+    agg.counterparts.add(kind === "specie" ? dr.chemical_val : dr.specie_val);
+    if (mode === "articles") {
+      dr.value_rows.forEach((row) =>
+        collectUniqueTokensFromRow(row, refColumns, agg.articles),
+      );
     }
   });
-  return values
-    .map((value) => ({
-      value,
-      label: labelForEntity(rows, meta, kind, value),
+  return [...aggregates.values()]
+    .map((agg) => ({
+      value: agg.value,
+      label: agg.label,
       count:
-        kind === "specie"
-          ? countLabelForSpecie(rows, value, mode, refColumns)
-          : countLabelForChemical(rows, value, mode, refColumns),
+        mode === "chemicals"
+          ? agg.counterparts.size
+          : mode === "articles"
+            ? agg.articles.size
+            : agg.total,
     }))
     .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
 }
@@ -149,33 +142,38 @@ function buildOptionsWithSeries(
     color,
     rows: srows === "primary" ? primaryRows : srows,
   }));
+  const optionsBySeries = resolved.map(({ color, rows }) => ({
+    color,
+    options: buildOptions(rows, kind, mode, refColumns, meta),
+  }));
+  const optionMaps = optionsBySeries.map(({ color, options }) => ({
+    color,
+    options: new Map(options.map((option) => [option.value, option])),
+  }));
+  const labels = new Map<string, string>();
   const values = new Set<string>();
-  resolved.forEach(({ rows }) => {
-    rows.forEach((dr) => {
-      values.add(kind === "specie" ? dr.specie_val : dr.chemical_val);
+  optionsBySeries.forEach(({ options }) => {
+    options.forEach((option) => {
+      values.add(option.value);
+      if (!labels.has(option.value) || labels.get(option.value) === option.value) {
+        labels.set(option.value, option.label);
+      }
     });
   });
-  return Array.from(values)
+  return [...values]
     .map((value) => {
-      const seriesCounts = resolved.map(({ color, rows }) => ({
+      const seriesCounts = optionMaps.map(({ color, options }) => ({
         color,
-        n:
-          kind === "specie"
-            ? countLabelForSpecie(rows, value, mode, refColumns)
-            : countLabelForChemical(rows, value, mode, refColumns),
+        n: options.get(value)?.count ?? 0,
       }));
       return {
         value,
-        label: labelForEntity(resolved.flatMap(({ rows }) => rows), meta, kind, value),
+        label: labels.get(value) ?? value,
         count: seriesCounts.reduce((acc, s) => acc + s.n, 0),
         seriesCounts,
       };
     })
     .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
-}
-
-function firstNonEmpty(values: Array<string | undefined>): string {
-  return values.map((value) => (value ?? "").trim()).find(Boolean) ?? "";
 }
 
 function chemicalListLabel(value: string | undefined, fallback: string): string {
@@ -196,30 +194,23 @@ function speciesListLabel(row: Map<string, string>, meta: DataMeta[], fallback: 
   return label || fallback;
 }
 
-function labelForEntity(
-  rows: DataRows[],
+function labelForDataRow(
+  dr: DataRows,
   meta: DataMeta[],
   kind: "specie" | "chemical",
-  value: string,
 ): string {
-  const candidates = rows.filter((dr) =>
-    kind === "specie" ? dr.specie_val === value : dr.chemical_val === value,
-  );
   if (kind === "chemical") {
     const markedColumn = meta.find((m) => m.is_chemical && m.is_list_name)?.name;
-    return firstNonEmpty(
-      candidates.map((dr) => {
-        if (markedColumn) {
-          const marked = chemicalListLabel(dr.chemical_row.get(markedColumn), "");
-          if (marked) return marked;
-        }
-        return chemicalListLabel(dr.chemical_row.get("trivial_names"), "");
-      }),
-    ) || value;
+    if (markedColumn) {
+      const marked = chemicalListLabel(dr.chemical_row.get(markedColumn), "");
+      if (marked) return marked;
+    }
+    return chemicalListLabel(
+      dr.chemical_row.get("trivial_names") ?? dr.chemical_row.get("names"),
+      "",
+    );
   }
-  return firstNonEmpty(
-    candidates.map((dr) => speciesListLabel(dr.specie_row, meta, "")),
-  ) || value;
+  return speciesListLabel(dr.specie_row, meta, "");
 }
 
 /** Build DataRows from raw search rows using already-parsed meta + key columns. */
@@ -263,6 +254,7 @@ function rowsFromResponseData(
 }
 
 type SeriesRowSet = { color: string; rows: DataRows[] };
+type CompareRowSetInput = { color: string; rows: DataRows[] | "primary" };
 
 function resolveCompareRowSets(
   primaryRows: DataRows[],
@@ -797,7 +789,7 @@ function ResultsWorkspace({
   setCurrentChemical,
   countMode,
   refColumns,
-  compareSeries = [],
+  seriesRowSets,
 }: {
   rows: DataRows[];
   meta: DataMeta[];
@@ -807,7 +799,7 @@ function ResultsWorkspace({
   setCurrentChemical: (v: string) => void;
   countMode: CountMode;
   refColumns: string[];
-  compareSeries?: CompareSeries[];
+  seriesRowSets: CompareRowSetInput[];
 }) {
   const smilesMeta = meta.find((m) => m.type === "smiles");
   const smilesKey = smilesMeta?.name ?? "";
@@ -833,26 +825,6 @@ function ResultsWorkspace({
     hoveredChemical !== "" ? "articles" : countMode;
   const chemicalsCountMode: CountMode =
     hoveredSpecie !== "" ? "articles" : countMode;
-
-  const seriesRowSets = useMemo(() => {
-    if (compareSeries.length <= 1) {
-      return [] as Array<{ color: string; rows: DataRows[] | "primary" }>;
-    }
-    const chemKey = rows[0]?.chemical_key ?? "";
-    const specieKey = rows[0]?.specie_key ?? "";
-    return compareSeries.map((s, i) => ({
-      color: s.color,
-      rows:
-        i === 0
-          ? ("primary" as const)
-          : rowsFromResponseData(
-              s.response["data"] ?? [],
-              meta,
-              chemKey,
-              specieKey,
-            ),
-    }));
-  }, [compareSeries, meta, rows]);
 
   const speciesOptions = buildOptionsWithSeries(
     rowsForSpeciesList,
@@ -1401,21 +1373,24 @@ function ResultTableWrapper({
 
   const chemKey = rows[0]?.chemical_key ?? "";
   const specieKey = rows[0]?.specie_key ?? "";
-  const seriesRowSets =
-    compareSeries.length > 1
-      ? compareSeries.map((s, i) => ({
-          color: s.color,
-          rows:
-            i === 0
-              ? ("primary" as const)
-              : rowsFromResponseData(
-                  s.response["data"] ?? [],
-                  meta,
-                  chemKey,
-                  specieKey,
-                ),
-        }))
-      : [];
+  const seriesRowSets = useMemo<CompareRowSetInput[]>(
+    () =>
+      compareSeries.length > 1
+        ? compareSeries.map((s, i) => ({
+            color: s.color,
+            rows:
+              i === 0
+                ? ("primary" as const)
+                : rowsFromResponseData(
+                    s.response["data"] ?? [],
+                    meta,
+                    chemKey,
+                    specieKey,
+                  ),
+          }))
+        : [],
+    [chemKey, compareSeries, meta, rows, specieKey],
+  );
   const resolvedSeries = resolveCompareRowSets(rows, seriesRowSets);
 
   const filteredBySeries = resolvedSeries.map(({ color, rows: srows }) => ({
@@ -1487,15 +1462,7 @@ function ResultTableWrapper({
   const downloadSheets: DownloadSheet[] = (() => {
     if (compareSeries.length > 1) {
       return compareSeries.map((s, i) => {
-        const srows =
-          i === 0
-            ? rows
-            : rowsFromResponseData(
-                s.response["data"] ?? [],
-                meta,
-                chemKey,
-                specieKey,
-              );
+        const srows = resolvedSeries[i]?.rows ?? rows;
         return {
           query: s.query,
           color: s.color,
@@ -1548,7 +1515,7 @@ function ResultTableWrapper({
         setCurrentChemical={setCurrentChemical}
         countMode={effectiveCountMode}
         refColumns={refColumns}
-        compareSeries={compareSeries}
+        seriesRowSets={seriesRowSets}
       />
     </>
   );

@@ -181,20 +181,24 @@ export function useCompareSeries(primaryQuery: string): {
     }
   }, [queriesKey, rawByQuery]);
 
-  const series: CompareSeries[] = allQueries
-    .map((q) => {
-      const raw = rawByQuery[q];
-      const color = colorsByQuery[q];
-      const fetchedAt = fetchedAtByQuery[q];
-      if (!raw || !color || !fetchedAt || isEmpty(raw)) return null;
-      return {
-        query: q,
-        color,
-        response: filterResponse(raw),
-        fetchedAt,
-      };
-    })
-    .filter((s): s is CompareSeries => s != null);
+  const series = useMemo(
+    () =>
+      allQueries
+        .map((q) => {
+          const raw = rawByQuery[q];
+          const color = colorsByQuery[q];
+          const fetchedAt = fetchedAtByQuery[q];
+          if (!raw || !color || !fetchedAt || isEmpty(raw)) return null;
+          return {
+            query: q,
+            color,
+            response: filterResponse(raw),
+            fetchedAt,
+          };
+        })
+        .filter((s): s is CompareSeries => s != null),
+    [queriesKey, rawByQuery, colorsByQuery, fetchedAtByQuery],
+  );
 
   return { series, colorsByQuery, extraQueries, primaryRaw, loading };
 }
