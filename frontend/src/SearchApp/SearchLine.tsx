@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ChevronRight, ArrowUpRightFromSquare } from "@gravity-ui/icons";
+import { QueryInput } from "./QueryInput";
 
 /** Search form that only updates the URL; data loading is owned by useCompareSeries. */
 export function SearchLine({
@@ -34,10 +35,10 @@ export function SearchLine({
           });
         }}
       >
-        <input
+        <QueryInput
           type="text"
           className="search-teaxtarea"
-          onChange={(e) => setRequest(e.target.value)}
+          onChange={setRequest}
           value={request}
           aria-label="Search query"
         />

@@ -16,11 +16,44 @@ export type TourStep = {
   targets?: string[];
   title: string;
   body: string;
+  examples?: string[];
   /** Prefer side card (readable, stays in viewport). Default auto. */
   placement?: "auto" | "side" | "center";
   /** Side-effect while this step is active */
   prepare?: TourPrepare;
 };
+
+function queryHelpSteps(target?: string): TourStep[] {
+  return [
+    {
+      target,
+      title: "Query autocomplete",
+      body: "The query bar and Compare queries suggest column names, operators and matching values as you type. Use the arrow keys and Enter to choose a suggestion, or Escape to dismiss it. Available columns depend on the active dataset.",
+      placement: "side",
+    },
+    {
+      target,
+      title: "Operators and values",
+      body: "Use = for exact text, != for different text, and LIKE for case-insensitive patterns (% matches any length, _ matches one character). CONTAINS matches one exact member of a set. Text also supports <, <=, > and >= as text comparisons, not numeric comparisons.",
+      examples: ["names LIKE 'Neo%'", "type_structure CONTAINS 'ang'"],
+      placement: "side",
+    },
+    {
+      target,
+      title: "AND, OR and parentheses",
+      body: "AND requires both conditions; OR accepts either. AND binds more tightly than OR. Parentheses group conditions and can be nested. Write AND, OR, LIKE and CONTAINS in uppercase. These examples use columns from the furanocoumarin dataset.",
+      examples: ["familia = 'Apiaceae' AND (type_structure CONTAINS 'ang' OR type_structure CONTAINS 'lin')"],
+      placement: "side",
+    },
+    {
+      target,
+      title: "Quoted names",
+      body: "Enclose values in single quotes. Double an apostrophe inside a value; backticks need no escaping. Autocomplete quotes selected values automatically. Words such as AND and OR inside quotes are part of the value.",
+      examples: ["names = 'O''Brien'", "names = 'Compound `A`'"],
+      placement: "side",
+    },
+  ];
+}
 
 export const TOUR_STEPS: Record<TourId, TourStep[]> = {
   search: [
@@ -67,6 +100,7 @@ export const TOUR_STEPS: Record<TourId, TourStep[]> = {
       body: "Submit opens the results table with your query in the URL. You can refine it later on the table or tree.",
       placement: "side",
     },
+    ...queryHelpSteps(),
   ],
   about: [
     {
@@ -97,6 +131,7 @@ export const TOUR_STEPS: Record<TourId, TourStep[]> = {
       body: "Edit the query text and submit to reload. The same query is shared with the phylogenetic tree.",
       placement: "side",
     },
+    ...queryHelpSteps("table-query"),
     {
       target: "table-goto-tree",
       title: "Open the tree",
@@ -112,7 +147,7 @@ export const TOUR_STEPS: Record<TourId, TourStep[]> = {
     {
       target: "table-compare",
       title: "Compare queries",
-      body: "Add up to 4 queries. Each gets a color; counts and dots show which query contributed. Zeros are hidden.",
+      body: "Expand Compare queries to add a query with the same autocomplete. Each query gets a color. Plus queries contribute rows; minus queries exclude matching rows. At least one plus query must remain visible. A minus query cannot be hidden.",
       placement: "side",
     },
     {
@@ -159,6 +194,7 @@ export const TOUR_STEPS: Record<TourId, TourStep[]> = {
       body: "Same query editor as on the table. Changing it reloads tree counts.",
       placement: "side",
     },
+    ...queryHelpSteps("tree-query"),
     {
       target: "tree-goto-table",
       title: "Back to the table",
@@ -186,7 +222,7 @@ export const TOUR_STEPS: Record<TourId, TourStep[]> = {
     {
       target: "tree-compare",
       title: "Compare on the tree",
-      body: "With several queries, each node shows colored counts.",
+      body: "Expand Compare queries to add a query with autocomplete. Each node shows colored plus-query counts after minus-query exclusions. At least one plus query must remain visible; minus queries cannot be hidden.",
       placement: "side",
     },
     {

@@ -11,7 +11,7 @@ interface AutocompleteProps {
   style: React.CSSProperties
 }
 
-const Autocomplete = ({ value, fetchSuggestions, onSelect, onChange, placeholder, ariaLabel, style }: AutocompleteProps) => {
+const Autocomplete = ({ value, fetchSuggestions, onSelect, onChange, placeholder = "Start typing", ariaLabel, style }: AutocompleteProps) => {
   const [inputValue, setInputValue] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);

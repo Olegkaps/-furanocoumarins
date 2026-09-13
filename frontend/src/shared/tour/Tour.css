@@ -119,6 +119,16 @@
   gap: 8px;
 }
 
+.page-tour__example {
+  margin: 0 0 14px;
+  padding: 8px;
+  background: var(--color-surface-alt);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .page-tour__help {
   position: fixed;
   right: 16px;

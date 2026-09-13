@@ -25,6 +25,7 @@ import { fetchSearchData, filterResponse } from "./searchApi";
 import { isEmpty } from "../shared/api";
 import { recordQueryHistory } from "../shared/queryHistory";
 import { guardComparePayloads } from "../shared/schemaGuard";
+import { QueryInput } from "./QueryInput";
 
 export type CompareSeries = {
   query: string;
@@ -484,10 +485,10 @@ export function QueryCompareBar({
             </p>
             {extras.length < maxExtra && (
               <div className="query-compare-bar__add">
-                <input
+                <QueryInput
                   type="text"
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
+                  onChange={setDraft}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();

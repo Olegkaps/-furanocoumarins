@@ -2,11 +2,10 @@ package search
 
 import (
 	"fmt"
-	"regexp"
-	"strings"
 
 	appcreate "admin/internal/application/create"
 	domainsearch "admin/internal/domain/search"
+	"admin/internal/pkg/searchquery"
 	"admin/internal/presentation/http/response"
 )
 
@@ -15,30 +14,16 @@ func ValidateRequest(searchRequest string, columns []domainsearch.ColumnMeta) er
 		return &response.UserError{E: fmt.Errorf("search request is required")}
 	}
 
-	// The public search grammar deliberately stays small.  PostgreSQL does not
-	// need CQL's IN form for the UI workflows; accepting it here would create a
-	// second, subtly different query language in the storage adapter.
-	allowedWords := []string{"AND", "CONTAINS", "LIKE", "=", "!=", "<", ">", "<=", ">="}
-	for i := range allowedWords {
-		allowedWords[i] = `\s` + allowedWords[i] + `\s`
+	expr, err := searchquery.Parse(searchRequest)
+	if err != nil {
+		return &response.UserError{E: err}
 	}
-	allowedPatterns := strings.Join(allowedWords, "|")
-	regex := regexp.MustCompile(allowedPatterns)
-
-	cleanedRequest := regex.ReplaceAllString(
-		" "+strings.ReplaceAll(searchRequest, " ", "  ")+" ",
-		"",
-	)
+	allowed := make(map[string]bool, len(columns))
 	for _, col := range columns {
-		cleanedRequest = strings.ReplaceAll(cleanedRequest, " "+col.Column+" ", "")
+		allowed[col.Column] = true
 	}
-	cleanedRequest = strings.TrimSpace(cleanedRequest)
-
-	regex = regexp.MustCompile(`'[^']*'|\s`)
-	cleanedRequest = regex.ReplaceAllString(cleanedRequest, "")
-
-	if cleanedRequest != "" {
-		return &response.UserError{E: fmt.Errorf("request contains incorrect words (merged): %v", ""+cleanedRequest)}
+	if err := expr.ValidateColumns(allowed); err != nil {
+		return &response.UserError{E: err}
 	}
 	return nil
 }

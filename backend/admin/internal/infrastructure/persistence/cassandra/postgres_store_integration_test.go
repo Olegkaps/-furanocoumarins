@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -159,4 +160,66 @@ func TestPostgresStoreIntegrationContainsAndArrayResults(t *testing.T) {
 	rows, err := store.pgGetColumnWhere(table, "aliases", "id = 'empty'")
 	require.NoError(t, err)
 	require.Equal(t, []string{}, rows[0]["aliases"])
+}
+
+func TestPostgresStoreIntegrationBooleanSearchAndAutocomplete(t *testing.T) {
+	if os.Getenv("TEST_POSTGRES_DSN") == "" {
+		t.Skip("requires explicit disposable TEST_POSTGRES_DSN")
+	}
+	db := postgresIntegrationDB(t)
+	store := NewPostgresStore(db)
+	require.NoError(t, store.EnsureActivationSchema(context.Background()))
+	table := "chemdb.search_" + strings.ReplaceAll(gocql.TimeUUID().String(), "-", "")
+	t.Cleanup(func() { _, err := db.Exec("DROP TABLE IF EXISTS " + mustPGTable(t, table)); require.NoError(t, err) })
+	data := [][]any{
+		{"a", "O'Brien `OR` (AND)", []string{"shared", "a%literal", "a_literal", `a\literal`}},
+		{"b", "second", []string{"shared", "another"}},
+		{"c", "third", []string{}},
+	}
+	for i := 0; i < 60; i++ {
+		v := fmt.Sprintf("prefix%02d", i)
+		data = append(data, []any{v, v, []string{v}})
+	}
+	require.NoError(t, store.pgCreateAndBatchInsert(table, []string{"id TEXT", "name TEXT", "aliases SET<TEXT>"}, []string{"id"}, data))
+	for _, tc := range []struct {
+		query string
+		ids   []string
+	}{
+		{"id='a' OR id='b' AND name='missing'", []string{"a"}},
+		{"(id='a' OR id='b') AND name='missing'", []string{}},
+		{"(id='a' OR (id='b' AND aliases CONTAINS 'shared'))", []string{"a", "b"}},
+		{"name='O''Brien `OR` (AND)' OR aliases CONTAINS 'absent'", []string{"a"}},
+		{"name='x'' OR 1=1; --'", []string{}},
+	} {
+		rows, err := store.pgGetColumnWhere(table, "id", tc.query)
+		require.NoError(t, err, tc.query)
+		ids := []string{}
+		for _, row := range rows {
+			ids = append(ids, row["id"].(string))
+		}
+		require.ElementsMatch(t, tc.ids, ids, tc.query)
+	}
+	for _, tc := range []struct {
+		column, prefix string
+		values         []string
+	}{
+		{"aliases", "SH", []string{"shared"}},
+		{"aliases", "a%", []string{"a%literal"}},
+		{"aliases", "a_", []string{"a_literal"}},
+		{"aliases", `a\`, []string{`a\literal`}},
+		{"aliases", "absent", []string{}},
+		{"name", "o'brien `OR`", []string{"O'Brien `OR` (AND)"}},
+		{"name", "%", []string{}},
+	} {
+		values, err := store.pgGetPrefix(table, tc.column, tc.prefix)
+		require.NoError(t, err)
+		require.Equal(t, tc.values, values)
+	}
+	for _, column := range []string{"name", "aliases"} {
+		values, err := store.pgGetPrefix(table, column, "prefix")
+		require.NoError(t, err)
+		require.Len(t, values, 50)
+		require.Equal(t, "prefix00", values[0])
+		require.Equal(t, "prefix49", values[49])
+	}
 }

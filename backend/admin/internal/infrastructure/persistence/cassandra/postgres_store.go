@@ -19,6 +19,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/lib/pq"
 
+	"admin/internal/pkg/searchquery"
 	"admin/internal/presentation/http/response"
 )
 
@@ -248,9 +249,23 @@ func (s *Store) pgGetPrefix(table, column, prefix string) ([]string, error) {
 	}
 	col, e := pgColumn(column)
 	if e != nil {
+		return nil, &response.UserError{E: e}
+	}
+	var array bool
+	e = s.db.QueryRow(`SELECT atttypid = 'text[]'::regtype FROM pg_attribute WHERE attrelid = $1::regclass AND attname = $2 AND attnum > 0 AND NOT attisdropped`, n, column).Scan(&array)
+	if e == sql.ErrNoRows {
+		return nil, &response.UserError{E: fmt.Errorf("unknown search column %q", column)}
+	}
+	if e != nil {
 		return nil, e
 	}
-	rows, e := s.db.Query(`SELECT DISTINCT `+col+`::text FROM `+n+` WHERE `+col+`::text ILIKE $1 ORDER BY 1 LIMIT 50`, prefix+"%")
+	value, source := col+"::text", n
+	if array {
+		value = "member.value"
+		source += " CROSS JOIN LATERAL unnest(" + col + ") AS member(value)"
+	}
+	pattern := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(prefix) + "%"
+	rows, e := s.db.Query(`SELECT DISTINCT `+value+` FROM `+source+` WHERE `+value+` ILIKE $1 ESCAPE '\' ORDER BY 1 LIMIT 50`, pattern)
 	if e != nil {
 		return nil, e
 	}
@@ -306,39 +321,37 @@ var pgCondition = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9_]*)\s*(=|!=|<=|>=|<|>
 var pgConjunction = regexp.MustCompile(`^\s+AND\s+`)
 
 func pgWhere(raw string) (string, []any, error) {
-	raw = strings.TrimSpace(raw)
-	clauses := []string{}
-	args := []any{}
-	for {
-		m := pgCondition.FindStringSubmatch(raw)
-		if m == nil {
-			return "", nil, fmt.Errorf("unsupported search expression")
-		}
-		col, e := pgColumn(m[1])
-		if e != nil {
-			return "", nil, e
-		}
-		v := strings.ReplaceAll(m[3], "''", "'")
-		switch m[2] {
-		case "CONTAINS":
-			clauses = append(clauses, col+" @> ARRAY[$"+fmt.Sprint(len(args)+1)+"]::text[]")
-		case "LIKE":
-			clauses = append(clauses, col+" ILIKE $"+fmt.Sprint(len(args)+1))
-		default:
-			clauses = append(clauses, col+" "+m[2]+" $"+fmt.Sprint(len(args)+1))
-		}
-		args = append(args, v)
-		raw = raw[len(m[0]):]
-		if raw == "" {
-			break
-		}
-		separator := pgConjunction.FindString(raw)
-		if separator == "" {
-			return "", nil, fmt.Errorf("unsupported search expression")
-		}
-		raw = raw[len(separator):]
+	expr, err := searchquery.Parse(raw)
+	if err != nil {
+		return "", nil, err
 	}
-	return strings.Join(clauses, " AND "), args, nil
+	args := []any{}
+	var render func(*searchquery.Expression) string
+	render = func(e *searchquery.Expression) string {
+		if e.Left != nil {
+			left, right := render(e.Left), render(e.Right)
+			if e.Left.Left != nil {
+				left = "(" + left + ")"
+			}
+			if e.Right.Left != nil {
+				right = "(" + right + ")"
+			}
+			return left + " " + e.Operator + " " + right
+		}
+		col := pq.QuoteIdentifier(e.Column)
+		args = append(args, e.Value)
+		parameter := "$" + fmt.Sprint(len(args))
+		switch e.Operator {
+		case "CONTAINS":
+			return col + " @> ARRAY[" + parameter + "]::text[]"
+		case "LIKE":
+			return col + " ILIKE " + parameter
+		default:
+			return col + " " + e.Operator + " " + parameter
+		}
+	}
+	where := render(expr)
+	return where, args, nil
 }
 func (s *Store) pgGetColumnWhere(table, selectClause, where string) ([]map[string]any, error) {
 	n, e := pgTable(table)

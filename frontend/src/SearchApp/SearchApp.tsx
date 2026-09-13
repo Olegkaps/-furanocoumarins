@@ -52,7 +52,7 @@ function AutocompletedInput({
         onSelect={(value) => setSelectedValue(value)}
         onChange={onChange}
         style={style}
-        placeholder="Enter..."
+        placeholder="Start typing"
       />
     </div>
   );

@@ -174,6 +174,9 @@ function TourCard({
       </div>
       <h2 className="page-tour__title">{step.title}</h2>
       <p className="page-tour__body">{step.body}</p>
+      {step.examples?.map((example) => (
+        <pre className="page-tour__example" key={example}><code>{example}</code></pre>
+      ))}
       <div className="page-tour__actions">
         <button
           type="button"

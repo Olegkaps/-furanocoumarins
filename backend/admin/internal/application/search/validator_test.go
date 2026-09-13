@@ -27,6 +27,25 @@ func TestValidateRequestPositive(t *testing.T) {
 	assert.NoError(t, search.ValidateRequest("name LIKE 'a%' AND surname LIKE 'x%'", columns))
 }
 
+func TestValidateRequestGroupedMetadataColumns(t *testing.T) {
+	columns := []domainsearch.ColumnMeta{
+		{Column: "familia", Type: "text"},
+		{Column: "subfamily", Type: "text"},
+		{Column: "type_structure", Type: "invisible search set"},
+	}
+	assert.NoError(t, search.ValidateRequest("(familia='A' OR subfamily='B') AND type_structure CONTAINS 'OR (AND) O''Brien `value`'", columns))
+	for _, query := range []string{
+		"familia='A' OR (unknown='B' AND subfamily='C')",
+		"familia='A' AND (subfamily='B' OR unknown='C')",
+		"familia='A' OR ()",
+		"familia='A' AND",
+	} {
+		err := search.ValidateRequest(query, columns)
+		var userErr *response.UserError
+		require.ErrorAs(t, err, &userErr, query)
+	}
+}
+
 func TestValidateRequestNegative(t *testing.T) {
 	columns := columnsFixture()
 	err := search.ValidateRequest("", columns)

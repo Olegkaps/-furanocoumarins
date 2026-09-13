@@ -142,6 +142,21 @@ and raw declarations, and require completion before publication. Initially prefe
 the active dataset's usable definition; never replace an admin-published latest
 version during repeated backfill. Shared versions survive dataset deletion.
 
+## Public Search Grammar
+
+`backend/admin/internal/pkg/searchquery` owns expression parsing for both request
+validation and PostgreSQL translation. Conditions use registered column names,
+comparison operators and single-quoted values. AND binds more tightly than OR;
+parentheses override precedence. Double apostrophes inside literals; never
+interpolate literal values into SQL. Keep parser size, nesting and condition
+limits when extending the grammar.
+
+Query-line and comparison autocomplete share `frontend/src/SearchApp/QueryInput`
+and its completion helper. Suggest registered columns, including classification
+columns without the guided-form `search` marker. Operators must match physical
+text/set behavior. Value requests must be debounced, bounded and discard stale
+results. Keep query examples in the page-help tours aligned with the grammar.
+
 ## Testing
 
 Run tests through the root `Makefile`:
