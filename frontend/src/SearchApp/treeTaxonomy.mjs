@@ -1,5 +1,22 @@
 import { getMetadataTypeModifier } from "../shared/metadataType.mjs";
 
+/** Match the renderer's taxonomy-path union, stopping once a tree is possible. */
+export function canShowPhylogeneticTree(response, compareSeries = [], tag = "original") {
+  const { columns } = selectTreeTaxonomy(response.metadata ?? [], tag);
+  const responses = compareSeries.length > 1
+    ? compareSeries.map(series => series.response)
+    : [response];
+  let firstPath;
+  for (const current of responses) {
+    for (const row of current.data ?? []) {
+      const path = columns.map(column => row[column.column] ?? "").join("@");
+      if (firstPath === undefined) firstPath = path;
+      else if (path !== firstPath) return true;
+    }
+  }
+  return false;
+}
+
 /** One column per rank, broadest first; selected taxonomy overrides original. */
 export function selectTreeTaxonomy(metadata, tag = "original") {
   const tags = new Set(["original", tag]);

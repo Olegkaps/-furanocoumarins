@@ -7,6 +7,8 @@ import {
   BranchesRight,
   BookOpen,
   Xmark,
+  ChevronLeft,
+  ChevronRight,
 } from "@gravity-ui/icons";
 import { isEmpty } from "../shared/api";
 import { Container, ScrollableContainer } from "../shared/ui";
@@ -176,6 +178,24 @@ function buildOptionsWithSeries(
     .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
 }
 
+/** Counts and selection validity need entity keys, not sorted display options. */
+export function entityValues(
+  series: Array<{ rows: DataRows[] }>,
+  kind: "specie" | "chemical",
+  counterpart = "",
+): Set<string> {
+  const values = new Set<string>();
+  for (const { rows } of series) {
+    for (const row of rows) {
+      const other = kind === "specie" ? row.chemical_val : row.specie_val;
+      if (counterpart === "" || other === counterpart) {
+        values.add(kind === "specie" ? row.specie_val : row.chemical_val);
+      }
+    }
+  }
+  return values;
+}
+
 function chemicalListLabel(value: string | undefined, fallback: string): string {
   if (!value) return fallback;
   return value.split("=")[0]?.trim() || fallback;
@@ -214,12 +234,24 @@ function labelForDataRow(
 }
 
 /** Build DataRows from raw search rows using already-parsed meta + key columns. */
-function rowsFromResponseData(
+const groupedRowsCache = new WeakMap<object, {
+  meta: DataMeta[];
+  chemKey: string;
+  specieKey: string;
+  rows: DataRows[];
+}>();
+
+export function rowsFromResponseData(
   dataItems: Array<{ [index: string]: any }>,
   meta: DataMeta[],
   chemKey: string,
   specieKey: string,
 ): DataRows[] {
+  // Search snapshots and their grouped rows are immutable after construction.
+  const cached = groupedRowsCache.get(dataItems);
+  if (cached?.meta === meta && cached.chemKey === chemKey && cached.specieKey === specieKey) {
+    return cached.rows;
+  }
   const map = new Map<string, DataRows>();
 
   dataItems.forEach((data_item) => {
@@ -250,7 +282,9 @@ function rowsFromResponseData(
     }
     map.get(key)?.add_row(value_row);
   });
-  return [...map.values()];
+  const rows = [...map.values()];
+  groupedRowsCache.set(dataItems, { meta, chemKey, specieKey, rows });
+  return rows;
 }
 
 type SeriesRowSet = { color: string; rows: DataRows[] };
@@ -583,7 +617,7 @@ function ResultTable({
   );
 }
 
-function RankedSelectList({
+export function RankedSelectList({
   options,
   countModeLabel,
   onSelect,
@@ -594,15 +628,30 @@ function RankedSelectList({
   onSelect: (value: string) => void;
   onHover?: (value: string | null) => void;
 }) {
+  const [page, setPage] = useState(0);
+  const pageSize = 100;
+  const lastPage = Math.max(0, Math.ceil(options.length / pageSize) - 1);
+  const currentPage = Math.min(page, lastPage);
+  const start = currentPage * pageSize;
   if (options.length === 0) {
     return <p className="empty-state" style={{ padding: 12 }}>No items</p>;
   }
   return (
+    <>
+    {options.length > pageSize && (
+      <nav aria-label="Entity list pages" style={{ display: "flex", alignItems: "center", gap: 8, padding: 8 }}>
+        <button type="button" className="btn" title="Previous page" aria-label="Previous page" disabled={currentPage === 0}
+          onClick={() => { setPage(currentPage - 1); onHover?.(null); }}><ChevronLeft width={16} height={16} /></button>
+        <span>{start + 1}-{Math.min(start + pageSize, options.length)} of {options.length}</span>
+        <button type="button" className="btn" title="Next page" aria-label="Next page" disabled={currentPage === lastPage}
+          onClick={() => { setPage(currentPage + 1); onHover?.(null); }}><ChevronRight width={16} height={16} /></button>
+      </nav>
+    )}
     <ol
       className="ranked-select-list"
       onMouseLeave={() => onHover?.(null)}
     >
-      {options.map((opt, i) => (
+      {options.slice(start, start + pageSize).map((opt, i) => (
         <li key={opt.value}>
           <button
             type="button"
@@ -612,7 +661,7 @@ function RankedSelectList({
             onFocus={() => onHover?.(opt.value)}
             onBlur={() => onHover?.(null)}
           >
-            <span className="ranked-select-list__index">{i + 1}.</span>
+            <span className="ranked-select-list__index">{start + i + 1}.</span>
             <span className="ranked-select-list__value">{opt.label}</span>
             <span className="ranked-select-list__count">
               {(() => {
@@ -647,6 +696,7 @@ function RankedSelectList({
         </li>
       ))}
     </ol>
+    </>
   );
 }
 
@@ -900,51 +950,17 @@ function ResultsWorkspace({
 
   // Selection validity uses committed filters only — hover must not clear picks.
   // Include values from all compare series (union), not only the primary query.
-  const selectedSpeciesValuesKey = buildOptionsWithSeries(
-    currentChemical === ""
-      ? rows
-      : rows.filter((dr) => dr.chemical_val === currentChemical),
-    "specie",
-    countMode,
-    refColumns,
-    meta,
-    seriesRowSets.map(({ color, rows: srows }) => ({
-      color,
-      rows:
-        srows === "primary"
-          ? "primary"
-          : currentChemical === ""
-            ? srows
-            : srows.filter((dr) => dr.chemical_val === currentChemical),
-    })),
-  )
-    .map((o) => o.value)
-    .join("\0");
-  const selectedChemicalsValuesKey = buildOptionsWithSeries(
-    currentSpecie === ""
-      ? rows
-      : rows.filter((dr) => dr.specie_val === currentSpecie),
-    "chemical",
-    countMode,
-    refColumns,
-    meta,
-    seriesRowSets.map(({ color, rows: srows }) => ({
-      color,
-      rows:
-        srows === "primary"
-          ? "primary"
-          : currentSpecie === ""
-            ? srows
-            : srows.filter((dr) => dr.specie_val === currentSpecie),
-    })),
-  )
-    .map((o) => o.value)
-    .join("\0");
-
+  const selectedRows = resolveCompareRowSets(rows, seriesRowSets);
+  const selectedSpeciesValuesKey = JSON.stringify(
+    [...entityValues(selectedRows, "specie", currentChemical)],
+  );
+  const selectedChemicalsValuesKey = JSON.stringify(
+    [...entityValues(selectedRows, "chemical", currentSpecie)],
+  );
   useEffect(() => {
     if (
       currentSpecie !== "" &&
-      !selectedSpeciesValuesKey.split("\0").includes(currentSpecie)
+      !JSON.parse(selectedSpeciesValuesKey).includes(currentSpecie)
     ) {
       setCurrentSpecie("");
     }
@@ -953,7 +969,7 @@ function ResultsWorkspace({
   useEffect(() => {
     if (
       currentChemical !== "" &&
-      !selectedChemicalsValuesKey.split("\0").includes(currentChemical)
+      !JSON.parse(selectedChemicalsValuesKey).includes(currentChemical)
     ) {
       setCurrentChemical("");
     }
@@ -964,15 +980,18 @@ function ResultsWorkspace({
     color,
     rows: filterRows(srows, previewSpecie, previewChemical),
   }));
-  const valueRows = mergeValueRowsFromSeries(previewFilteredBySeries, refColumns);
+  const showPublications = previewSpecie !== "" || previewChemical !== "";
+  const valueRows = showPublications
+    ? mergeValueRowsFromSeries(previewFilteredBySeries, refColumns)
+    : [];
   const articleSeriesColors =
-    seriesRowSets.length > 1
+    showPublications && seriesRowSets.length > 1
       ? collectArticleSeriesColors(previewFilteredBySeries, refColumns)
       : undefined;
-  const referenceCount = uniqueArticleCountInRows(
+  const referenceCount = showPublications ? uniqueArticleCountInRows(
     flattenFilteredDataRows(previewFilteredBySeries),
     refColumns,
-  );
+  ) : 0;
 
   const chemicalDetail = findChemicalRow(
     rows,
@@ -999,12 +1018,6 @@ function ResultsWorkspace({
     speciesCountMode === "chemicals" ? "chemicals" : speciesCountMode;
   const chemicalCountLabel =
     chemicalsCountMode === "chemicals" ? "species" : chemicalsCountMode;
-
-  const showPublications =
-    currentSpecie !== "" ||
-    currentChemical !== "" ||
-    hoveredChemical !== "" ||
-    hoveredSpecie !== "";
 
   return (
     <div
@@ -1341,6 +1354,8 @@ function TableStateBar({
 function ResultTableWrapper({
   rows,
   meta,
+  chemKey,
+  specieKey,
   compareSeries = [],
   colorsByQuery = {},
   primaryQuery = "",
@@ -1348,35 +1363,31 @@ function ResultTableWrapper({
 }: {
   rows: Array<DataRows>;
   meta: Array<DataMeta>;
+  chemKey: string;
+  specieKey: string;
   compareSeries?: CompareSeries[];
   colorsByQuery?: Record<string, string>;
   primaryQuery?: string;
   compareBarPrimaryQuery?: string;
 }) {
-  if (rows.length === 0) {
-    return <></>;
-  }
-
-  const refColumns = meta
+  const refColumns = useMemo(() => meta
     .filter((m) => m.type === "reference")
-    .map((m) => m.name);
+    .map((m) => m.name), [meta]);
 
-  const allSpecies = buildOptions(rows, "specie", "chemicals", refColumns, meta);
-  const allChemicals = buildOptions(rows, "chemical", "chemicals", refColumns, meta);
+  const allSpecies = useMemo(() => [...entityValues([{ rows }], "specie")], [rows]);
+  const allChemicals = useMemo(() => [...entityValues([{ rows }], "chemical")], [rows]);
 
   const [countMode, setCountMode] = useState<CountMode>("chemicals");
   const [currentSpecie, setCurrentSpecie] = useState(
-    allSpecies.length === 1 ? allSpecies[0].value : "",
+    allSpecies.length === 1 ? allSpecies[0] : "",
   );
   const [currentChemical, setCurrentChemical] = useState(
-    allChemicals.length === 1 ? allChemicals[0].value : "",
+    allChemicals.length === 1 ? allChemicals[0] : "",
   );
 
   const countModeLocked = currentSpecie !== "" || currentChemical !== "";
   const effectiveCountMode: CountMode = countModeLocked ? "articles" : countMode;
 
-  const chemKey = rows[0]?.chemical_key ?? "";
-  const specieKey = rows[0]?.specie_key ?? "";
   const seriesRowSets = useMemo<CompareRowSetInput[]>(
     () =>
       compareSeries.length > 1
@@ -1401,59 +1412,12 @@ function ResultTableWrapper({
     color,
     rows: filterRows(srows, currentSpecie, currentChemical),
   }));
-  const rowsForSpeciesListBySeries = resolvedSeries.map(
-    ({ color, rows: srows }) => ({
-      color,
-      rows:
-        currentChemical === ""
-          ? srows
-          : srows.filter((dr) => dr.chemical_val === currentChemical),
-    }),
-  );
-  const rowsForChemicalListBySeries = resolvedSeries.map(
-    ({ color, rows: srows }) => ({
-      color,
-      rows:
-        currentSpecie === ""
-          ? srows
-          : srows.filter((dr) => dr.specie_val === currentSpecie),
-    }),
-  );
-
-  const speciesCount =
-    currentSpecie === ""
-      ? buildOptionsWithSeries(
-          rowsForSpeciesListBySeries[0]?.rows ?? rows,
-          "specie",
-          effectiveCountMode,
-          refColumns,
-          meta,
-          seriesRowSets.map(({ color, rows: srows }, i) => ({
-            color,
-            rows:
-              srows === "primary"
-                ? "primary"
-                : rowsForSpeciesListBySeries[i]?.rows ?? srows,
-          })),
-        ).length
-      : 1;
-  const chemicalCount =
-    currentChemical === ""
-      ? buildOptionsWithSeries(
-          rowsForChemicalListBySeries[0]?.rows ?? rows,
-          "chemical",
-          effectiveCountMode,
-          refColumns,
-          meta,
-          seriesRowSets.map(({ color, rows: srows }, i) => ({
-            color,
-            rows:
-              srows === "primary"
-                ? "primary"
-                : rowsForChemicalListBySeries[i]?.rows ?? srows,
-          })),
-        ).length
-      : 1;
+  const speciesCount = currentSpecie === ""
+    ? entityValues(resolvedSeries, "specie", currentChemical).size
+    : 1;
+  const chemicalCount = currentChemical === ""
+    ? entityValues(resolvedSeries, "chemical", currentSpecie).size
+    : 1;
   const referenceCount = uniqueArticleCountInRows(
     flattenFilteredDataRows(
       currentSpecie === "" && currentChemical === ""
@@ -1488,6 +1452,27 @@ function ResultTableWrapper({
       },
     ];
   })();
+
+  if (resolvedSeries.every((series) => series.rows.length === 0)) {
+    return (
+      <TableStateBar
+        rows={[]}
+        downloadSheets={[]}
+        meta={meta}
+        currentSpecie=""
+        currentChemical=""
+        countMode="chemicals"
+        setCountMode={setCountMode}
+        countModeLocked={false}
+        speciesCount={0}
+        chemicalCount={0}
+        referenceCount={0}
+        primaryQuery={primaryQuery}
+        compareBarPrimaryQuery={compareBarPrimaryQuery}
+        colorsByQuery={colorsByQuery}
+      />
+    );
+  }
 
   return (
     <>
@@ -1539,91 +1524,92 @@ function ResultTableOrNull({
   compareBarPrimaryQuery?: string;
   [key: string]: any;
 }) {
-  if (isEmpty(response)) {
-    return <div></div>;
-  }
+  const model = useMemo(() => {
+    if (isEmpty(response)) return null;
+    const data_meta: Array<DataMeta> = [];
+    let chem_key_column = "";
+    let specie_key_column = "";
 
-  const data_meta: Array<DataMeta> = [];
-  let chem_key_column = "";
-  let specie_key_column = "";
-
-  const metadata = [...response["metadata"]].sort(
-    (
-      meta_1: { [index: string]: any },
-      meta_2: { [index: string]: any },
-    ) => {
-      return compareMetadataResultTypes(meta_1["type"], meta_2["type"]);
-    },
-  );
-  metadata.forEach((meta_item: { [index: string]: any }) => {
-    const data_name = meta_item["column"];
-    let data_type = "";
-    let additional_data = "";
-    let classificationLevel: number | null = null;
-
-    const full_type = meta_item["type"];
-    const linkModifier = getMetadataTypeModifier(full_type, "link");
-    const classificationModifier = getMetadataTypeModifier(full_type, "clas");
-    if (linkModifier) {
-      data_type = "link";
-      additional_data = linkModifier[0];
-    } else if (classificationModifier) {
-      data_type = "clas";
-    } else if (hasMetadataTypeToken(full_type, "SMILES")) {
-      data_type = "smiles";
-    } else if (hasMetadataTypeToken(full_type, "ref[]")) {
-      data_type = "reference";
-    }
-    if (classificationModifier && /^\d+$/.test(classificationModifier[0])) {
-      classificationLevel = Number(classificationModifier[0]);
-    }
-
-    if (hasMetadataTypeToken(full_type, "chemical")) {
-      if (hasMetadataTypeToken(full_type, "keycolumn")) {
-        chem_key_column = data_name;
-      }
-    } else if (hasMetadataTypeToken(full_type, "specie")) {
-      if (hasMetadataTypeToken(full_type, "keycolumn")) {
-        specie_key_column = data_name;
-      }
-    }
-
-    let group_type = "";
-    if (hasMetadataTypeToken(full_type, "chemical")) {
-      group_type = "chemical";
-    } else if (hasMetadataTypeToken(full_type, "specie") || classificationModifier) {
-      group_type = "specie";
-    }
-    if (!hasMetadataTypeToken(full_type, "table_") && !classificationModifier) {
-      group_type = "ignore";
-    }
-    data_meta.push(
-      new DataMeta(
-        data_type,
-        data_name,
-        meta_item["name"],
-        meta_item["description"],
-        additional_data,
-        group_type,
-        {
-          isListName: hasMetadataTypeToken(full_type, "list_name"),
-          classificationLevel,
-        },
-      ),
+    const metadata = [...response["metadata"]].sort(
+      (
+        meta_1: { [index: string]: any },
+        meta_2: { [index: string]: any },
+      ) => {
+        return compareMetadataResultTypes(meta_1["type"], meta_2["type"]);
+      },
     );
-  });
+    metadata.forEach((meta_item: { [index: string]: any }) => {
+      const data_name = meta_item["column"];
+      let data_type = "";
+      let additional_data = "";
+      let classificationLevel: number | null = null;
 
-  const rows = rowsFromResponseData(
-    response["data"],
-    data_meta,
-    chem_key_column,
-    specie_key_column,
-  );
+      const full_type = meta_item["type"];
+      const linkModifier = getMetadataTypeModifier(full_type, "link");
+      const classificationModifier = getMetadataTypeModifier(full_type, "clas");
+      if (linkModifier) {
+        data_type = "link";
+        additional_data = linkModifier[0];
+      } else if (classificationModifier) {
+        data_type = "clas";
+      } else if (hasMetadataTypeToken(full_type, "SMILES")) {
+        data_type = "smiles";
+      } else if (hasMetadataTypeToken(full_type, "ref[]")) {
+        data_type = "reference";
+      }
+      if (classificationModifier && /^\d+$/.test(classificationModifier[0])) {
+        classificationLevel = Number(classificationModifier[0]);
+      }
+
+      if (hasMetadataTypeToken(full_type, "chemical")) {
+        if (hasMetadataTypeToken(full_type, "keycolumn")) {
+          chem_key_column = data_name;
+        }
+      } else if (hasMetadataTypeToken(full_type, "specie")) {
+        if (hasMetadataTypeToken(full_type, "keycolumn")) {
+          specie_key_column = data_name;
+        }
+      }
+
+      let group_type = "";
+      if (hasMetadataTypeToken(full_type, "chemical")) {
+        group_type = "chemical";
+      } else if (hasMetadataTypeToken(full_type, "specie") || classificationModifier) {
+        group_type = "specie";
+      }
+      if (!hasMetadataTypeToken(full_type, "table_") && !classificationModifier) {
+        group_type = "ignore";
+      }
+      data_meta.push(
+        new DataMeta(
+          data_type,
+          data_name,
+          meta_item["name"],
+          meta_item["description"],
+          additional_data,
+          group_type,
+          {
+            isListName: hasMetadataTypeToken(full_type, "list_name"),
+            classificationLevel,
+          },
+        ),
+      );
+    });
+
+    return { meta: data_meta, chemKey: chem_key_column, specieKey: specie_key_column };
+  }, [response.metadata]);
+  const rows = useMemo(() => model
+    ? rowsFromResponseData(response.data, model.meta, model.chemKey, model.specieKey)
+    : [], [response.data, model]);
+
+  if (!model) return <div></div>;
 
   return (
     <ResultTableWrapper
       rows={rows}
-      meta={data_meta}
+      meta={model.meta}
+      chemKey={model.chemKey}
+      specieKey={model.specieKey}
       compareSeries={compareSeries}
       colorsByQuery={colorsByQuery}
       primaryQuery={primaryQuery}

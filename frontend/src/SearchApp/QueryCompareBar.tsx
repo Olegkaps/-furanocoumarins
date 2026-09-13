@@ -1,13 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Eye, EyeSlash, Plus, Xmark } from "@gravity-ui/icons";
+import {
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  EyeSlash,
+  Minus,
+  Plus,
+  Xmark,
+} from "@gravity-ui/icons";
 import config from "../config";
 import { NewFeatureHint } from "../shared/ui/NewFeatureHint";
 import {
   readCompareQueriesFromParams,
   readHiddenCompareQueriesFromParams,
+  readMinusCompareQueriesFromParams,
+  sanitizeHiddenCompareQueries,
   syncCompareColors,
   writeHiddenCompareQueriesToParams,
+  writeMinusCompareQueriesToParams,
   writeCompareQueriesToParams,
 } from "./compareQueries";
 import { fetchSearchData, filterResponse } from "./searchApi";
@@ -17,6 +28,7 @@ import { guardComparePayloads } from "../shared/schemaGuard";
 
 export type CompareSeries = {
   query: string;
+  mode: "plus" | "minus";
   color: string;
   response: { [index: string]: any };
   /** ISO timestamp when this query’s response was received. */
@@ -115,6 +127,7 @@ export function useCompareSeries(primaryQuery: string): {
   /** Raw (unfiltered) primary response for page chrome / empty states. */
   primaryRaw: { [index: string]: any };
   hiddenQueries: string[];
+  minusQueries: string[];
   loading: boolean;
 } {
   const [searchParams] = useSearchParams();
@@ -133,12 +146,19 @@ export function useCompareSeries(primaryQuery: string): {
   }, [primaryQuery, extraQueries]);
 
   const queriesKey = allQueries.join("\u0001");
-  const hiddenQueries = useMemo(() => {
+  const minusQueries = useMemo(() => {
     const active = new Set(allQueries);
-    return readHiddenCompareQueriesFromParams(searchParams).filter((q) =>
+    return readMinusCompareQueriesFromParams(searchParams).filter((q) =>
       active.has(q),
     );
   }, [searchParams, queriesKey]);
+  const hiddenQueries = useMemo(() => {
+    return sanitizeHiddenCompareQueries(
+      allQueries,
+      readHiddenCompareQueriesFromParams(searchParams),
+      minusQueries,
+    );
+  }, [searchParams, queriesKey, minusQueries]);
 
   const [colorsByQuery, setColorsByQuery] = useState<Record<string, string>>(
     {},
@@ -189,6 +209,10 @@ export function useCompareSeries(primaryQuery: string): {
     }
   }, [queriesKey, rawByQuery]);
 
+  const filteredByQuery = useMemo(
+    () => Object.fromEntries(Object.entries(rawByQuery).map(([q, raw]) => [q, filterResponse(raw)])),
+    [rawByQuery],
+  );
   const series = useMemo(
     () =>
       allQueries
@@ -199,13 +223,14 @@ export function useCompareSeries(primaryQuery: string): {
           if (!raw || !color || !fetchedAt || isEmpty(raw)) return null;
           return {
             query: q,
+            mode: minusQueries.includes(q) ? "minus" : "plus",
             color,
-            response: filterResponse(raw),
+            response: filteredByQuery[q],
             fetchedAt,
           };
         })
         .filter((s): s is CompareSeries => s != null),
-    [queriesKey, rawByQuery, colorsByQuery, fetchedAtByQuery],
+    [queriesKey, rawByQuery, filteredByQuery, colorsByQuery, fetchedAtByQuery, minusQueries],
   );
 
   return {
@@ -214,6 +239,7 @@ export function useCompareSeries(primaryQuery: string): {
     extraQueries,
     primaryRaw,
     hiddenQueries,
+    minusQueries,
     loading,
   };
 }
@@ -222,25 +248,34 @@ export function CompareQueriesDisplay({
   queries,
   colorsByQuery,
   hiddenQueries = [],
+  minusQueries = [],
   onToggleHidden,
+  onToggleMinus,
   onRemove,
 }: {
   /** Primary first, then extras. */
   queries: string[];
   colorsByQuery: Record<string, string>;
   hiddenQueries?: string[];
+  minusQueries?: string[];
   onToggleHidden?: (query: string) => void;
+  onToggleMinus?: (query: string) => void;
   /** When set, extras (not primary) show a remove control. */
   onRemove?: (query: string) => void;
 }) {
   if (queries.length === 0) return null;
   const [primary, ...extras] = queries;
   const hidden = new Set(hiddenQueries);
-  const visibleCount = queries.filter((q) => !hidden.has(q)).length;
+  const minus = new Set(minusQueries);
+  const visiblePlusCount = queries.filter(
+    (q) => !hidden.has(q) && !minus.has(q),
+  ).length;
   const HiddenButton = ({ query }: { query: string }) => {
     if (!onToggleHidden) return null;
     const isHidden = hidden.has(query);
-    const disabled = !isHidden && visibleCount <= 1;
+    const isMinus = minus.has(query);
+    const disabled =
+      isMinus || (!isHidden && !isMinus && visiblePlusCount <= 1);
     const Icon = isHidden ? EyeSlash : Eye;
     return (
       <button
@@ -249,8 +284,10 @@ export function CompareQueriesDisplay({
         title={
           isHidden
             ? "Show query"
+            : isMinus
+              ? "Minus queries cannot be hidden"
             : disabled
-              ? "At least one query must stay visible"
+              ? "At least one plus query must stay visible"
               : "Hide query"
         }
         aria-label={isHidden ? `Show ${query}` : `Hide ${query}`}
@@ -259,6 +296,35 @@ export function CompareQueriesDisplay({
         onClick={() => onToggleHidden(query)}
       >
         <Icon width={14} height={14} />
+      </button>
+    );
+  };
+  const RoleButton = ({ query }: { query: string }) => {
+    if (!onToggleMinus) return null;
+    const isMinus = minus.has(query);
+    const isHidden = hidden.has(query);
+    const disabled = isHidden || (!isMinus && visiblePlusCount <= 1);
+    const Icon = isMinus ? Minus : Plus;
+    return (
+      <button
+        type="button"
+        className={`query-compare-bar__role${isMinus ? " is-minus" : " is-plus"}`}
+        title={
+          isMinus
+            ? "Use as plus query"
+            : isHidden
+              ? "Hidden queries cannot be minus"
+            : disabled
+              ? "At least one plus query is required"
+              : "Use as minus query"
+        }
+        aria-label={isMinus ? `Use ${query} as plus` : `Use ${query} as minus`}
+        aria-pressed={isMinus}
+        disabled={disabled}
+        onClick={() => onToggleMinus(query)}
+      >
+        <Icon width={13} height={13} />
+        <span>{isMinus ? "minus" : "plus"}</span>
       </button>
     );
   };
@@ -277,6 +343,7 @@ export function CompareQueriesDisplay({
             {primary}
           </span>
           <span className="query-compare-bar__tag">primary</span>
+          <RoleButton query={primary} />
           <HiddenButton query={primary} />
         </li>
       )}
@@ -292,6 +359,7 @@ export function CompareQueriesDisplay({
           <span className="query-compare-bar__text" title={q}>
             {q}
           </span>
+          <RoleButton query={q} />
           <HiddenButton query={q} />
           {onRemove && (
             <button
@@ -320,7 +388,9 @@ export function QueryCompareBar({
   const [searchParams, setSearchParams] = useSearchParams();
   const extras = readCompareQueriesFromParams(searchParams);
   const hiddenQueries = readHiddenCompareQueriesFromParams(searchParams);
+  const minusQueries = readMinusCompareQueriesFromParams(searchParams);
   const [draft, setDraft] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const maxExtra = Math.max(0, config["MAX_COMPARE_QUERIES"] - 1);
   const primary = primaryQuery.trim();
   const canAdd =
@@ -358,12 +428,31 @@ export function QueryCompareBar({
       { replace: true },
     );
   };
+  const toggleMinus = (q: string) => {
+    setSearchParams(
+      (prev) => {
+        const current = readMinusCompareQueriesFromParams(prev);
+        const nextMinus = current.includes(q)
+          ? current.filter((x) => x !== q)
+          : [...current, q];
+        return writeMinusCompareQueriesToParams(prev, nextMinus);
+      },
+      { replace: true },
+    );
+  };
 
   if (primary === "" && extras.length === 0) {
     return null;
   }
 
   const listQueries = primary !== "" ? [primary, ...extras] : extras;
+  const activeMinus = minusQueries.filter((q) => listQueries.includes(q));
+  const activeHidden = sanitizeHiddenCompareQueries(
+    listQueries,
+    hiddenQueries,
+    activeMinus,
+  );
+  const plusCount = listQueries.length - activeMinus.length;
 
   return (
     <NewFeatureHint
@@ -371,45 +460,67 @@ export function QueryCompareBar({
       tip="Compare several search queries — counts are colored per query; zeros are hidden."
     >
       <div className="query-compare-bar">
-        <p className="query-compare-bar__title">Compare queries</p>
-        <p className="query-compare-bar__hint">
-          Up to {config["MAX_COMPARE_QUERIES"]} queries.
-        </p>
-        {extras.length < maxExtra && (
-          <div className="query-compare-bar__add">
-            <input
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  add();
-                }
-              }}
-              placeholder="Add query to compare"
-              aria-label="Add query to compare"
-              disabled={primary === ""}
+        <button
+          type="button"
+          className="query-compare-bar__toggle"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((open) => !open)}
+        >
+          {expanded ? (
+            <ChevronDown width={16} height={16} aria-hidden />
+          ) : (
+            <ChevronRight width={16} height={16} aria-hidden />
+          )}
+          <span className="query-compare-bar__title">Compare queries</span>
+          <span className="query-compare-bar__summary">
+            {plusCount} plus
+            {activeMinus.length > 0 ? `, ${activeMinus.length} minus` : ""}
+          </span>
+        </button>
+        {expanded && (
+          <>
+            <p className="query-compare-bar__hint">
+              Up to {config["MAX_COMPARE_QUERIES"]} queries.
+            </p>
+            {extras.length < maxExtra && (
+              <div className="query-compare-bar__add">
+                <input
+                  type="text"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      add();
+                    }
+                  }}
+                  placeholder="Add query to compare"
+                  aria-label="Add query to compare"
+                  disabled={primary === ""}
+                />
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={!canAdd}
+                  onClick={add}
+                  title="Add query"
+                >
+                  <Plus width={16} height={16} />
+                  Add
+                </button>
+              </div>
+            )}
+            <CompareQueriesDisplay
+              queries={listQueries}
+              colorsByQuery={colorsByQuery}
+              hiddenQueries={activeHidden}
+              minusQueries={minusQueries}
+              onToggleHidden={toggleHidden}
+              onToggleMinus={toggleMinus}
+              onRemove={remove}
             />
-            <button
-              type="button"
-              className="btn"
-              disabled={!canAdd}
-              onClick={add}
-              title="Add query"
-            >
-              <Plus width={16} height={16} />
-              Add
-            </button>
-          </div>
+          </>
         )}
-        <CompareQueriesDisplay
-          queries={listQueries}
-          colorsByQuery={colorsByQuery}
-          hiddenQueries={hiddenQueries}
-          onToggleHidden={toggleHidden}
-          onRemove={remove}
-        />
       </div>
     </NewFeatureHint>
   );

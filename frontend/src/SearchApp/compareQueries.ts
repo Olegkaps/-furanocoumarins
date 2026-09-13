@@ -2,6 +2,7 @@ import config from "../config";
 
 const CMP_PARAM = "cmp";
 const CMP_HIDDEN_PARAM = "cmp_hidden";
+const CMP_MINUS_PARAM = "cmp_minus";
 
 export type CompareQuery = {
   query: string;
@@ -54,6 +55,63 @@ export function readHiddenCompareQueriesFromParams(
   return parseCompareQueries(searchParams.get(CMP_HIDDEN_PARAM));
 }
 
+export function readMinusCompareQueriesFromParams(
+  searchParams: URLSearchParams,
+): string[] {
+  const active = activeCompareQueries(searchParams);
+  const allowed = new Set(active);
+  const hidden = new Set(readHiddenCompareQueriesFromParams(searchParams));
+  let minus = parseCompareQueries(searchParams.get(CMP_MINUS_PARAM)).filter((q) =>
+    allowed.has(q) && !hidden.has(q),
+  );
+  const plusCount = active.filter((q) => !minus.includes(q)).length;
+  if (plusCount === 0) {
+    minus = minus.slice(1);
+  }
+  return minus;
+}
+
+function activeCompareQueries(
+  searchParams: URLSearchParams,
+  extras = readCompareQueriesFromParams(searchParams),
+): string[] {
+  return [searchParams.get("query")?.trim() ?? "", ...extras].filter(Boolean);
+}
+
+function writeSanitizedMinusQueries(
+  next: URLSearchParams,
+  queries: string[],
+  activeQueries = activeCompareQueries(next),
+) {
+  const allowed = new Set(activeQueries);
+  const hidden = new Set(readHiddenCompareQueriesFromParams(next));
+  let minus = queries.filter((q) => allowed.has(q) && !hidden.has(q));
+  const plusCount = activeQueries.filter((q) => !minus.includes(q)).length;
+  if (plusCount === 0) {
+    minus = minus.slice(1);
+  }
+  const serialized = serializeCompareQueries(minus);
+  if (serialized == null) next.delete(CMP_MINUS_PARAM);
+  else next.set(CMP_MINUS_PARAM, serialized);
+}
+
+export function sanitizeHiddenCompareQueries(
+  activeQueries: string[],
+  hiddenQueries: string[],
+  minusQueries: string[],
+): string[] {
+  const active = new Set(activeQueries);
+  const minus = new Set(minusQueries);
+  let hidden = hiddenQueries.filter((q) => active.has(q) && !minus.has(q));
+  const plusQueries = activeQueries.filter((q) => !minus.has(q));
+  const visiblePlusCount = plusQueries.filter((q) => !hidden.includes(q)).length;
+  if (visiblePlusCount === 0) {
+    const firstPlus = plusQueries[0];
+    hidden = hidden.filter((q) => q !== firstPlus);
+  }
+  return hidden;
+}
+
 export function writeCompareQueriesToParams(
   prev: URLSearchParams,
   queries: string[],
@@ -70,6 +128,11 @@ export function writeCompareQueriesToParams(
   const hiddenSerialized = serializeCompareQueries(hidden);
   if (hiddenSerialized == null) next.delete(CMP_HIDDEN_PARAM);
   else next.set(CMP_HIDDEN_PARAM, hiddenSerialized);
+  writeSanitizedMinusQueries(
+    next,
+    readMinusCompareQueriesFromParams(next),
+    activeCompareQueries(next, queries),
+  );
   return next;
 }
 
@@ -83,8 +146,12 @@ export function writeCompareQuerySetToParams(
     ...readCompareQueriesFromParams(prev),
   ].filter(Boolean);
   const oldHidden = new Set(readHiddenCompareQueriesFromParams(prev));
+  const oldMinus = new Set(readMinusCompareQueriesFromParams(prev));
   const hiddenIndexes = oldQueries
     .map((q, index) => (oldHidden.has(q) ? index : -1))
+    .filter((index) => index >= 0);
+  const minusIndexes = oldQueries
+    .map((q, index) => (oldMinus.has(q) ? index : -1))
     .filter((index) => index >= 0);
 
   const next = new URLSearchParams(prev);
@@ -108,6 +175,13 @@ export function writeCompareQuerySetToParams(
   const hiddenSerialized = serializeCompareQueries(hidden);
   if (hiddenSerialized == null) next.delete(CMP_HIDDEN_PARAM);
   else next.set(CMP_HIDDEN_PARAM, hiddenSerialized);
+  writeSanitizedMinusQueries(
+    next,
+    minusIndexes
+      .map((index) => newQueries[index])
+      .filter((q): q is string => Boolean(q)),
+    newQueries,
+  );
   return next;
 }
 
@@ -120,12 +194,38 @@ export function writeHiddenCompareQueriesToParams(
     next.get("query")?.trim() ?? "",
     ...readCompareQueriesFromParams(next),
   ].filter(Boolean);
-  const allowed = new Set(allQueries);
   const serialized = serializeCompareQueries(
-    queries.filter((q) => allowed.has(q)),
+    sanitizeHiddenCompareQueries(
+      allQueries,
+      queries,
+      readMinusCompareQueriesFromParams(next),
+    ),
   );
   if (serialized == null) next.delete(CMP_HIDDEN_PARAM);
   else next.set(CMP_HIDDEN_PARAM, serialized);
+  writeSanitizedMinusQueries(
+    next,
+    readMinusCompareQueriesFromParams(next),
+    allQueries,
+  );
+  return next;
+}
+
+export function writeMinusCompareQueriesToParams(
+  prev: URLSearchParams,
+  queries: string[],
+): URLSearchParams {
+  const next = new URLSearchParams(prev);
+  const allQueries = activeCompareQueries(next);
+  const hidden = sanitizeHiddenCompareQueries(
+    allQueries,
+    readHiddenCompareQueriesFromParams(next),
+    queries,
+  );
+  const hiddenSerialized = serializeCompareQueries(hidden);
+  if (hiddenSerialized == null) next.delete(CMP_HIDDEN_PARAM);
+  else next.set(CMP_HIDDEN_PARAM, hiddenSerialized);
+  writeSanitizedMinusQueries(next, queries);
   return next;
 }
 
@@ -200,4 +300,4 @@ export function appendCladeClause(
   return trimmed === "" ? clause : `${trimmed} AND ${clause}`;
 }
 
-export { CMP_PARAM, CMP_HIDDEN_PARAM };
+export { CMP_PARAM, CMP_HIDDEN_PARAM, CMP_MINUS_PARAM };

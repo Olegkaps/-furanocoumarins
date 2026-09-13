@@ -796,13 +796,6 @@ function parseOptionalInt(raw: string | null): number | null {
   return Number.isFinite(n) ? Math.trunc(n) : null;
 }
 
-function joinedCladeMatchesPrefix(fullKey: string, prefix: string): boolean {
-  if (prefix === "") {
-    return true;
-  }
-  return fullKey === prefix || fullKey.startsWith(prefix + "@");
-}
-
 type UniquesByClades = {
   [joined_clades: string]: {
     smiles: Set<string>;
@@ -811,33 +804,43 @@ type UniquesByClades = {
   };
 };
 
-function countAtPrefix(
+const prefixCountsCache = new WeakMap<UniquesByClades, Map<string, Record<CountMode, number>>>();
+
+export function countAtPrefix(
   uniquesByClades: UniquesByClades,
   pathParts: Array<string>,
   countMode: CountMode,
   smilesColumns: Array<string>,
   refColumns: Array<string>,
 ): number {
-  const prefix = pathParts.join("@");
-  if (countMode === "all") {
-    let total = 0;
-    Object.entries(uniquesByClades).forEach(([joined, u]) => {
-      if (joinedCladeMatchesPrefix(joined, prefix)) total += u.total;
-    });
-    return total;
-  }
-  const mergedSmiles = new Set<string>();
-  const mergedRefs = new Set<string>();
-  Object.entries(uniquesByClades).forEach(([joined, u]) => {
-    if (joinedCladeMatchesPrefix(joined, prefix)) {
-      u.smiles.forEach((s) => mergedSmiles.add(s));
-      u.refs.forEach((r) => mergedRefs.add(r));
+  let counts = prefixCountsCache.get(uniquesByClades);
+  if (!counts) {
+    const prefixes = new Map<string, UniquesByClades[string]>();
+    for (const [joined, leaf] of Object.entries(uniquesByClades)) {
+      // Empty prefix is the root, including when the first rank is blank.
+      const keys = new Set(["", joined]);
+      for (let i = joined.indexOf("@"); i >= 0; i = joined.indexOf("@", i + 1)) {
+        keys.add(joined.slice(0, i));
+      }
+      for (const key of keys) {
+        let total = prefixes.get(key);
+        if (!total) {
+          total = { total: 0, smiles: new Set(), refs: new Set() };
+          prefixes.set(key, total);
+        }
+        total.total += leaf.total;
+        leaf.smiles.forEach((value) => total.smiles.add(value));
+        leaf.refs.forEach((value) => total.refs.add(value));
+      }
     }
-  });
-  if (countMode === "chemicals") {
-    return smilesColumns.length ? mergedSmiles.size : 0;
+    counts = new Map(Array.from(prefixes, ([key, value]) => [key, {
+      all: value.total, chemicals: value.smiles.size, articles: value.refs.size,
+    }]));
+    prefixCountsCache.set(uniquesByClades, counts);
   }
-  return refColumns.length ? mergedRefs.size : 0;
+  if (countMode === "chemicals" && !smilesColumns.length) return 0;
+  if (countMode === "articles" && !refColumns.length) return 0;
+  return counts.get(pathParts.join("@"))?.[countMode] ?? 0;
 }
 
 function seriesCountSum(node: PhilogeneticTreeNode): number {
@@ -918,13 +921,19 @@ function assignUniqueCountsToTree(
   });
 }
 
-function buildUniquesByClades(
+const leafCountsCache = new WeakMap<object, Map<string, UniquesByClades>>();
+
+export function buildUniquesByClades(
   rows: Array<{ [index: string]: string }> | undefined,
   species_meta: Array<string>,
   smilesColumns: Array<string>,
   refColumns: Array<string>,
 ): UniquesByClades {
-  const uniquesByClades: UniquesByClades = {};
+  // Responses are immutable snapshots; retain alternate taxonomies while rows live.
+  const cacheKey = JSON.stringify([species_meta, smilesColumns, refColumns]);
+  const cached = rows && leafCountsCache.get(rows)?.get(cacheKey);
+  if (cached) return cached;
+  const uniquesByClades: UniquesByClades = Object.create(null);
   rows?.forEach((row) => {
     const clades: Array<string> = [];
     species_meta.forEach((clade_name: string, ind: number) => {
@@ -948,6 +957,14 @@ function buildUniquesByClades(
       u.refs.add(row[refColumns[0]]);
     }
   });
+  if (rows) {
+    let entries = leafCountsCache.get(rows);
+    if (!entries) {
+      entries = new Map();
+      leafCountsCache.set(rows, entries);
+    }
+    entries.set(cacheKey, uniquesByClades);
+  }
   return uniquesByClades;
 }
 
@@ -1240,14 +1257,14 @@ function PhilogeneticTree({
   const [wholeWord, setWholeWord] = useState(false);
   const [matchIndex, setMatchIndex] = useState(0);
 
-  const treeModel = useMemo(() => {
+  const sourceRoot = useMemo(() => {
     if (species.length === 0) return null;
     const aggregateChildCounts = countMode === "all";
     const root = new PhilogeneticTreeNode("");
     for (const specie of species) {
       root.add_child(specie.clades, specie.values_count, aggregateChildCounts);
     }
-    if (countMode === "chemicals" || countMode === "articles") {
+    if (compareSeriesUniques.length <= 1 && countMode !== "all") {
       assignUniqueCountsToTree(
         root,
         [],
@@ -1267,24 +1284,26 @@ function PhilogeneticTree({
         refColumns,
       );
     }
-    const maxLevel = Math.max(0, meta.length - 2);
-    const from = Math.max(0, Math.min(displayFrom, maxLevel));
-    const to = Math.max(from, Math.min(displayTo, maxLevel));
-    const spacing = treeSpacingForSeries(compareSeriesUniques.length);
-    const projected = projectTreeForDisplay(root, meta, from, to, spacing);
-    const collapsed = collapseUnaryFromRoot(projected);
-    return { projected, ...collapsed, from, to, spacing };
+    return root;
   }, [
     species,
-    meta,
     countMode,
     uniquesByClades,
     compareSeriesUniques,
     smilesColumns,
     refColumns,
-    displayFrom,
-    displayTo,
   ]);
+
+  const treeModel = useMemo(() => {
+    if (!sourceRoot) return null;
+    const maxLevel = Math.max(0, meta.length - 2);
+    const from = Math.max(0, Math.min(displayFrom, maxLevel));
+    const to = Math.max(from, Math.min(displayTo, maxLevel));
+    const spacing = treeSpacingForSeries(compareSeriesUniques.length);
+    const projected = projectTreeForDisplay(sourceRoot, meta, from, to, spacing);
+    const collapsed = collapseUnaryFromRoot(projected);
+    return { projected, ...collapsed, from, to, spacing };
+  }, [sourceRoot, meta, displayFrom, displayTo, compareSeriesUniques.length]);
 
   useEffect(() => {
     if (!treeModel) return;
@@ -1494,9 +1513,11 @@ const TAXONOMY_INFO =
 const DEPTH_INFO =
   "Limits which taxonomic ranks are drawn. Levels before “from” are folded into one path stem; levels after “to” are hidden. Counts are unchanged. If “to” is not set, it is chosen automatically so at most a configured number of leaf tips are drawn.";
 
+const EMPTY_COMPARE_SERIES: CompareSeries[] = [];
+
 function PhilogeneticTreeOrNull({
   response,
-  compareSeries = [],
+  compareSeries = EMPTY_COMPARE_SERIES,
   colorsByQuery = {},
   primaryQuery = "",
   compareBarPrimaryQuery = primaryQuery,
@@ -1531,81 +1552,82 @@ function PhilogeneticTreeOrNull({
     );
   };
 
-  if (isEmpty(response)) {
-    return <div></div>;
-  }
+  const { taxonomy, species_meta, meta_names, cladeLevels, smilesColumns,
+    refColumns, uniquesByClades, seriesForTree, species } = useMemo(() => {
+    const taxonomy = selectTreeTaxonomy(
+      (response["metadata"] ?? []) as Array<{ type: string; column: string; name: string }>,
+      tag,
+    );
+    const species_meta = ["__root__", ...taxonomy.columns.map((column) => column.column)];
+    const meta_names = ["__root__", ...taxonomy.columns.map((column) => column.name)];
 
-  const taxonomy = selectTreeTaxonomy(
-    response["metadata"] as Array<{ type: string; column: string; name: string }>,
-    tag,
-  );
-  const species_meta = ["__root__", ...taxonomy.columns.map((column) => column.column)];
-  const meta_names = ["__root__", ...taxonomy.columns.map((column) => column.name)];
+    const cladeLevels = meta_names.slice(1).map((name, index) => ({
+      index,
+      name: name || species_meta[index + 1] || `Level ${index + 1}`,
+    }));
 
-  const cladeLevels = meta_names.slice(1).map((name, index) => ({
-    index,
-    name: name || species_meta[index + 1] || `Level ${index + 1}`,
-  }));
+    const smilesColumns = (
+      (response["metadata"] ?? []) as Array<{ [index: string]: string }>
+    )
+      .filter((m) => hasMetadataTypeToken(String(m["type"]), "SMILES"))
+      .map((m) => m["column"]);
+    const refColumns = (
+      (response["metadata"] ?? []) as Array<{ [index: string]: string }>
+    )
+      .filter((m) => hasMetadataTypeToken(String(m["type"]), "ref[]"))
+      .map((m) => m["column"]);
+
+    const uniquesByClades = buildUniquesByClades(
+      response["data"],
+      species_meta,
+      smilesColumns,
+      refColumns,
+    );
+
+    const seriesForTree =
+      compareSeries.length > 1
+        ? compareSeries.map((s) => ({
+            color: s.color,
+            uniques: buildUniquesByClades(
+              s.response["data"],
+              species_meta,
+              smilesColumns,
+              refColumns,
+            ),
+          }))
+        : [];
+
+    const counts: { [index: string]: number } = {};
+    if (seriesForTree.length > 1) {
+      const pathSet = new Set<string>();
+      seriesForTree.forEach((s) => {
+        Object.keys(s.uniques).forEach((p) => pathSet.add(p));
+      });
+      pathSet.forEach((joined_clades) => {
+        counts[joined_clades] = seriesForTree.reduce(
+          (acc, s) =>
+            acc + leafCountFromUniques(s.uniques[joined_clades], countMode),
+          0,
+        );
+      });
+    } else {
+      Object.entries(uniquesByClades).forEach(([joined_clades, u]) => {
+        counts[joined_clades] = leafCountFromUniques(u, countMode);
+      });
+    }
+
+    const species = [] as Array<Specie>;
+    Object.entries(counts).forEach(([joined_clades, count]) => {
+      species.push(new Specie(count, joined_clades.split("@")));
+    });
+    return { taxonomy, species_meta, meta_names, cladeLevels, smilesColumns,
+      refColumns, uniquesByClades, seriesForTree, species };
+  }, [response, tag, compareSeries, countMode]);
 
   const maxLevel = Math.max(0, cladeLevels.length - 1);
   const effectiveFrom = Math.min(displayFrom, maxLevel);
 
-  const smilesColumns = (
-    response["metadata"] as Array<{ [index: string]: string }>
-  )
-    .filter((m) => hasMetadataTypeToken(String(m["type"]), "SMILES"))
-    .map((m) => m["column"]);
-  const refColumns = (
-    response["metadata"] as Array<{ [index: string]: string }>
-  )
-    .filter((m) => hasMetadataTypeToken(String(m["type"]), "ref[]"))
-    .map((m) => m["column"]);
-
-  const uniquesByClades = buildUniquesByClades(
-    response["data"],
-    species_meta,
-    smilesColumns,
-    refColumns,
-  );
-
-  const seriesForTree =
-    compareSeries.length > 1
-      ? compareSeries.map((s) => ({
-          color: s.color,
-          uniques: buildUniquesByClades(
-            s.response["data"],
-            species_meta,
-            smilesColumns,
-            refColumns,
-          ),
-        }))
-      : [];
-
-  const counts: { [index: string]: number } = {};
-  if (seriesForTree.length > 1) {
-    const pathSet = new Set<string>();
-    seriesForTree.forEach((s) => {
-      Object.keys(s.uniques).forEach((p) => pathSet.add(p));
-    });
-    pathSet.forEach((joined_clades) => {
-      counts[joined_clades] = seriesForTree.reduce(
-        (acc, s) =>
-          acc + leafCountFromUniques(s.uniques[joined_clades], countMode),
-        0,
-      );
-    });
-  } else {
-    Object.entries(uniquesByClades).forEach(([joined_clades, u]) => {
-      counts[joined_clades] = leafCountFromUniques(u, countMode);
-    });
-  }
-
-  const species = [] as Array<Specie>;
-  Object.entries(counts).forEach(([joined_clades, count]) => {
-    species.push(new Specie(count, joined_clades.split("@")));
-  });
-
-  const effectiveTo =
+  const effectiveTo = useMemo(() =>
     displayTo == null
       ? chooseAutoDisplayTo(
           species,
@@ -1614,7 +1636,13 @@ function PhilogeneticTreeOrNull({
           maxLevel,
           config["TREE_MAX_VISIBLE_CLADES"],
         )
-      : Math.max(effectiveFrom, Math.min(displayTo, maxLevel));
+      : Math.max(effectiveFrom, Math.min(displayTo, maxLevel)),
+    [displayTo, species, species_meta, effectiveFrom, maxLevel],
+  );
+
+  if (isEmpty(response)) {
+    return <div></div>;
+  }
 
   const treeToolbar = (
     <div className="panel tree-toolbar">

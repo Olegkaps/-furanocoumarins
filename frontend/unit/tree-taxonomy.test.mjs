@@ -1,9 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { selectTreeTaxonomy } from "../src/SearchApp/treeTaxonomy.mjs";
+import { selectTreeTaxonomy, canShowPhylogeneticTree } from "../src/SearchApp/treeTaxonomy.mjs";
 
 const column = (name, type) => ({ column: name, name, type });
 const names = result => result.columns.map(item => item.column);
+
+test("tree availability counts distinct paths across visible responses and selected taxonomy", () => {
+  const metadata = [column("species", "clas[0]"), column("accepted", "clas[0][accepted]")];
+  const first = { metadata, data: [{ species: "a", accepted: "same" }] };
+  const second = { metadata, data: [{ species: "b", accepted: "same" }] };
+  const series = [{ response: first }, { response: second }];
+  assert.equal(canShowPhylogeneticTree(first), false);
+  assert.equal(canShowPhylogeneticTree(first, series), true);
+  assert.equal(canShowPhylogeneticTree(first, series, "accepted"), false);
+  assert.equal(canShowPhylogeneticTree({ metadata, data: [] }, series), true);
+  assert.equal(canShowPhylogeneticTree(first, [{ response: first }, { response: first }]), false);
+  assert.equal(canShowPhylogeneticTree({}), false);
+  assert.equal(canShowPhylogeneticTree({ metadata: [], data: [{ a: 1 }, { a: 2 }] }), false);
+  assert.equal(canShowPhylogeneticTree({ metadata, data: [{}, { species: "" }] }), false);
+});
 
 test("tree ranks run broadest to narrowest independently of metadata token order", () => {
   const metadata = [

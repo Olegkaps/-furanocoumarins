@@ -59,7 +59,7 @@ export function EmptyResponse() {
   return <p className="empty-state">No data for given request</p>;
 }
 
-export function SearchLink({ path, text }: { path: string; text: string }) {
+export function SearchLink({ path, text, disabled = false }: { path: string; text: string; disabled?: boolean }) {
   const [searchParams] = useSearchParams();
   const tourTarget =
     path === "/tree"
@@ -70,7 +70,11 @@ export function SearchLink({ path, text }: { path: string; text: string }) {
   return (
     <div className="goto-chip" data-tour={tourTarget}>
       <p>Go to:</p>
-      <Link
+      {disabled ? (
+        <span role="link" aria-disabled="true" style={{ opacity: 0.5, cursor: "not-allowed" }} title="Phylogenetic tree requires at least two taxa">
+          {text}
+        </span>
+      ) : <Link
         to={{
           pathname: path,
           search: searchParams.toString() ? `?${searchParams.toString()}` : "",
@@ -79,7 +83,7 @@ export function SearchLink({ path, text }: { path: string; text: string }) {
       >
         {text}
         <ArrowUpRightFromSquare />
-      </Link>
+      </Link>}
     </div>
   );
 }
