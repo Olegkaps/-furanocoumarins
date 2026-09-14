@@ -1,0 +1,18 @@
+.publication-main-export { border-top: 1px solid #c8ced3; padding: 20px 0; min-width: 0; color: #243128; }
+.publication-main-export h2 { font-size: 20px; }
+.publication-main-export label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.publication-main-export input:not([type=checkbox]), .publication-main-export select, .publication-main-export textarea { width: 100%; box-sizing: border-box; min-width: 0; padding: 7px; border: 1px solid #acb8c0; border-radius: 4px; background: #fff; color: #202728; }
+.publication-main-export > label { max-width: 100%; margin: 12px 0; }
+.publication-main-export__toolbar, .publication-main-export nav { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 12px 0; }
+.publication-main-export__toolbar label { flex-direction: row; align-items: center; }
+.publication-main-export__scroll { overflow: auto; max-width: 100%; }
+.publication-main-export table { border-collapse: collapse; table-layout: fixed; min-width: 900px; width: 100%; }
+.publication-main-export th, .publication-main-export td { border-bottom: 1px solid #d4dcdf; padding: 10px; vertical-align: top; text-align: left; width: 250px; overflow-wrap: anywhere; }
+.publication-main-export th:first-child, .publication-main-export td:first-child { width: 55px; }
+.publication-main-export tr[aria-current=true] { background: #eaf3fb; }
+.publication-main-export button { cursor: pointer; white-space: normal; overflow-wrap: anywhere; }
+.publication-main-export button:disabled { cursor: default; opacity: .5; }
+.publication-main-export__lookup { display: grid; gap: 8px; }
+.publication-main-export__lookup small { color: #775014; }
+.publication-main-export code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.publication-main-export textarea { height: 140px; font-family: monospace; white-space: pre; }

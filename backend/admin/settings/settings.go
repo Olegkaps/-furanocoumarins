@@ -39,6 +39,11 @@ type Config struct {
 	S3UsePathStyle bool          `env:"S3_USE_PATH_STYLE" env-default:"true"`
 	SearchCacheTTL time.Duration `env:"SEARCH_CACHE_TTL" env-default:"5m"`
 	AuthMasterURL  string        `env:"AUTH_MASTER_URL" env-default:"http://authd:8080"`
+
+	// API use requires explicit opt-in; neither credentials nor a model default enable it.
+	AliceAPIEnabled bool   `env:"ALICE_API_ENABLED" env-default:"false"`
+	AliceAPIKey     string `env:"ALICE_API_KEY"`
+	AliceModelURI   string `env:"ALICE_MODEL_URI"`
 }
 
 // C is the loaded application configuration.

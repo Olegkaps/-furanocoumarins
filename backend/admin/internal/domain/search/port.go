@@ -32,6 +32,7 @@ type SearchResponse struct {
 	Metadata       []ColumnMeta     `json:"metadata"`
 	Data           []map[string]any `json:"data"`
 	TableTimestamp time.Time        `json:"timestamp"`
+	Truncated      *bool            `json:"truncated,omitempty"`
 }
 
 // Reader loads search and metadata data from persistence.

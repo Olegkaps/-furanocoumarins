@@ -157,12 +157,72 @@ columns without the guided-form `search` marker. Operators must match physical
 text/set behavior. Value requests must be debounced, bounded and discard stale
 results. Keep query examples in the page-help tours aligned with the grammar.
 
+## Publication Reader
+
+`/admin/publication-reader` is an admin-only review workspace. Its three API
+routes (`status`, `document`, `analyze`) all require `RequireAdmin`; Caddy forwards
+only these exact endpoints, leaving the page route to the SPA. The implementation
+lives in `backend/admin/internal/publicationreader`,
+`frontend/src/Admin/PublicationReader*`, and
+`frontend/src/Admin/browserPublicationAnalysis.ts`.
+
+Documents are processed in memory and never change curated scientific records.
+PDF extraction requires `pdftotext` (`poppler-utils` in the backend image); scanned
+documents require external OCR. Text/HTML pagination is logical, not printed-page
+pagination. URL imports must retain public-address-only, DNS-pinned fetching,
+redirect validation, and bounded source/text sizes and deadlines.
+PDF conversion has one shared process slot per backend instance; saturation
+returns a retryable busy response instead of queuing more converter processes.
+
+Browser analysis uses an admin-entered provider, model and personal API key.
+Keep that key only in component memory, clear it when changing providers, and
+never persist it, log it, put it in a URL, or send it through the application's
+authenticated API client. Direct requests use fixed provider HTTPS endpoints,
+omit cookies and application bearer tokens, and reject redirects. Browser
+analysis must retain bounded responses, cancellation and exact evidence checks.
+OpenRouter defaults to its free-only route; never silently fall back to paid
+models. Other providers' free access depends on account tier, quota and region.
+Document import and server configuration endpoints still require `RequireAdmin`.
+
+Server-side analysis is disabled by default. The optional Yandex Cloud adapter requires
+server-side `ALICE_API_ENABLED=true`, `ALICE_API_KEY`, and `ALICE_MODEL_URI`
+(`gpt://<folder-id>/<model>/<version>`). Never expose this server key in frontend settings.
+The free Alice consumer chat does not establish free API access; obtain explicit
+provider selection before enabling billable requests. Imported publication text
+is sent to the configured provider only when the admin requests analysis.
+
+Findings are unverified AI candidates, with exact page quotations per reported
+field. Quote matching is not semantic verification. Unreported chirality must not
+be presented as absent chirality. Preserve these distinctions in the UI and tests.
+
+The reader also accepts bounded local extraction JSON without calling a model:
+`{document, analysis}` uses the normal page-based contracts; the offline preview's
+`sections`/`findings` format is converted to logical pages. Optional exact
+`mentions` and `association_note` preserve species-specific evidence and
+cross-passage caveats. Pair selection controls highlights; clicked quotations
+keep a distinct color after focus moves. Never infer species aliases from names.
+
+`PublicationMainExport` builds unverified drafts from the latest published main
+sheet's physical column order. CID lookup uses chemical names only; taxon lookup
+uses genus/species only, never the chemical or publication. Keep ambiguity blank,
+preserve manual selections/clears, and do not guess a reference ID from a URL.
+Exports have matching HTML-table and TSV cells, including blanks, with a TSV
+download fallback. Reviewing, importing extraction JSON, and copying must never
+write curated data or automatically invoke an LLM. Extraction methods remain
+review evidence, not automatically populated main-sheet fields.
+Identity lookups request compact `/search` projections (`columns`, bounded
+`limit`) rather than downloading complete joined observations. Keep the default
+search response unchanged and never mutate cached rows while projecting them.
+Truncated results must not produce automatic identity predictions.
+
 ## Testing
 
 Run tests through the root `Makefile`:
 
 - `make lint` — Go vet plus frontend lint.
 - `make test-unit` — backend unit/regression suite and frontend production build.
+- `make test-publication-reader` — reader/backend HTTP regressions, reader frontend
+  tests, and frontend production build.
 - `make test-backend-container` — CI-equivalent backend coverage/integration container.
 - `make test-metadata` — PostgreSQL-only metadata versions, backfill, and HTTP
   persistence; requires an explicit disposable `TEST_POSTGRES_DSN`.

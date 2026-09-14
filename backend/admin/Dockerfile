@@ -17,6 +17,8 @@ RUN --mount=type=cache,target="/root/.cache/go-build" \
 
 FROM alpine/curl
 
+RUN apk add --no-cache poppler-utils
+
 WORKDIR /usr/src/app
 
 COPY --from=compiler /usr/src/app/main_app ./

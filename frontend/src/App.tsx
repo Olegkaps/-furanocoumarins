@@ -56,6 +56,7 @@ function App() {
 			  <Route path="/register" element={<Register />}/>
               <Route path="/admin" element={<AdminApp />}/>
               <Route path="/admin/metadata" element={<AdminApp metadataPage />}/>
+              <Route path="/admin/publication-reader" element={<AdminApp publicationReaderPage />}/>
               <Route path="/reference/:article_id" element={<Reference />}/>
           </Routes>
         </div>

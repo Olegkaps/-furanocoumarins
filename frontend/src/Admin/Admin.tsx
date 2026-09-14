@@ -11,18 +11,19 @@ import "./Admin.css";
 import { PageTour } from "../shared/tour/PageTour";
 import AccountSecurity from "./AccountSecurity";
 import MetadataEditor from "./MetadataEditor";
+import PublicationReader from "./PublicationReader";
 
-export function AdminApp({ metadataPage = false }: { metadataPage?: boolean }) {
+export function AdminApp({ metadataPage = false, publicationReaderPage = false }: { metadataPage?: boolean; publicationReaderPage?: boolean }) {
   const username = getName();
   if (!isTokenExists()) return <Navigate to="/login" />;
   return (
     <div>
-      <FullNavigation pageName={metadataPage ? "metadata" : "admin"} />
-      {!metadataPage && <PageTour tourId="admin" />}
+      <FullNavigation pageName={publicationReaderPage ? "publication-reader" : metadataPage ? "metadata" : "admin"} />
+      {!metadataPage && !publicationReaderPage && <PageTour tourId="admin" />}
       <div className="admin-page" style={{ paddingTop: 8 }}>
         <div className="admin-topbar" style={{ marginBottom: 8 }} data-tour="admin-header">
           <h1 className="admin-topbar__title" style={{ fontSize: "1.75rem" }}>
-            {metadataPage ? "Import metadata" : "Administration"}
+            {publicationReaderPage ? "Publication reader" : metadataPage ? "Import metadata" : "Administration"}
           </h1>
           <div className="admin-user">
             <p className="admin-user__name">{username}</p>
@@ -32,7 +33,10 @@ export function AdminApp({ metadataPage = false }: { metadataPage?: boolean }) {
           </div>
         </div>
       </div>
-      {metadataPage ? <div className="admin-page metadata-page">
+      {publicationReaderPage ? <div className="admin-page">
+        <Link to="/admin" className="btn">Back to administration</Link>
+        <PublicationReader />
+      </div> : metadataPage ? <div className="admin-page metadata-page">
         <Link to="/admin" className="btn">Back to administration</Link>
         <MetadataEditor />
       </div> : <><AdminPage /><AccountSecurity /></>}

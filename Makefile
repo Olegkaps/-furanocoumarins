@@ -110,6 +110,12 @@ MONITORING_TEST_COMPOSE = $(COMPOSE) -p furano-monitoring-validation -f monitori
 test-monitoring-backend:
 	cd backend/admin && ENV_TYPE=TEST go test ./internal/presentation/http/... -count=1
 
+.PHONY: test-publication-reader
+test-publication-reader: frontend-deps
+	cd backend/admin && ENV_TYPE=TEST go test ./internal/publicationreader ./internal/presentation/http/... -count=1
+	cd frontend && node --test unit/*publication*.test.mjs
+	cd frontend && npm run build
+
 test-monitoring-config:
 	python3 scripts/monitoring-check.py
 	$(MONITORING_TEST_COMPOSE) run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml

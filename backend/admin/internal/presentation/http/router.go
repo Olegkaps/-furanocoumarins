@@ -17,6 +17,7 @@ import (
 	bibtexhandler "admin/internal/presentation/http/bibtex"
 	createhandler "admin/internal/presentation/http/create"
 	pageshandler "admin/internal/presentation/http/pages"
+	publicationhandler "admin/internal/presentation/http/publicationreader"
 	"admin/internal/presentation/http/response"
 	searchhandler "admin/internal/presentation/http/search"
 	tableshandler "admin/internal/presentation/http/tables"
@@ -97,6 +98,10 @@ func NewApp(container *app.Container) *fiber.App {
 
 	app.Post("/get-tables-list", authmasterhandler.RequireUser(container), tables.GetTablesList)
 	admin := authmasterhandler.RequireAdmin(container)
+	publication := publicationhandler.New(settings.C.AliceAPIEnabled, settings.C.AliceAPIKey, settings.C.AliceModelURI)
+	app.Get("/admin/publication-reader/status", admin, publication.Status)
+	app.Post("/admin/publication-reader/document", admin, publication.Document)
+	app.Post("/admin/publication-reader/analyze", admin, publication.Analyze)
 	app.Get("/metadata-versions", admin, create.MetadataVersions)
 	app.Get("/metadata-versions/latest", admin, create.LatestMetadata)
 	app.Post("/metadata-versions", admin, create.SaveMetadata)

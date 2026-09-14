@@ -5,8 +5,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	domainsearch "admin/internal/domain/search"
 	"admin/internal/app"
+	domainsearch "admin/internal/domain/search"
 	"admin/internal/presentation/http/deps"
 	"admin/internal/presentation/http/response"
 )
@@ -34,14 +34,26 @@ type (
 // @Description  Searches the active table by query string
 // @Tags         search
 // @Param        q query string true "Search query" example(species = 'Angelica')
+// @Param        columns query string false "Comma-separated registered columns (1-8); returns distinct projected rows"
+// @Param        limit query int false "Projection row limit (1-100, default 21); requires columns"
 // @Produce      json
 // @Success      200 {object} SearchResponse
 // @Failure      400,500 {object} response.ErrorResponse
 // @Router       /search [get]
 func (h *Handler) SearchMainApp(c *fiber.Ctx) error {
+	columns, limit, err := projectionOptions(c)
+	if err != nil {
+		return response.Resp400(c, err)
+	}
 	result, err := h.Container.Search.Search(c, c.Query("q"))
 	if err != nil {
 		return response.RespErr(c, err)
+	}
+	if columns != nil {
+		result, err = projectSearch(result, columns, limit)
+		if err != nil {
+			return response.RespErr(c, err)
+		}
 	}
 	return response.JSON(c, result)
 }

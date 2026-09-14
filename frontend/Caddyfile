@@ -8,6 +8,9 @@
         /pages/* \
         /ping \
         /auth/* \
+        /admin/publication-reader/status \
+        /admin/publication-reader/document \
+        /admin/publication-reader/analyze \
         /get-tables-list \
         /create-table \
         /table-imports/* \

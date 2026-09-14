@@ -292,6 +292,7 @@ const AdminPage: React.FC = () => {
         </div>
         <div className="admin-topbar__actions">
           <Link to="/admin/metadata" className="btn">Import metadata</Link>
+          <Link to="/admin/publication-reader" className="btn">Publication reader</Link>
           <button
             type="button"
             className="btn"
