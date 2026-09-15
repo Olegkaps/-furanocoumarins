@@ -5,6 +5,13 @@ COMPOSE ?= $(shell if command -v podman >/dev/null 2>&1; then echo podman compos
 
 install: frontend-deps install-e2e
 
+.PHONY: migration_1 test-migration-command
+migration_1:
+	bash deploy/swarm/scripts/migration_1.sh
+
+test-migration-command:
+	python3 deploy/swarm/scripts/migration_1_test.py
+
 frontend-deps:
 	cd frontend && if [ ! -x node_modules/.bin/vite ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then npm ci --no-audit; fi
 
@@ -32,6 +39,7 @@ lint: frontend-deps
 	cd frontend && npm run lint
 
 test-unit: frontend-deps
+	$(MAKE) test-migration-command
 	bash deploy/swarm/scripts/production-config_test.sh
 	bash deploy/swarm/scripts/image-reference_test.sh
 	bash deploy/swarm/scripts/init-secrets_test.sh

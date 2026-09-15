@@ -285,14 +285,18 @@ func RunCassandraToPostgres(ctx context.Context, session *gocql.Session, db *sql
 	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("connect PostgreSQL target: %w", err)
 	}
-	if _, err := db.ExecContext(ctx, `SELECT pg_advisory_lock(604260); CREATE SCHEMA IF NOT EXISTS chemdb; CREATE TABLE IF NOT EXISTS chemdb.cassandra_migrations (table_name text PRIMARY KEY, checksum text NOT NULL, rows bigint NOT NULL, completed_at timestamptz NOT NULL DEFAULT now())`); err != nil {
+	unlock, err := acquireMigrationLock(ctx, db)
+	if err != nil {
 		return err
 	}
 	defer func() {
-		if _, err := db.ExecContext(context.Background(), "SELECT pg_advisory_unlock(604260)"); err != nil {
+		if err := unlock(); err != nil {
 			resultErr = errors.Join(resultErr, fmt.Errorf("release PostgreSQL migration lock: %w", err))
 		}
 	}()
+	if _, err := db.ExecContext(ctx, `CREATE SCHEMA IF NOT EXISTS chemdb; CREATE TABLE IF NOT EXISTS chemdb.cassandra_migrations (table_name text PRIMARY KEY, checksum text NOT NULL, rows bigint NOT NULL, completed_at timestamptz NOT NULL DEFAULT now())`); err != nil {
+		return err
+	}
 	// Static tables use exactly the same dynamic-copy path, including their
 	// primary keys and all rows. Their schemas are part of the legacy snapshot.
 	registryRows := []struct {

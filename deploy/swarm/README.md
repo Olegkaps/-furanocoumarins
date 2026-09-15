@@ -100,7 +100,69 @@ so application startup ordering remains the deploy script's responsibility.
 
 The backend creates and validates its PostgreSQL `chemdb` schema during
 startup. Existing Cassandra data is imported once with the offline
-`migrate-cassandra-postgres` command; it is not a Swarm service or volume.
+`migrate-cassandra-postgres` command. Cassandra is not part of the new runtime
+stack; retain the legacy service and its volume during cutover.
+
+## Scientific-data migration with existing Swarm secrets
+
+Before deploying the new stack, back up both databases. From this release's
+checkout on an active Swarm manager, run:
+
+```bash
+make migration_1
+```
+
+No `production.conf`, database credentials, image publication, or application
+deployment is required. The command builds a dedicated `Dockerfile.migration`
+image locally and runs it on that manager. The normal backend image does not
+contain the migration executable.
+
+The default stack is `furanocoumarins`; for another stack use
+`make migration_1 STACK_NAME=my-stack`. Its existing replicated services must be
+`<stack>_cassandra`, `<stack>_postgres`, and `<stack>_go-auth`. The job discovers
+the databases' overlay networks and mounts existing `postgres_user`,
+`postgres_password`, and `postgres_db` secrets without reading their values into
+the shell. This workflow supports private non-TLS PostgreSQL and Cassandra's
+default port without authentication/TLS.
+
+The command builds before touching the app, reserves a single migration job,
+stops `go-auth`, waits for its tasks to stop, then migrates. Stop any additional
+external writers yourself before running. Database service definitions and
+volumes are not removed; PostgreSQL receives the migrated data. Concurrent migration processes are also excluded
+by a PostgreSQL session lock.
+
+On success, verify migrated data, then deploy the new PostgreSQL-only stack.
+`go-auth` remains stopped on success and after any failure following shutdown;
+the script never restarts the old application. Run migration before deploying
+the PostgreSQL-only backend, and keep the existing Cassandra service available.
+Keep the Cassandra backup/volume until the new application
+is verified and backed up.
+
+The job is retained for inspection. Before retrying, inspect its tasks and logs,
+confirm it has stopped, and remove only the job (substitute your stack if needed):
+
+```bash
+docker service ps --no-trunc furanocoumarins_migration-1
+docker service logs furanocoumarins_migration-1
+docker service rm furanocoumarins_migration-1
+```
+
+A failed migration must be investigated before retrying or resuming writers.
+The importer has a 30-minute deadline; the wrapper also bounds task waits and
+stops an unfinished job on interruption or timeout while retaining evidence.
+
+Standalone `FURANO_POSTGRES_DSN` configuration remains supported. For an existing
+DSN secret, mount it and set `FURANO_POSTGRES_DSN_FILE` instead of component
+settings; an explicit DSN takes precedence over the component settings.
+Component mode defaults to port `5432` and SSL mode `require` when omitted.
+`FURANO_CASSANDRA_HOST_FILE` is also supported. Never set both a direct
+value and its `_FILE` counterpart. A specified missing or empty secret file is
+an error, not permission to fall back to another value.
+
+Metadata versions and dataset pins are backfilled automatically at migration
+completion and backend startup. This does not fetch Google Sheets or publish
+localhost drafts; incomplete historical definitions still need completion in
+`/admin/metadata` before new imports.
 
 {% note alert %}
 

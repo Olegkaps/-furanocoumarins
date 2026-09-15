@@ -36,8 +36,8 @@ func TestCassandraPostgresSourceCatalogMigration(t *testing.T) {
 	db, err := sql.Open("postgres", dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
-	// The migrator's session-level advisory lock requires a pinned connection.
-	db.SetMaxOpenConns(1)
+	// One reserved lock session plus a separate connection for copying tables.
+	db.SetMaxOpenConns(2)
 	ctx := context.Background()
 	require.NoError(t, session.Query("CREATE KEYSPACE IF NOT EXISTS chemdb WITH replication = {'class':'SimpleStrategy','replication_factor':1}").Exec())
 	for _, q := range []string{

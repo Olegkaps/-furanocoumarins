@@ -74,8 +74,17 @@ For local Compose use direct `FURANO_SOURCE_DATABASE_URL` and
 the side-owned importer job.
 
 Scientific data uses PostgreSQL at runtime. The separate offline
-`migrate-cassandra-postgres` command requires `FURANO_CASSANDRA_HOST` and
-`FURANO_POSTGRES_DSN`. Read a quiesced legacy source, use an isolated target for
+`migrate-cassandra-postgres` command accepts `FURANO_CASSANDRA_HOST` and
+`FURANO_POSTGRES_DSN`, or their `_FILE` variants. Swarm jobs can instead build
+the target connection from `PG_HOST`, `PG_PORT`, `PG_SSLMODE` and mounted
+`PG_USER_FILE`, `PG_PASSWORD_FILE`, `PG_DB_FILE` secrets. Never expose secret
+values in logs or service arguments; ambiguous direct/file settings fail closed.
+`make migration_1` builds `Dockerfile.migration` and runs a one-shot Swarm job
+before deploying the PostgreSQL-only stack. The normal backend image excludes
+the migration binary. The command reuses existing database networks and secrets,
+stops `go-auth`, and leaves it stopped for cutover; it never deploys the stack or
+removes Cassandra. Preserve the job's logs and inspect failures before retrying.
+Read a quiesced legacy source, use an isolated target for
 validation, and retain the original Cassandra volume until the migrated
 application has been verified and backed up. Table schemas, content fingerprints,
 and row counts participate in the cutover manifest; changed sources must not be
