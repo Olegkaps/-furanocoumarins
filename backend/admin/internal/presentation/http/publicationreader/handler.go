@@ -46,7 +46,8 @@ func (h *Handler) Document(c *fiber.Ctx) error {
 		return c.Status(415).JSON(fiber.Map{"error": "use multipart/form-data or application/json"})
 	}
 	var doc reader.Document
-	if media == "application/json" {
+	switch media {
+	case "application/json":
 		var body struct {
 			URL string `json:"url"`
 		}
@@ -54,7 +55,7 @@ func (h *Handler) Document(c *fiber.Ctx) error {
 			return respondError(c, err)
 		}
 		doc, err = reader.Fetch(c.UserContext(), h.fetch, body.URL)
-	} else if media == "multipart/form-data" {
+	case "multipart/form-data":
 		mr := multipart.NewReader(bytes.NewReader(c.Body()), params["boundary"])
 		part, partErr := mr.NextPart()
 		if partErr != nil || part.FormName() != "file" || part.FileName() == "" {
@@ -77,7 +78,7 @@ func (h *Handler) Document(c *fiber.Ctx) error {
 			}
 		}
 		doc, err = reader.Extract(c.UserContext(), data, contentType, part.FileName())
-	} else {
+	default:
 		return c.Status(415).JSON(fiber.Map{"error": "use multipart/form-data or application/json"})
 	}
 	if err != nil {

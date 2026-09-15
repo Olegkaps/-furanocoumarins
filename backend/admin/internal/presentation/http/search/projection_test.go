@@ -149,5 +149,5 @@ func TestProjectionDefaultLimitAndMaximumColumns(t *testing.T) {
 	})
 	res, err := server.Test(httptest.NewRequest("GET", "/?columns=a,b,c,d,e,f,g,h", nil))
 	require.NoError(t, err)
-	res.Body.Close()
+	require.NoError(t, res.Body.Close())
 }
