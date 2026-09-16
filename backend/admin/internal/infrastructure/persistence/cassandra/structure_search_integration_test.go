@@ -16,6 +16,7 @@ import (
 
 func TestAutocompletePostgresStructureFullResults(t *testing.T) {
 	db := postgresIntegrationDB(t)
+	db.SetMaxOpenConns(1) // A failed COPY must leave this connection reusable.
 	store := NewPostgresStore(db)
 	ctx := context.Background()
 	require.NoError(t, store.EnsureActivationSchema(ctx))
@@ -69,7 +70,27 @@ func TestAutocompletePostgresStructureFullResults(t *testing.T) {
 	t.Cleanup(func() {
 		_, _ = db.Exec("DROP TRIGGER IF EXISTS reject_structure_test ON chemdb.structure_candidates; DROP FUNCTION IF EXISTS chemdb.reject_structure_test()")
 	})
-	require.ErrorContains(t, store.BuildStructureIndex(ctx), "forced build failure")
+	var connectionPID int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT pg_backend_pid()").Scan(&connectionPID))
+	for attempt := 0; attempt < 10; attempt++ {
+		// Multiple batches exceed lib/pq's COPY buffer, so the trigger error can
+		// arrive during a row Exec as well as at the final flush.
+		failureCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		buildErr := store.BuildStructureIndex(failureCtx)
+		contextErr := failureCtx.Err()
+		cancel()
+		require.NoError(t, contextErr, "failed COPY must finish before its deadline")
+		require.ErrorContains(t, buildErr, "forced build failure")
+		var reusedPID int
+		var revision string
+		var firstID int64
+		require.NoError(t, db.QueryRowContext(ctx, "SELECT pg_backend_pid()").Scan(&reusedPID))
+		require.Equal(t, connectionPID, reusedPID, "rollback must preserve a usable connection")
+		require.NoError(t, db.QueryRowContext(ctx, "SELECT revision FROM chemdb.structure_index_versions WHERE dataset=$1", table.TableData).Scan(&revision))
+		require.Equal(t, originalRevision, revision)
+		require.NoError(t, db.QueryRowContext(ctx, "SELECT min(id) FROM chemdb.structure_candidates WHERE dataset=$1", table.TableData).Scan(&firstID))
+		require.Equal(t, originalID, firstID, "failed replacement must preserve original candidates")
+	}
 	_, err = db.Exec("DROP TRIGGER reject_structure_test ON chemdb.structure_candidates; DROP FUNCTION chemdb.reject_structure_test()")
 	require.NoError(t, err)
 	var afterFailure string

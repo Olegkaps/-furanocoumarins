@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -109,7 +110,7 @@ func classificationAutocompleteEntries(ctx context.Context, tx *sql.Tx, dataName
 		if err == nil {
 			err = rows.Err()
 		}
-		rows.Close()
+		err = errors.Join(err, rows.Close())
 		if err != nil {
 			return nil, false, err
 		}

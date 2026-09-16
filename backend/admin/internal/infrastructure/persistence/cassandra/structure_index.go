@@ -55,7 +55,7 @@ func structureColumns(ctx context.Context, db interface {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []autocomplete.Suggestion{}
 	for rows.Next() {
 		var c autocomplete.Suggestion
@@ -91,7 +91,7 @@ func (s *Store) BuildStructureIndex(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var dataset, meta, revision string
 	var owner time.Time
 	err = tx.QueryRowContext(ctx, `SELECT table_data,table_meta,created_at,created_at::text||':'||version FROM chemdb.tables WHERE is_active AND is_ok`).Scan(&dataset, &meta, &owner, &revision)
@@ -147,13 +147,12 @@ func (s *Store) BuildStructureIndex(ctx context.Context) error {
 			for rows.Next() {
 				var v string
 				if e = rows.Scan(&v); e != nil {
-					rows.Close()
+					_ = rows.Close()
 					return e
 				}
 				values = append(values, v)
 			}
-			e = rows.Err()
-			rows.Close()
+			e = errors.Join(rows.Err(), rows.Close())
 			if e != nil {
 				return e
 			}
@@ -174,12 +173,13 @@ func (s *Store) BuildStructureIndex(ctx context.Context) error {
 				}
 				_, e = copyStmt.ExecContext(ctx, dataset, column.Column, values[n], f.Atoms, f.Bonds, f.Screenable, pq.Array(nonNilFeatures(f.Modes[0])), pq.Array(nonNilFeatures(f.Modes[1])), pq.Array(nonNilFeatures(f.Modes[2])), pq.Array(nonNilFeatures(f.Modes[3])))
 				if e != nil {
-					return e
+					// COPY receives responses asynchronously. Drain it before rollback
+					// can read from the same connection, including row-write failures.
+					return errors.Join(e, copyStmt.Close())
 				}
 			}
 			if _, e = copyStmt.ExecContext(ctx); e != nil {
-				copyStmt.Close()
-				return e
+				return errors.Join(e, copyStmt.Close())
 			}
 			if e = copyStmt.Close(); e != nil {
 				return e
@@ -277,7 +277,7 @@ func (s *Store) searchStructures(ctx context.Context, value string, columns []st
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var snapshotRevision string
 	if err = tx.QueryRowContext(ctx, "SELECT revision FROM chemdb.structure_index_versions WHERE dataset=$1", dataset).Scan(&snapshotRevision); err != nil {
 		return nil, err
@@ -307,13 +307,12 @@ func (s *Store) searchStructures(ctx context.Context, value string, columns []st
 				var v string
 				var candidateID int64
 				if e = rows.Scan(&candidateID, &v); e != nil {
-					rows.Close()
+					_ = rows.Close()
 					return nil, e
 				}
 				values = append(values, v)
 			}
-			e = rows.Err()
-			rows.Close()
+			e = errors.Join(rows.Err(), rows.Close())
 			if e != nil {
 				return nil, e
 			}

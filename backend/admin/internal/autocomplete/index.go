@@ -5,6 +5,7 @@ import (
 	"admin/internal/chemistry"
 	"admin/internal/pkg/metadata"
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -81,24 +82,20 @@ func New(ctx context.Context, entries []Entry, columns []string) (*Index, error)
 			out.searchColumns[e.Column] = true
 		}
 		if err := ctx.Err(); err != nil {
-			index.Close()
-			return nil, err
+			return nil, errors.Join(err, index.Close())
 		}
 		if err = batch.Index(strconv.Itoa(i), map[string]string{"text": e.Value + " " + e.Text, "column": e.Column}); err != nil {
-			index.Close()
-			return nil, err
+			return nil, errors.Join(err, index.Close())
 		}
 		if batch.Size() >= 1000 {
 			if err = index.Batch(batch); err != nil {
-				index.Close()
-				return nil, err
+				return nil, errors.Join(err, index.Close())
 			}
 			batch = index.NewBatch()
 		}
 	}
 	if err = index.Batch(batch); err != nil {
-		index.Close()
-		return nil, err
+		return nil, errors.Join(err, index.Close())
 	}
 	return out, nil
 }

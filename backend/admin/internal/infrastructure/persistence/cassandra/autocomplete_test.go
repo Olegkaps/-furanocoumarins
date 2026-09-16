@@ -46,7 +46,7 @@ func TestAutocompleteRebuildsOnDatasetOrBibliographyGeneration(t *testing.T) {
 		require.Empty(t, got)
 	}
 	require.NoError(t, mock.ExpectationsWereMet())
-	s.autocompleteIndex.Close()
+	require.NoError(t, s.autocompleteIndex.Close())
 }
 func TestAutocompleteFailsClosedWhenActiveChangesOrDisappears(t *testing.T) {
 	db, mock, err := sqlmock.New()
@@ -64,7 +64,7 @@ func TestAutocompleteFailsClosedWhenActiveChangesOrDisappears(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNoRows)
 	require.Nil(t, got)
 	require.NoError(t, mock.ExpectationsWereMet())
-	s.autocompleteIndex.Close()
+	require.NoError(t, s.autocompleteIndex.Close())
 }
 func TestBibtexSearchText(t *testing.T) {
 	require.Equal(t, "The Psoralen study Müller and Smith 2026", bibtexSearchText("@article{ref,\ntitle={The {Psoralen} study},\nauthor={Müller and Smith},\nyear=2026}"))
@@ -79,7 +79,7 @@ func TestChemicalAliasesAutocompleteAreDistinctMembers(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 	s := NewPostgresStore(db)
-	defer s.CloseAutocomplete()
+	t.Cleanup(func() { require.NoError(t, s.CloseAutocomplete()) })
 	expectAutocompleteVersion(mock, "aliases")
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT "column",show_name,type`).WillReturnRows(sqlmock.NewRows([]string{"column", "show_name", "type"}).AddRow("names", "Names", "search chemical"))

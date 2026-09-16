@@ -35,7 +35,7 @@ func TestAutocompleteRequestValidation(t *testing.T) {
 		resp, err := app.Test(httptest.NewRequest("GET", "/autocomplete"+tt.path, nil))
 		require.NoError(t, err)
 		require.Equal(t, tt.status, resp.StatusCode, tt.path)
-		resp.Body.Close()
+		require.NoError(t, resp.Body.Close())
 	}
 }
 
@@ -65,7 +65,7 @@ func TestAutocompleteHTTPContracts(t *testing.T) {
 		Suggestions []autocomplete.Suggestion `json:"suggestions"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&all))
-	resp.Body.Close()
+	require.NoError(t, resp.Body.Close())
 	require.Len(t, all.Suggestions, 1)
 	require.Equal(t, "Species", all.Suggestions[0].ShowName)
 	require.Equal(t, "species", all.Suggestions[0].Group)
@@ -76,13 +76,13 @@ func TestAutocompleteHTTPContracts(t *testing.T) {
 	require.Equal(t, 200, resp.StatusCode)
 	var legacy AutocompleteResponse
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&legacy))
-	resp.Body.Close()
+	require.NoError(t, resp.Body.Close())
 	require.Equal(t, []string{"Angelica archangelica"}, legacy.Values)
 	version()
 	resp, err = server.Test(httptest.NewRequest("GET", "/autocomplete/unknown?value=ANGEL", nil))
 	require.NoError(t, err)
 	require.Equal(t, 400, resp.StatusCode)
-	resp.Body.Close()
+	require.NoError(t, resp.Body.Close())
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -96,7 +96,7 @@ func TestSearchStructureFailureStatus(t *testing.T) {
 		resp, err := server.Test(httptest.NewRequest("GET", "/search", nil))
 		require.NoError(t, err)
 		require.Equal(t, tc.status, resp.StatusCode)
-		resp.Body.Close()
+		require.NoError(t, resp.Body.Close())
 		if tc.status == 503 {
 			require.Equal(t, "1", resp.Header.Get("Retry-After"))
 		}

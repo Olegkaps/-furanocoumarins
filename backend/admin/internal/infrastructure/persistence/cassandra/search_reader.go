@@ -110,7 +110,9 @@ func (r *SearchReader) FetchSearchData(
 		if err := rows.Err(); err != nil {
 			return nil, err
 		}
-		rows.Close()
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
 	}
 	return r.store.pgSearchWhere(ctx, version.TableData, selectClause, query, resolve, nameLists)
 }

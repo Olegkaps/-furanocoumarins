@@ -3,6 +3,7 @@ package cassandra
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -114,7 +115,7 @@ func (s *Store) autocompleteEntries(ctx context.Context, data, meta string) ([]a
 	if err != nil {
 		return nil, nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	rows, err := tx.QueryContext(ctx, `SELECT "column",show_name,type FROM `+metaName+` ORDER BY "column"`)
 	if err != nil {
 		return nil, nil, err
@@ -124,8 +125,7 @@ func (s *Store) autocompleteEntries(ctx context.Context, data, meta string) ([]a
 	for rows.Next() {
 		var m autocomplete.Suggestion
 		if err = rows.Scan(&m.Column, &m.ShowName, &m.Type); err != nil {
-			rows.Close()
-			return nil, nil, err
+			return nil, nil, errors.Join(err, rows.Close())
 		}
 		if m.ShowName == "" {
 			m.ShowName = m.Column
@@ -134,8 +134,7 @@ func (s *Store) autocompleteEntries(ctx context.Context, data, meta string) ([]a
 		metas = append(metas, m)
 		columns = append(columns, m.Column)
 	}
-	err = rows.Err()
-	rows.Close()
+	err = errors.Join(rows.Err(), rows.Close())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -147,13 +146,11 @@ func (s *Store) autocompleteEntries(ctx context.Context, data, meta string) ([]a
 	for rows.Next() {
 		var id, text string
 		if err = rows.Scan(&id, &text); err != nil {
-			rows.Close()
-			return nil, nil, err
+			return nil, nil, errors.Join(err, rows.Close())
 		}
 		bibliography[id] = bibtexSearchText(text)
 	}
-	err = rows.Err()
-	rows.Close()
+	err = errors.Join(rows.Err(), rows.Close())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -173,12 +170,10 @@ func (s *Store) autocompleteEntries(ctx context.Context, data, meta string) ([]a
 		for rows.Next() {
 			var value string
 			if err = rows.Scan(&value); err != nil {
-				rows.Close()
-				return nil, nil, err
+				return nil, nil, errors.Join(err, rows.Close())
 			}
 			if len(value) > 16384 {
-				rows.Close()
-				return nil, nil, fmt.Errorf("autocomplete value exceeds 16 KiB")
+				return nil, nil, errors.Join(fmt.Errorf("autocomplete value exceeds 16 KiB"), rows.Close())
 			}
 			values := []string{value}
 			if metadata.IsChemicalNameList(m.Column, m.Type) {
@@ -197,13 +192,11 @@ func (s *Store) autocompleteEntries(ctx context.Context, data, meta string) ([]a
 				}
 				entries = append(entries, e)
 				if len(entries) > 1000000 {
-					rows.Close()
-					return nil, nil, fmt.Errorf("autocomplete exceeds one million distinct values")
+					return nil, nil, errors.Join(fmt.Errorf("autocomplete exceeds one million distinct values"), rows.Close())
 				}
 			}
 		}
-		err = rows.Err()
-		rows.Close()
+		err = errors.Join(rows.Err(), rows.Close())
 		if err != nil {
 			return nil, nil, err
 		}
