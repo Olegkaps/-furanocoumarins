@@ -19,10 +19,15 @@ func ValidateRequest(searchRequest string, columns []domainsearch.ColumnMeta) er
 		return &response.UserError{E: err}
 	}
 	allowed := make(map[string]bool, len(columns))
+	smiles := make(map[string]bool, len(columns))
 	for _, col := range columns {
 		allowed[col.Column] = true
+		smiles[col.Column], _ = appcreate.HasColumnTypeToken(col.Type, "smiles")
 	}
 	if err := expr.ValidateColumns(allowed); err != nil {
+		return &response.UserError{E: err}
+	}
+	if err := expr.ValidateStructures(smiles); err != nil {
 		return &response.UserError{E: err}
 	}
 	return nil

@@ -50,10 +50,17 @@ func (s *Store) ensurePostgresSchema(ctx context.Context) error {
 CREATE TABLE IF NOT EXISTS chemdb.tables (created_at timestamptz PRIMARY KEY, name text NOT NULL, version text NOT NULL, table_meta text NOT NULL, table_data text NOT NULL, table_species text NOT NULL, is_ok boolean NOT NULL DEFAULT false, is_active boolean NOT NULL DEFAULT false);
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_chemdb_table ON chemdb.tables ((is_active)) WHERE is_active;
 CREATE TABLE IF NOT EXISTS chemdb.bibtex (article_id text PRIMARY KEY, bibtex_text text NOT NULL);
+CREATE TABLE IF NOT EXISTS chemdb.autocomplete_generation (id integer PRIMARY KEY CHECK(id=1), generation bigint NOT NULL DEFAULT 0);
+INSERT INTO chemdb.autocomplete_generation(id) VALUES(1) ON CONFLICT DO NOTHING;
+CREATE OR REPLACE FUNCTION chemdb.invalidate_autocomplete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN UPDATE chemdb.autocomplete_generation SET generation=generation+1 WHERE id=1; RETURN NULL; END $$;
+CREATE OR REPLACE TRIGGER bibtex_autocomplete_changed AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON chemdb.bibtex FOR EACH STATEMENT EXECUTE FUNCTION chemdb.invalidate_autocomplete();
 CREATE TABLE IF NOT EXISTS chemdb.pages (name text PRIMARY KEY, url text NOT NULL);
 CREATE TABLE IF NOT EXISTS chemdb.metadata_versions (version bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, document jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), created_by text NOT NULL, provenance text NOT NULL, published boolean NOT NULL DEFAULT false);
 ALTER TABLE chemdb.tables ADD COLUMN IF NOT EXISTS metadata_version bigint REFERENCES chemdb.metadata_versions(version);`)
 	if err != nil {
+		return err
+	}
+	if _, err = s.db.ExecContext(ctx, structureIndexSchema); err != nil {
 		return err
 	}
 	return s.BackfillMetadata(ctx)
@@ -320,12 +327,21 @@ func (s *Store) pgSetPageKey(name, key string) error {
 var pgCondition = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9_]*)\s*(=|!=|<=|>=|<|>|LIKE|CONTAINS)\s*'((?:''|[^'])*)'`)
 var pgConjunction = regexp.MustCompile(`^\s+AND\s+`)
 
-func pgWhere(raw string) (string, []any, error) {
+type structureMatches struct {
+	values []string
+	set    bool
+}
+type structureResolver func(*searchquery.Expression) (structureMatches, error)
+
+func pgWhere(raw string) (string, []any, error) { return pgWhereResolved(raw, nil) }
+
+func pgWhereResolved(raw string, resolve structureResolver, nameLists ...map[string]bool) (string, []any, error) {
 	expr, err := searchquery.Parse(raw)
 	if err != nil {
 		return "", nil, err
 	}
 	args := []any{}
+	var resolveErr error
 	var render func(*searchquery.Expression) string
 	render = func(e *searchquery.Expression) string {
 		if e.Left != nil {
@@ -339,10 +355,32 @@ func pgWhere(raw string) (string, []any, error) {
 			return left + " " + e.Operator + " " + right
 		}
 		col := pq.QuoteIdentifier(e.Column)
+		if e.Operator == "SUBSTRUCTURE" {
+			if resolve == nil {
+				resolveErr = fmt.Errorf("SUBSTRUCTURE requires a structure resolver")
+				return "FALSE"
+			}
+			values, err := resolve(e)
+			if err != nil {
+				resolveErr = err
+				return "FALSE"
+			}
+			if len(values.values) == 0 {
+				return "FALSE"
+			}
+			args = append(args, pq.Array(values.values))
+			if values.set {
+				return col + " && $" + fmt.Sprint(len(args)) + "::text[]"
+			}
+			return col + " = ANY($" + fmt.Sprint(len(args)) + "::text[])"
+		}
 		args = append(args, e.Value)
 		parameter := "$" + fmt.Sprint(len(args))
 		switch e.Operator {
 		case "CONTAINS":
+			if len(nameLists) > 0 && nameLists[0][e.Column] {
+				return "EXISTS (SELECT 1 FROM unnest(string_to_array(" + col + ", '=')) AS chemical_alias(value) WHERE btrim(chemical_alias.value) <> '' AND btrim(chemical_alias.value) = " + parameter + ")"
+			}
 			return col + " @> ARRAY[" + parameter + "]::text[]"
 		case "LIKE":
 			return col + " ILIKE " + parameter
@@ -351,9 +389,13 @@ func pgWhere(raw string) (string, []any, error) {
 		}
 	}
 	where := render(expr)
-	return where, args, nil
+	return where, args, resolveErr
 }
 func (s *Store) pgGetColumnWhere(table, selectClause, where string) ([]map[string]any, error) {
+	return s.pgSearchWhere(context.Background(), table, selectClause, where, nil)
+}
+
+func (s *Store) pgSearchWhere(ctx context.Context, table, selectClause, where string, resolve structureResolver, nameLists ...map[string]bool) ([]map[string]any, error) {
 	n, e := pgTable(table)
 	if e != nil {
 		return nil, e
@@ -366,11 +408,11 @@ func (s *Store) pgGetColumnWhere(table, selectClause, where string) ([]map[strin
 			return nil, e
 		}
 	}
-	w, args, e := pgWhere(where)
+	w, args, e := pgWhereResolved(where, resolve, nameLists...)
 	if e != nil {
 		return nil, e
 	}
-	rows, e := s.db.Query(`SELECT `+strings.Join(quoted, ",")+` FROM `+n+` WHERE `+w, args...)
+	rows, e := s.db.QueryContext(ctx, `SELECT `+strings.Join(quoted, ",")+` FROM `+n+` WHERE `+w, args...)
 	if e != nil {
 		return nil, e
 	}

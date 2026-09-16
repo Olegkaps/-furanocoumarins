@@ -125,7 +125,7 @@ processing, persist its ID in `tables.metadata_version`, and use its worksheet
 mappings instead of reading a workbook metadata sheet. Structured and raw JSON
 editors modify the same document. Physical column types are text and text sets;
 search, result placement, SMILES, references and classification are semantics,
-not extra SQL types. Empty set choices are derived from imported values.
+not extra SQL types. Set autocomplete values come from stored rows through the backend, never from metadata choices. New imports store bare set declarations in runtime metadata; legacy choices remain readable in original declarations and immutable definitions.
 
 The editor lives at `/admin/metadata`; `/admin` only fetches the latest version
 for uploads. Its draft previews project the sheets reachable from `main` into
@@ -150,6 +150,13 @@ comparison operators and single-quoted values. AND binds more tightly than OR;
 parentheses override precedence. Double apostrophes inside literals; never
 interpolate literal values into SQL. Keep parser size, nesting and condition
 limits when extending the grammar.
+
+The guided search also exposes a virtual genus + species autocomplete column.
+It combines searchable classification ranks 0 and 1 only within the same tag,
+using actual observation pairs. Suggestions carry physical-column conditions;
+selection becomes a genus AND species expression. Generated suggestions contain full names; genus-only values belong to the ordinary genus column.
+Guided search defaults to OR and offers an Any (OR) / All (AND) selector for combining selections and any remaining typed value. Keep each full-name pair grouped with AND and the typed value’s alternative columns grouped with OR.
+The virtual identifier is autocomplete-only and must never enter the query grammar.
 
 Query-line and comparison autocomplete share `frontend/src/SearchApp/QueryInput`
 and its completion helper. Suggest registered columns, including classification
@@ -236,3 +243,107 @@ Run tests through the root `Makefile`:
 Add regression coverage for every auth route or mutation-policy change. Browser
 coverage must exercise behavior, not merely assert that management headings are
 visible. Never add a TEST/AUTOTEST bypass around auth-master middleware.
+
+
+## Autocomplete search engine
+
+`internal/autocomplete` embeds Bleve for case-insensitive token prefixes and
+one-edit fuzzy value matching. The default and guided-search scope honors the
+metadata `search` flag, with SMILES always eligible. Explicit result-query column
+completion may still address any registered column.
+Suggestions identify their column/show_name. The legacy chemical `names` column
+stores an equals-delimited alias list: split only `=`, preserve chemical-name
+commas, trim and deduplicate aliases. Its autocomplete values are individual
+aliases; selecting one emits `names CONTAINS 'alias'`, with exact list membership
+across every matching row. The shared metadata predicate scopes this scalar-list
+exception to chemical names. Existing scalar `=` and scientific response cells
+remain unchanged; native text sets keep their existing array membership.
+Parsed bibliography fields enrich reference suggestions, which still insert the
+reference ID into a normal search condition.
+
+The active dataset and persisted bibliography generation identify a rebuildable
+index. Recheck that identity before returning results; never serve suggestions
+from a previously active dataset. Cold rebuilds are bounded and exclusive; warm
+text searches can run concurrently. PostgreSQL remains the scientific source.
+
+`internal/chemistry` calls native RDKit through cgo. Production and test images
+use Debian and compile with the `rdkit` build tag. A build without native RDKit
+must explicitly reject structure requests, never pretend text similarity is
+substructure matching. Never case-fold SMILES. Relaxed atom matching preserves
+explicit heteroatoms; relaxed bonds preserve double/triple/aromatic constraints.
+Stereo matching is independently selectable. Limits and native scan concurrency
+are part of the public endpoint's resource bounds. Native calls run in at most two
+reusable local worker processes; kill and reap a timed-out worker before
+replacing it. Do not call the uninterruptible native matcher in HTTP goroutines.
+
+Structure requests screen against persistent PostgreSQL candidate fingerprints,
+not Bleve entries. Schema initialization creates the version catalog, candidate
+table, four GIN indexes and fallback index. First use starts a bounded atomic
+background backfill and returns retryable Busy until publication; replicas
+serialize builds with an advisory lock. Dataset deletion cascades to its index.
+Scientific datasets are immutable: dataset version plus FingerprintVersion
+identifies chemistry generations; bibliography edits must not invalidate them.
+
+Four monotone fingerprint modes retain/erase element and bond labels. Bounded
+one/two-anchor paths retain explicit heteroatom and multiple-bond requirements
+even in relaxed modes. Path, cycle, degree, finer occurrence-count and fused-cycle
+attachment features narrow candidates while ignoring stereo/local hydrogen counts;
+the original RDKit matcher verifies those and every explicitly supplied atom or
+bond constraint afterward. Wildcards or feature-budget overflow bypass screening.
+Never truncate target features. Increment FingerprintVersion when semantics change.
+
+Use disjoint SQL branches for screenable GIN candidates and unscreenable fallback;
+an OR fallback can prevent GIN use. Stream candidates once through a read-only
+repeatable-read cursor in bounded batches. Validate fingerprint generation inside
+that snapshot. Native workers parse only candidate batches. Full result overflow
+fails explicitly rather than silently truncating matches. Keep candidate-superset
+oracle tests across all eight modes, restart/rollback tests and actual SQL plans.
+
+SearchApp uses one input with grouped column filters and selected-condition chips.
+Results QueryInput requests values only for its current column and preserves
+server fuzzy ranking. Column groups start collapsed. Structure mode targets all
+SMILES columns automatically. Ketcher and its template/copy controls live only
+in the structure drawer; those actions must not write scientific data. SMILES columns remain eligible
+without the legacy search marker. MoleculePreview uses a lazy local SMILES
+renderer for visible suggestions, bounded to 1024 characters and 128 atoms.
+Keep raw selectable text when depiction fails; never send SMILES to an external
+renderer or load the full drawing editor for thumbnails.
+
+The structure drawer fixes positive hydrogen counts on selected atoms through
+Ketcher's undoable atom attributes. Preserve constraints through export and
+reopening. Indigo drops normal SMILES H-count attributes and atom maps; the
+bounded drawer serializer uses checked temporary isotope identities only in
+conversion copies, restoring real isotope labels before applying/returning data.
+Use layout on tagged SMILES import to retain stereochemical wedges. Missing,
+duplicated, or incompatible constraint identities must fail export visibly.
+
+`make test-autocomplete` exercises native modes and the compressed workbook oracle
+in `internal/chemistry/testdata`. Keep source hash, row provenance, invalid input
+classification and independent Python expectations when refreshing the fixture.
+Browser coverage lives in the autocomplete specs; live coverage must exercise
+an actual native backend and a disposable PostgreSQL dataset.
+
+
+### Structure predicates in search results
+
+`smiles SUBSTRUCTURE 'C1CCCCC1'` filters actual observation results. Optional
+enabled parameters are serialized as `SUBSTRUCTURE[bonds,hetero,stereo]`;
+omitted parameters are false, so the default is bare `SUBSTRUCTURE`. The legacy
+full named-boolean form remains accepted. Parameter completion belongs inside
+the results query dropdown; never add separate drawing or flag controls there.
+Compact legacy display without changing quoted literals or comparison identities. Existing equality remains exact.
+Only registered SMILES columns accept this operator. Resolve the complete set
+of matched molecular values through the bounded native workers and bind it as
+SQL array membership inside the boolean expression; never reuse a truncated
+suggestion page or expand into an unbounded OR expression. Preserve AND/OR
+precedence, the dataset identity, and request deadlines throughout resolution.
+
+The UI calls the control "bond multiplicity". Relaxed matching permits a
+six-membered single-bond carbon ring to match an aromatic six-membered ring;
+explicit multiple bonds and heteroatoms stay required. Explicit bracket hydrogen
+counts also stay required in every mode: `O[CH3]` fixes a methyl end, while
+unmarked positions remain open. Preserve that H-count query when replacing
+carbon predicates for heteroatom relaxation; do not introduce a second query
+language for this existing SMILES notation. Heteroatom relaxation
+must not add an aliphatic-only constraint that removes existing aromatic hits.
+An eight-membered query is not a benzene query and must retain its topology.

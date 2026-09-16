@@ -1,0 +1,21 @@
+.molecule-preview {
+  flex: none;
+  width: 144px;
+  height: 96px;
+  position: relative;
+  border: 1px solid #d8dfe6;
+  border-radius: 6px;
+  background: white;
+  color: #536273;
+  pointer-events: none;
+  overflow: hidden;
+}
+.molecule-preview > svg { width: 100% !important; height: 100% !important; display: block; }
+.molecule-preview__status { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; font-size: 12px; padding: 6px; }
+.unified-search__input li:has(.molecule-preview), .query-input__suggestions li:has(.molecule-preview) { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px; }
+.molecule-suggestion__text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.molecule-suggestion__text > small { display: block; margin-top: 5px; }
+@media (max-width: 600px) {
+  .molecule-preview { width: 100px; height: 76px; }
+  .unified-search__input li:has(.molecule-preview), .query-input__suggestions li:has(.molecule-preview) { gap: 8px; padding: 8px; }
+}

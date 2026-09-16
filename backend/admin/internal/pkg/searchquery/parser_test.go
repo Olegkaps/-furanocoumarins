@@ -1,6 +1,7 @@
 package searchquery
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -66,5 +67,50 @@ func TestSearchLimits(t *testing.T) {
 			_, err = Parse(tc.over)
 			require.Error(t, err)
 		})
+	}
+}
+
+func TestSubstructureOptionsAndBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		query string
+		flags [3]bool
+	}{
+		{"smiles SUBSTRUCTURE 'C1CCCCC1'", [3]bool{}},
+		{"smiles SUBSTRUCTURE[bond_multiplicity=true,hetero_atoms=false,stereochemistry=true] 'C=C'", [3]bool{true, false, true}},
+		{"smiles SUBSTRUCTURE[bond_multiplicity=false,hetero_atoms=true,stereochemistry=false] 'C1CCCCC1'", [3]bool{false, true, false}},
+	} {
+		e, err := Parse(tc.query)
+		require.NoError(t, err)
+		require.Equal(t, "SUBSTRUCTURE", e.Operator)
+		require.Equal(t, tc.flags, e.StructureFlags)
+	}
+	for _, q := range []string{"smiles SUBSTRUCTURE[1,0,1] 'C'", "smiles SUBSTRUCTURE[bond_multiplicity=maybe,hetero_atoms=false,stereochemistry=false] 'C'", "smiles SUBSTRUCTURE[stereochemistry=false] 'C'", "smiles SUBSTRUCTURE 'C'; DROP TABLE x"} {
+		_, err := Parse(q)
+		require.Error(t, err, q)
+	}
+}
+
+func TestCompactSubstructureModes(t *testing.T) {
+	for mask := 0; mask < 8; mask++ {
+		flags := [3]bool{mask&1 != 0, mask&2 != 0, mask&4 != 0}
+		names := []string{}
+		for i, name := range []string{"bonds", "hetero", "stereo"} {
+			if flags[i] {
+				names = append(names, name)
+			}
+		}
+		suffix := ""
+		if len(names) > 0 {
+			suffix = "[" + strings.Join(names, ",") + "]"
+		}
+		for _, op := range []string{"SUBSTRUCTURE" + suffix, fmt.Sprintf("SUBSTRUCTURE[bond_multiplicity=%t,hetero_atoms=%t,stereochemistry=%t]", flags[0], flags[1], flags[2])} {
+			expr, err := Parse("smiles " + op + " 'C' AND names = 'test'")
+			require.NoError(t, err)
+			require.Equal(t, flags, expr.Left.StructureFlags)
+		}
+	}
+	for _, suffix := range []string{"[]", "[bonds,bonds]", "[unknown]", "[hetero,]", "[,stereo]", "[bonds=true]", "[bonds hetero]"} {
+		_, err := Parse("smiles SUBSTRUCTURE" + suffix + " 'C'")
+		require.Error(t, err, suffix)
 	}
 }

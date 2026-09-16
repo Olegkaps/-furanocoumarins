@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -109,7 +110,7 @@ func New(opts Options) (*Container, error) {
 	}
 	c.Mail = mailSender
 
-	c.Closer = db.Close
+	c.Closer = func() error { return errors.Join(c.Cassandra.CloseAutocomplete(), db.Close()) }
 
 	// auth-master is the only production identity/session provider. The legacy
 	// PostgreSQL user repository and Redis magic-link store stay available only
@@ -146,7 +147,7 @@ func newTestContainer(opts Options) (*Container, error) {
 	}
 	c.Users, c.Auth = buildAuth(opts, c)
 	c.Search = wireSearch(c.Cassandra)
-	c.Closer = func() error { return nil }
+	c.Closer = c.Cassandra.CloseAutocomplete
 	return c, nil
 }
 

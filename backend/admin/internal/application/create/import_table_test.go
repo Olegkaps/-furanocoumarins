@@ -153,7 +153,25 @@ func (m *metadataCaptureImporter) CreateAndBatchInsert(tableName string, columns
 	return m.mockImporter.CreateAndBatchInsert(tableName, columns, keys, rows)
 }
 
-func TestImportTableDerivesSetChoicesWithoutChangingWorkbook(t *testing.T) {
+func assertImportedNameSet(t *testing.T, imp *metadataCaptureImporter, expected ...string) {
+	t.Helper()
+	for index, column := range imp.dataBatchCols {
+		if column == "name SET<TEXT>" {
+			require.Len(t, imp.dataBatchRows, 1)
+			members, ok := imp.dataBatchRows[0][index].(map[string]struct{})
+			require.True(t, ok)
+			want := make(map[string]struct{}, len(expected))
+			for _, value := range expected {
+				want[value] = struct{}{}
+			}
+			assert.Equal(t, want, members)
+			return
+		}
+	}
+	t.Fatal("missing imported name set")
+}
+
+func TestImportTableKeepsSetValuesOutOfMetadata(t *testing.T) {
 	for _, declaration := range []string{"set", "set[<>]"} {
 		t.Run(declaration, func(t *testing.T) {
 			f := fullImportWorkbook(t)
@@ -167,7 +185,7 @@ func TestImportTableDerivesSetChoicesWithoutChangingWorkbook(t *testing.T) {
 			found := false
 			for _, row := range imp.metadata {
 				if row[1] == "name" {
-					assert.Equal(t, "search set[Bergapten Psoralen Xanthotoxin] chemical", row[2])
+					assert.Equal(t, "search set chemical", row[2])
 					found = true
 				}
 			}
@@ -208,8 +226,8 @@ func TestImportTableBlankColumnModifiersRemainText(t *testing.T) {
 func TestImportTableSetChoiceBoundaries(t *testing.T) {
 	for _, tc := range []struct{ name, declaration, value, want string }{
 		{"empty", "set[<>]", "", "set chemical"},
-		{"explicit", "set[Curated Other]", "Different", "set[Curated Other] chemical"},
-		{"apostrophe", "set", "O'Brien", "set[O'Brien] chemical"},
+		{"explicit", "set[Curated Other]", "Different", "set chemical"},
+		{"apostrophe", "set", "O'Brien", "set chemical"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := fullImportWorkbook(t)
@@ -219,6 +237,11 @@ func TestImportTableSetChoiceBoundaries(t *testing.T) {
 			imp := &metadataCaptureImporter{}
 			_, err := appcreate.ImportTable(&mockStore{imp: imp}, f, "meta", tc.name, logging.Nop{})
 			require.NoError(t, err)
+			if tc.value == "" {
+				assertImportedNameSet(t, imp)
+			} else {
+				assertImportedNameSet(t, imp, tc.value)
+			}
 			for _, row := range imp.metadata {
 				if row[1] == "name" {
 					assert.Equal(t, tc.want, row[2])
@@ -228,7 +251,7 @@ func TestImportTableSetChoiceBoundaries(t *testing.T) {
 	}
 }
 
-func TestImportTableSetChoicesIncludeDefaultsAndSpeciesRows(t *testing.T) {
+func TestImportTableSetDefaultsDoNotBecomeMetadataChoices(t *testing.T) {
 	f := fullImportWorkbook(t)
 	t.Cleanup(func() { _ = f.Close() })
 	// The default value is only visible after row postprocessing. Unjoined
@@ -244,11 +267,12 @@ func TestImportTableSetChoicesIncludeDefaultsAndSpeciesRows(t *testing.T) {
 	for _, row := range imp.metadata {
 		types[row[1].(string)] = row[2].(string)
 	}
-	assert.Equal(t, "default[id] set[1] chemical", types["name"])
+	assert.Equal(t, "default[id] set chemical", types["name"])
 	assert.NotContains(t, types, "species")
+	assertImportedNameSet(t, imp, "1")
 }
 
-func TestImportTableRejectsUnrepresentableAutomaticSetChoicesBeforeWrites(t *testing.T) {
+func TestImportTableAcceptsSetMembersOutsideLegacyEnumGrammar(t *testing.T) {
 	for _, value := range []string{"compound[1]", "compound\n1", "compound\t1", "<>"} {
 		t.Run(value, func(t *testing.T) {
 			f := fullImportWorkbook(t)
@@ -257,9 +281,14 @@ func TestImportTableRejectsUnrepresentableAutomaticSetChoicesBeforeWrites(t *tes
 			require.NoError(t, f.SetCellValue("main", "B2", value))
 			imp := &metadataCaptureImporter{}
 			_, err := appcreate.ImportTable(&mockStore{imp: imp}, f, "meta", "invalid-set", logging.Nop{})
-			require.ErrorContains(t, err, "cannot be represented in set[choices]")
-			assert.Zero(t, imp.insertCalls)
-			assert.Zero(t, imp.batchCalls)
+			require.NoError(t, err)
+			assert.Equal(t, 1, imp.setOkCalls)
+			assertImportedNameSet(t, imp, value)
+			for _, row := range imp.metadata {
+				if row[1] == "name" {
+					assert.Equal(t, "set chemical", row[2])
+				}
+			}
 		})
 	}
 }

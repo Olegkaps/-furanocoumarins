@@ -23,9 +23,11 @@ const (
 type Expression struct {
 	Column, Operator, Value string
 	Left, Right             *Expression
+	// StructureFlags are bond multiplicity, hetero atoms, and stereochemistry.
+	StructureFlags [3]bool
 }
 
-var comparison = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9_]*)\s*(=|!=|<=|>=|<|>|LIKE|CONTAINS)\s*'((?:''|[^'])*)'`)
+var comparison = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9_]*)\s*(=|!=|<=|>=|<|>|LIKE|CONTAINS|SUBSTRUCTURE(?:\[bond_multiplicity=(?:true|false),hetero_atoms=(?:true|false),stereochemistry=(?:true|false)\]|\[(?:bonds|hetero|stereo)(?:,(?:bonds|hetero|stereo))*\])?)\s*'((?:''|[^'])*)'`)
 
 type parser struct {
 	rest        string
@@ -112,7 +114,26 @@ func (p *parser) operand(depth int) (*Expression, error) {
 		return nil, fmt.Errorf("search exceeds %d comparisons", MaxComparisons)
 	}
 	p.rest = strings.TrimSpace(p.rest[len(m[0]):])
-	return &Expression{Column: m[1], Operator: m[2], Value: strings.ReplaceAll(m[3], "''", "'")}, nil
+	expr := &Expression{Column: m[1], Operator: m[2], Value: strings.ReplaceAll(m[3], "''", "'")}
+	if strings.HasPrefix(expr.Operator, "SUBSTRUCTURE") {
+		expr.StructureFlags = [3]bool{false, false, false}
+		if len(expr.Operator) > len("SUBSTRUCTURE") {
+			flags := strings.Split(strings.TrimSuffix(expr.Operator[len("SUBSTRUCTURE")+1:], "]"), ",")
+			if strings.Contains(flags[0], "=") {
+				expr.StructureFlags = [3]bool{strings.HasSuffix(flags[0], "=true"), strings.HasSuffix(flags[1], "=true"), strings.HasSuffix(flags[2], "=true")}
+			} else {
+				for _, flag := range flags {
+					i := map[string]int{"bonds": 0, "hetero": 1, "stereo": 2}[flag]
+					if expr.StructureFlags[i] {
+						return nil, fmt.Errorf("duplicate substructure parameter %q", flag)
+					}
+					expr.StructureFlags[i] = true
+				}
+			}
+		}
+		expr.Operator = "SUBSTRUCTURE"
+	}
+	return expr, nil
 }
 
 // ValidateColumns checks every comparison, including all branches of OR.
@@ -127,4 +148,18 @@ func (e *Expression) ValidateColumns(allowed map[string]bool) error {
 		return err
 	}
 	return e.Right.ValidateColumns(allowed)
+}
+
+// ValidateStructures restricts graph predicates to registered SMILES columns.
+func (e *Expression) ValidateStructures(smiles map[string]bool) error {
+	if e.Left != nil {
+		if err := e.Left.ValidateStructures(smiles); err != nil {
+			return err
+		}
+		return e.Right.ValidateStructures(smiles)
+	}
+	if e.Operator == "SUBSTRUCTURE" && !smiles[e.Column] {
+		return fmt.Errorf("SUBSTRUCTURE requires a SMILES column, got %q", e.Column)
+	}
+	return nil
 }

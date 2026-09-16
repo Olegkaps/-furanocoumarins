@@ -1,8 +1,10 @@
-FROM golang:alpine AS compiler
+FROM golang:1.25-bookworm AS compiler
 
 WORKDIR /usr/src/app
 
-ENV CGO_ENABLED=0
+RUN apt-get update && apt-get install -y --no-install-recommends librdkit-dev libboost-dev && rm -rf /var/lib/apt/lists/*
+
+ENV CGO_ENABLED=1
 ENV GOOS=linux
 
 COPY go.mod .
@@ -12,12 +14,12 @@ RUN go mod download
 COPY . ./
 ENV GOCACHE=/root/.cache/go-build
 RUN --mount=type=cache,target="/root/.cache/go-build" \
-    go build -o main_app main.go
+    go build -tags rdkit -o main_app main.go
 
 
-FROM alpine/curl
+FROM debian:bookworm-slim
 
-RUN apk add --no-cache poppler-utils
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl poppler-utils librdkit1 && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/app
 

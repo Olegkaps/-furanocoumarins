@@ -1,0 +1,43 @@
+import { expect, test } from "@playwright/test";
+const metadata = [{ column: "names", name: "Chemical names", type: "search table_2 chemical" }];
+test("chemical alias selection uses list membership on home and results pages", async ({ page }) => {
+ await page.addInitScript(() => { for (const p of ["search", "table"]) localStorage.setItem(`fuco-tour:v1:${p}`, "done"); });
+ await page.route("**/metadata", route => route.fulfill({json:{metadata}}));
+ await page.route("**/search?*", route => route.fulfill({json:{metadata,data:[]}}));
+ await page.route("**/autocomplete?*", route => route.fulfill({json:{suggestions:[{column:"names",show_name:"Chemical names",value:"Skimmetine"}]}}));
+ await page.route("**/autocomplete/names?*", route => route.fulfill({json:{values:["Skimmetine"]}}));
+ await page.goto("/search");
+ await page.getByRole("combobox").fill("skimmetne");
+ await expect(page.getByRole("option")).toHaveText("SkimmetineChemical names");
+ await page.getByRole("option").click();
+ await page.getByRole("button",{name:"Search",exact:true}).click();
+ expect(new URL(page.url()).searchParams.get("query")).toBe("names CONTAINS 'Skimmetine'");
+ const input = page.getByRole("combobox", { name: "Search query", exact: true });
+ await expect(input).toBeVisible();
+ await input.fill("names ");
+ await page.getByRole("option",{name:"CONTAINS",exact:true}).click();
+ await input.pressSequentially("skimmetne");
+ await page.getByRole("option",{name:"Skimmetine",exact:true}).click();
+ await expect(input).toHaveValue("names CONTAINS 'Skimmetine' ");
+ await input.fill("names = 'skimmetne");
+ await page.getByRole("option",{name:"Skimmetine",exact:true}).click();
+ await expect(input).toHaveValue("names CONTAINS 'Skimmetine' ");
+});
+
+test("live chemical alias selection returns workbook observations", async ({ page }) => {
+ test.skip(process.env.AUTOCOMPLETE_WORKBOOK_LIVE !== "1", "Requires local workbook backend");
+ await page.addInitScript(() => { for (const p of ["search", "table"]) localStorage.setItem(`fuco-tour:v1:${p}`, "done"); });
+ await page.goto("/search");
+ await page.getByRole("combobox").fill("SKIMMETNE");
+ const option = page.getByRole("option").filter({hasText:"Skimmetine"});
+ await expect(option).toHaveCount(1);
+ await option.click();
+ const response = page.waitForResponse(r => new URL(r.url()).pathname === "/search" && r.request().method() === "GET");
+ await page.getByRole("button",{name:"Search",exact:true}).click();
+ const result = await response;
+ expect(result.ok()).toBe(true);
+ const body = await result.json();
+ expect(body.data.length).toBeGreaterThan(0);
+ expect(body.data.every((row: { names: string }) => row.names.split("=").map(name => name.trim()).includes("Skimmetine"))).toBe(true);
+ expect(new URL(page.url()).searchParams.get("query")).toBe("names CONTAINS 'Skimmetine'");
+});
