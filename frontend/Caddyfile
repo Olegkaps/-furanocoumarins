@@ -8,11 +8,13 @@
         /autocomplete/* \
         /article/* \
         /pages/* \
+		/about/pages \
         /ping \
         /auth/* \
         /admin/publication-reader/status \
         /admin/publication-reader/document \
         /admin/publication-reader/analyze \
+		/admin/about/pages \
         /get-tables-list \
         /create-table \
         /table-imports/* \

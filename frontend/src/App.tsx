@@ -43,6 +43,7 @@ function App() {
               <Route path="/" element={<Navigate to="/about" />}/>
               <Route path="/search" element={<SearchApp />}/>
               <Route path="/about" element={<AboutPage />}/>
+              <Route path="/about/:subpageID" element={<AboutPage />}/>
               <Route path="/history" element={<HistoryPage />}/>
               <Route path="/cache" element={<CachePage />}/>
               <Route path="/page" element={<SubstancePage />}/>

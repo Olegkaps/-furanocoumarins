@@ -3,7 +3,7 @@ import { api, getToken } from "../../shared/api";
 
 export const MAX_PAGE_CHARS = 10_000;
 
-export function useEditablePage(pageName: string | null) {
+export function useEditablePage(pageName: string | null, defaultContent = "") {
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,13 +30,13 @@ export function useEditablePage(pageName: string | null) {
       const msg = status === 404 ? null : "Failed to load page";
       setError(msg ?? null);
       if (!msg) {
-        setContent("");
-        setEditText("");
+        setContent(defaultContent);
+        setEditText(defaultContent);
       }
     } finally {
       setLoading(false);
     }
-  }, [pageName]);
+  }, [pageName, defaultContent]);
 
   useEffect(() => {
     if (pageName == null) {

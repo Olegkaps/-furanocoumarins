@@ -67,6 +67,7 @@ func NewApp(container *app.Container) *fiber.App {
 	app.Get("/search", search.SearchMainApp)
 	app.Get("/article/:id", bibtex.GetArticle)
 	app.Get("/pages/:name", pages.GetPage)
+	app.Get("/about/pages", pages.GetAboutPages)
 
 	app.Get("/ping", response.Resp200)
 	// Fixed compatibility surface: authd itself is private and arbitrary proxy
@@ -117,6 +118,7 @@ func NewApp(container *app.Container) *fiber.App {
 	app.Delete("/tables", admin, tables.DeleteAllBadTables)
 	app.Put("/bibtex", admin, bibtex.UpdateFile)
 	app.Put("/pages/:name", admin, pages.PutPage)
+	app.Put("/admin/about/pages", admin, pages.PutAboutPages)
 
 	return app
 }

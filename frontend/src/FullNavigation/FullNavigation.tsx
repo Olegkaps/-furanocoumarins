@@ -11,6 +11,8 @@ import {
   Magnifier,
 } from "@gravity-ui/icons";
 import { isTokenExists } from "../shared/api";
+import { useAboutSubpages } from "../About/useAboutSubpages";
+import { AboutIcon } from "../About/aboutSubpages";
 
 function NavIcon({
   to,
@@ -58,6 +60,7 @@ export interface FullNavigationProps {
 
 export default function FullNavigation({ pageName }: FullNavigationProps) {
   const [isAdmin, setIsAdmin] = useState(() => isTokenExists());
+  const { pages: aboutPages } = useAboutSubpages();
 
   useEffect(() => {
     const sync = () => setIsAdmin(isTokenExists());
@@ -76,9 +79,14 @@ export default function FullNavigation({ pageName }: FullNavigationProps) {
         <NavIcon to="/search" title="Search" current={pageName === "home"}>
           <Magnifier width={28} height={28} />
         </NavIcon>
-        <NavIcon to="/about" title="About" current={pageName === "about"}>
-          <CircleInfo width={28} height={28} />
-        </NavIcon>
+        <div className="about-nav-menu">
+          <NavIcon to="/about" title="About" current={pageName === "about"}>
+            <CircleInfo width={28} height={28} />
+          </NavIcon>
+          {aboutPages.length > 0 && <div className="about-nav-menu__items" aria-label="About subpages">
+            {aboutPages.map((page) => <Link key={page.id} to={`/about/${page.id}`}><AboutIcon icon={page.icon} size={18} /><span>{page.name}</span></Link>)}
+          </div>}
+        </div>
         <NavIcon
           to="/history"
           title="Query history"
