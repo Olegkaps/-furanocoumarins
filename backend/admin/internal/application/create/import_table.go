@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/xuri/excelize/v2"
@@ -414,7 +413,7 @@ func importRows(imp cassandra.TableImporter, TableFile *excelize.File, FileName 
 	}
 
 	data_primary_keys := []string{"uuid"}
-	if err := populateSetChoices(meta_data, data_columns, joined_data, sp_columns, sp_data); err != nil {
+	if err := normalizeSetTypes(meta_data); err != nil {
 		return "", err
 	}
 
@@ -522,51 +521,18 @@ func importRows(imp cassandra.TableImporter, TableFile *excelize.File, FileName 
 	return message, nil
 }
 
-// populateSetChoices enriches persisted metadata only. Choices come from the
-// final imported rows (after defaults and joins), never from spreadsheet edits
-// or unreferenced source rows. Explicit workbook choices remain authoritative.
-func populateSetChoices(meta [][]any, dataColumns []string, data [][]any, speciesColumns []string, species [][]any) error {
+// Runtime set values come from stored rows, never a metadata enumeration.
+// Legacy input declarations remain readable, but new dataset metadata is bare.
+func normalizeSetTypes(meta [][]any) error {
 	for _, row := range meta {
-		column, columnType := row[1].(string), row[2].(string)
+		columnType := row[2].(string)
 		parsed, err := parseColumnType(columnType)
 		if err != nil {
 			return err
 		}
-		if !parsed.hasToken("set") || parsed.hasSetChoices {
-			continue
+		if parsed.hasToken("set") {
+			row[2] = columnType[:parsed.setStart] + "set" + columnType[parsed.setEnd:]
 		}
-		unique := make(map[string]struct{})
-		collect := func(columns []string, rows [][]any) {
-			for index, definition := range columns {
-				if strings.Fields(definition)[0] != column {
-					continue
-				}
-				for _, values := range rows {
-					if set, ok := values[index].(map[string]struct{}); ok {
-						maps.Copy(unique, set)
-					}
-				}
-			}
-		}
-		collect(dataColumns, data)
-		collect(speciesColumns, species)
-		choices := make([]string, 0, len(unique))
-		for value := range unique {
-			// The legacy metadata grammar has no escaping. Reject ambiguity before
-			// reserving a table instead of publishing broken dropdown options.
-			if strings.ContainsAny(value, "[]") || strings.IndexFunc(value, func(r rune) bool {
-				return unicode.IsSpace(r) || unicode.IsControl(r)
-			}) >= 0 || value == "<>" {
-				return fmt.Errorf("preflight column %q: set value %q cannot be represented in set[choices] metadata", column, value)
-			}
-			choices = append(choices, value)
-		}
-		slices.Sort(choices)
-		declaration := "set"
-		if len(choices) != 0 {
-			declaration += "[" + strings.Join(choices, " ") + "]"
-		}
-		row[2] = columnType[:parsed.setStart] + declaration + columnType[parsed.setEnd:]
 	}
 	return nil
 }

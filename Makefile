@@ -32,7 +32,7 @@ auth-import:
 	$(COMPOSE) -f docker-compose.local.yaml stop go-auth authd; \
 	$(COMPOSE) -f docker-compose.local.yaml --profile migration run --rm --no-deps auth-import
 
-test: compose-check lint test-unit test-race test-integration test-e2e test-frontend-container test-monitoring-config test-monitoring-smoke
+test: compose-check lint test-unit test-race test-autocomplete test-integration test-e2e test-frontend-container test-monitoring-config test-monitoring-smoke
 
 lint: frontend-deps
 	cd backend/admin && go vet ./...
@@ -137,3 +137,25 @@ test-monitoring: test-monitoring-backend test-monitoring-config
 # Runs a temporary stack with synthetic metrics and no production resources.
 test-monitoring-smoke:
 	COMPOSE='$(COMPOSE)' bash scripts/monitoring-smoke.sh
+
+# Native chemistry and autocomplete regressions, including workbook golden cases.
+.PHONY: test-autocomplete
+AUTOCOMPLETE_TEST_IMAGE ?= localhost/furanocoumarins-autocomplete-test:local
+test-autocomplete:
+	$(CONTAINER_ENGINE) build -f backend/admin/Dockerfile.test -t $(AUTOCOMPLETE_TEST_IMAGE) backend/admin
+	$(CONTAINER_ENGINE) run --rm $(AUTOCOMPLETE_TEST_IMAGE) go test -tags=rdkit ./internal/chemistry ./internal/autocomplete ./internal/pkg/searchquery ./internal/application/search ./internal/infrastructure/persistence/cassandra ./internal/presentation/http/search -count=1
+
+.PHONY: test-autocomplete-browser
+test-autocomplete-browser: frontend-deps
+	cd frontend && ./node_modules/.bin/playwright test e2e/autocomplete.spec.ts e2e/autocomplete-live.spec.ts e2e/molecule-previews.spec.ts e2e/molecule-previews-live.spec.ts e2e/radical-boundaries-live.spec.ts e2e/chemical-name-lists.spec.ts e2e/drawer-hydrogens.spec.ts e2e/set-values.spec.ts e2e/classification-autocomplete.spec.ts e2e/classification-live.spec.ts
+
+.PHONY: test-autocomplete-integration
+test-autocomplete-integration:
+	@test -n "$(TEST_POSTGRES_DSN)" || { echo 'TEST_POSTGRES_DSN must select a disposable test database'; exit 1; }
+	cd backend/admin && ENV_TYPE=TEST go test -tags=integration ./internal/infrastructure/persistence/cassandra -run '^Test(AutocompletePostgres|ChemicalNameMembershipPostgres|ClassificationAutocompleteActualPairs)' -count=1
+
+
+.PHONY: test-substructure-integration
+test-substructure-integration:
+	@test -n "$(TEST_POSTGRES_DSN)" || { echo 'TEST_POSTGRES_DSN must select a disposable test database'; exit 1; }
+	cd backend/admin && ENV_TYPE=TEST go test -tags=integration,rdkit ./internal/infrastructure/persistence/cassandra -run '^TestAutocompletePostgresStructureFullResults$$' -count=1

@@ -154,3 +154,12 @@ func requireUserError(t *testing.T, expected error, actual error) {
 	require.True(t, ok)
 	assert.Equal(t, expected, userErr.E)
 }
+
+func TestSubstructureRequiresSMILESColumn(t *testing.T) {
+	columns := []domainsearch.ColumnMeta{{Column: "smiles", Type: "text SMILES"}, {Column: "name", Type: "text search"}, {Column: "fake", Type: "set[smiles search]"}}
+	require.NoError(t, search.ValidateRequest("smiles SUBSTRUCTURE 'C' AND name = 'one' OR smiles = 'CC'", columns))
+	for _, q := range []string{"name SUBSTRUCTURE 'C'", "smiles = 'C' OR fake SUBSTRUCTURE 'C'", "unknown SUBSTRUCTURE 'C'"} {
+		var err *response.UserError
+		require.ErrorAs(t, search.ValidateRequest(q, columns), &err)
+	}
+}

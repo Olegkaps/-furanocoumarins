@@ -33,12 +33,12 @@ test("all registered identifiers are offered, irrespective of guided search and 
 });
 
 test("operators match physical text/set semantics", () => {
-  assert.deepEqual(labels("names "), ["=", "!=", "<", ">", "<=", ">=", "LIKE"]);
+  assert.deepEqual(labels("names "), ["CONTAINS", "=", "!=", "<", ">", "<=", ">=", "LIKE"]);
   assert.deepEqual(labels("names <"), ["<", "<="]);
   assert.deepEqual(labels("type_structure "), ["CONTAINS"]);
   assert.deepEqual(labels("aliases "), ["CONTAINS"]);
   assert.deepEqual(labels("familia LI"), ["LIKE"]);
-  assert.deepEqual(labels("names CONTAINS ", ["bad"]), []);
+  assert.deepEqual(labels("names CONTAINS ", ["Skimmetine"]), ["Skimmetine"]);
   assert.deepEqual(labels("aliases = ", ["bad"]), []);
   assert.deepEqual(labels("names like ", ["bad"]), []);
 });
@@ -70,10 +70,11 @@ test("operator insertion preserves a following closing parenthesis", () => {
   assert.equal(result.value.slice(result.caret), "' )");
 });
 
-test("remote lookups require a nonblank dynamic value prefix; finite sets remain local", () => {
-  for (const query of ["names = ", "names = '", "names = '  ", "names ", "type_structure CONTAINS 'a"]) {
+test("remote lookups require a nonblank value prefix, including enum columns", () => {
+  for (const query of ["names = ", "names = '", "names = '  ", "names "]) {
     assert.equal(queryValueRequestKey(context(query)), "", query);
   }
+  assert.deepEqual(JSON.parse(queryValueRequestKey(context("type_structure CONTAINS 'a"))), ["type_structure", "a"]);
   assert.deepEqual(JSON.parse(queryValueRequestKey(context("aliases CONTAINS 'O''B"))), ["aliases", "O'B"]);
   assert.deepEqual(JSON.parse(queryValueRequestKey(context("names LIKE 'Neo"))), ["names", "Neo"]);
 });
@@ -100,7 +101,7 @@ test("a token starting at the caret wins a shared boundary without losing end-of
   assert.equal(ctx.end, 9);
   assert.equal(ctx.prefix, "");
   const [suggestion] = querySuggestions(ctx, columns, ["O'Brien"]);
-  assert.equal(applyQuerySuggestion(query, ctx, suggestion).value, "names= 'O''Brien' AND familia='Apiaceae'");
+  assert.equal(applyQuerySuggestion(query, ctx, suggestion).value, "names CONTAINS 'O''Brien' AND familia='Apiaceae'");
   assert.equal(context(query, 5).kind, "operator");
   assert.equal(context("names").kind, "column");
   assert.deepEqual(labels("names"), ["names"]);
@@ -108,12 +109,13 @@ test("a token starting at the caret wins a shared boundary without losing end-of
   assert.equal(context("names ").kind, "operator");
 });
 
-test("finite choices and dynamic values are filtered, deduplicated, bounded and safely quoted", () => {
-  assert.deepEqual(labels("type_structure CONTAINS 'a"), ["ang"]);
+test("server-ranked fuzzy values are preserved, deduplicated, bounded and safely quoted", () => {
+  assert.deepEqual(labels("type_structure CONTAINS 'agn", ["ang"]), ["ang"]);
+  assert.deepEqual(labels("names = 'psorlaen", ["Psoralen", "Isopsoralen"]), ["Psoralen", "Isopsoralen"]);
   assert.deepEqual(labels("aliases CONTAINS 'o", ["O'Brien", "O'Brien", null, 2]), ["O'Brien"]);
   const ctx = context("names = 'O");
   const [suggestion] = querySuggestions(ctx, columns, ["O'Brien"]);
-  assert.equal(applyQuerySuggestion("names = 'O", ctx, suggestion).value, "names = 'O''Brien' ");
+  assert.equal(applyQuerySuggestion("names = 'O", ctx, suggestion).value, "names CONTAINS 'O''Brien' ");
   assert.equal(labels("names = ", Array.from({ length: 100 }, (_, i) => `${i}`)).length, 12);
   assert.deepEqual(labels("names = ", { values: ["bad"] }), []);
 });
@@ -136,7 +138,7 @@ test("completion replaces the token around the caret and preserves following cla
   const ctx = context(query, caret);
   const suggestion = { label: "O'Brien", insert: "'O''Brien'" };
   const result = applyQuerySuggestion(query, ctx, suggestion);
-  assert.equal(result.value, "familia='Apiaceae' OR names = 'O''Brien' AND subfamily = 'A'");
+  assert.equal(result.value, "familia='Apiaceae' OR names CONTAINS 'O''Brien' AND subfamily = 'A'");
   assert.equal(result.value.slice(result.caret), " AND subfamily = 'A'");
   assert.equal(ctx.prefix, "wr");
   const middle = "names = 'A' OR familia = 'B'";
@@ -205,4 +207,105 @@ test("shared input renders a labelled combobox while preserving parent attribute
   assert.match(html, /aria-label="Search query"/);
   assert.match(html, /disabled=""/);
   assert.doesNotMatch(html, /aria-activedescendant/);
+});
+
+test("SMILES supports substructure predicates with named options and preserves following conditions", () => {
+  const cols = queryColumns([{column:"smiles", name:"Structure", type:"chemical SMILES"}]);
+  assert.ok(querySuggestions(queryContext("smiles ", 7, cols), cols).some(s => s.label === "SUBSTRUCTURE"));
+  const query = "smiles SUBSTRUCTURE[bond_multiplicity=false,hetero_atoms=true,stereochemistry=false] 'C1CCCCC1' AND smiles = 'CC'";
+  const caret = query.indexOf("C1CCC") + 4;
+  const ctx = queryContext(query, caret, cols);
+  assert.equal(ctx.kind, "value");
+  assert.equal(ctx.prefix, "C1CC");
+  assert.equal(ctx.column.column, "smiles");
+  assert.equal(query.slice(ctx.operatorStart, ctx.operatorEnd), "SUBSTRUCTURE[bond_multiplicity=false,hetero_atoms=true,stereochemistry=false]");
+  const replaced = applyQuerySuggestion(query, ctx, {label:"c1ccccc1",insert:"'c1ccccc1'"});
+  assert.ok(replaced.value.endsWith(" AND smiles = 'CC'"));
+});
+
+test("a fresh structure clause does not inherit the previous operator", () => {
+  const cols = queryColumns([{column:"smiles", type:"SMILES chemical"}]);
+  const query = "smiles = 'CC' AND smiles ";
+  const ctx = queryContext(query, query.length, cols);
+  assert.equal(ctx.kind, "operator");
+  assert.equal(ctx.operatorStart, undefined);
+  assert.equal(ctx.operator, undefined);
+});
+
+const { structureOperator, parseStructureOptions } = await server.ssrLoadModule("/src/SearchApp/StructureOptions.tsx");
+test("all structure modes serialize compactly and read legacy URLs", () => {
+  for (let mask = 0; mask < 8; mask++) {
+    const options = { bond_order: !!(mask & 1), hetero_atoms: !!(mask & 2), stereochemistry: !!(mask & 4) };
+    assert.deepEqual(parseStructureOptions(structureOperator(options)), options);
+    assert.deepEqual(parseStructureOptions(`SUBSTRUCTURE[bond_multiplicity=${options.bond_order},hetero_atoms=${options.hetero_atoms},stereochemistry=${options.stereochemistry}]`), options);
+  }
+  assert.equal(structureOperator(parseStructureOptions()), "SUBSTRUCTURE");
+});
+test("parameter completion enters brackets and preserves literal and following clauses", () => {
+  const cols = queryColumns([{column:"smiles", type:"SMILES chemical"}]);
+  const query = "smiles SUB 'CC' AND smiles = 'N'";
+  const ctx = queryContext(query, query.indexOf("SUB") + 3, cols);
+  const choice = querySuggestions(ctx, cols).find(s => s.insert === "SUBSTRUCTURE[]");
+  const entered = applyQuerySuggestion(query, ctx, choice);
+  assert.equal(entered.value, "smiles SUBSTRUCTURE[] 'CC' AND smiles = 'N'");
+  const param = queryContext(entered.value, entered.caret, cols);
+  assert.equal(param.kind, "parameter");
+  assert.deepEqual(querySuggestions(param, cols).map(s => s.label), ["bonds", "hetero", "stereo"]);
+  const selected = applyQuerySuggestion(entered.value, param, { label:"hetero", insert:"hetero" });
+  assert.equal(selected.value, "smiles SUBSTRUCTURE[hetero] 'CC' AND smiles = 'N'");
+});
+test("parameter edits replace only the current fragment, omit used flags, and close unfinished brackets", () => {
+  const cols = queryColumns([{column:"smiles", type:"SMILES chemical"}]);
+  for (const query of ["smiles SUBSTRUCTURE[bonds,he,stereo] 'CC'", "smiles SUBSTRUCTURE[bonds,he"]) {
+    const ctx = queryContext(query, query.indexOf(",he") + 3, cols);
+    const suggestions = querySuggestions(ctx, cols);
+    assert.deepEqual(suggestions.map(s => s.label), ["hetero"]);
+    const result = applyQuerySuggestion(query, ctx, suggestions[0]);
+    assert.equal(result.value, query.endsWith("he") ? "smiles SUBSTRUCTURE[bonds,hetero]" : "smiles SUBSTRUCTURE[bonds,hetero,stereo] 'CC'");
+  }
+  const full = "smiles SUBSTRUCTURE[bonds,hetero,stereo,]";
+  const ctx = queryContext(full, full.length - 1, cols);
+  assert.deepEqual(querySuggestions(ctx, cols), []);
+});
+
+test("unfinished parameters never consume brackets from SMILES or subsequent operators", () => {
+  const cols = queryColumns([{column:"smiles", type:"SMILES chemical"}]);
+  for (const after of [" 'C[N+]' AND smiles = 'N'", " 'CC' AND smiles SUBSTRUCTURE[bonds] 'C'"]) {
+    const query = "smiles SUBSTRUCTURE[he" + after;
+    const ctx = queryContext(query, query.indexOf("[he") + 3, cols);
+    const result = applyQuerySuggestion(query, ctx, {label:"hetero", insert:"hetero"});
+    assert.equal(result.value, "smiles SUBSTRUCTURE[hetero]" + after);
+  }
+});
+
+test("legacy display compaction preserves values, escaped apostrophes and boolean clauses", async () => {
+  const { compactStructureQuery } = await server.ssrLoadModule("/src/SearchApp/StructureOptions.tsx");
+  const old = "SUBSTRUCTURE[bond_multiplicity=false,hetero_atoms=true,stereochemistry=false]";
+  const query = `smiles ${old} 'C[N+]' OR names = 'x''${old}' AND smiles ${old} 'C'`;
+  assert.equal(compactStructureQuery(query), `smiles SUBSTRUCTURE[hetero] 'C[N+]' OR names = 'x''${old}' AND smiles SUBSTRUCTURE[hetero] 'C'`);
+  assert.equal(compactStructureQuery(`names = 'unfinished ${old}`), `names = 'unfinished ${old}`);
+});
+
+test("chemical alias completion uses membership while manual equality stays valid", () => {
+ const q = "familia = 'Apiaceae' AND names = 'skim";
+ const ctx = context(q);
+ const chosen = querySuggestions(ctx, columns, ["Skimmetine"])[0];
+ assert.equal(applyQuerySuggestion(q, ctx, chosen).value, "familia = 'Apiaceae' AND names CONTAINS 'Skimmetine' ");
+ assert.deepEqual(labels("names != 'skim", ["Skimmetine"]), []);
+ assert.equal(context("names = 'Skimmetine=Other' ").kind, "logical");
+});
+
+
+test("set suggestions use database members, never legacy metadata choices", () => {
+  for (const type of ["set chemical", "set[obsolete stale] chemical"]) {
+    const cols = queryColumns([{ column: "radicals", type }]);
+    const query = "radicals CONTAINS 'O";
+    const ctx = queryContext(query, query.length, cols);
+    assert.equal(ctx.column.set, true);
+    assert.deepEqual(querySuggestions(ctx, cols), []);
+    assert.deepEqual(querySuggestions(ctx, cols, ["O'Brien, methyl", "other member"]).map(s => s.label), ["O'Brien, methyl", "other member"]);
+    const [choice] = querySuggestions(ctx, cols, ["O'Brien, methyl"]);
+    assert.equal(applyQuerySuggestion(query, ctx, choice).value, "radicals CONTAINS 'O''Brien, methyl' ");
+    assert.deepEqual(querySuggestions(ctx, cols, null), []);
+  }
 });

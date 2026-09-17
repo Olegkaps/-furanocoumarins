@@ -117,7 +117,7 @@ func TestSearchProjectionHTTP(t *testing.T) {
 		t.Run(tc.query, func(t *testing.T) {
 			res, err := server.Test(httptest.NewRequest("GET", "/search?q="+url.QueryEscape("names LIKE '%imperatorin%'")+tc.query, nil))
 			require.NoError(t, err)
-			defer res.Body.Close()
+			defer func() { require.NoError(t, res.Body.Close()) }()
 			require.Equal(t, tc.status, res.StatusCode)
 			var body map[string]json.RawMessage
 			require.NoError(t, json.NewDecoder(res.Body).Decode(&body))

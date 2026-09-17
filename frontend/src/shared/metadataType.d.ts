@@ -8,3 +8,5 @@ export function hasMetadataTypeToken(columnType: string, expected: string): bool
 export function getMetadataTypeModifier(columnType: string, marker: string): string[] | null;
 export function safeMetadataLink(template: string, value: string): string | null;
 export function compareMetadataResultTypes(left: string, right: string): number;
+
+export function isChemicalNameList(column: string, type: string): boolean;

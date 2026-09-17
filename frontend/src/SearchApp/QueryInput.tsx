@@ -5,6 +5,10 @@ import { api } from "../shared/api";
 import { applyQuerySuggestion, completionKey, queryColumns, queryContext, querySuggestions, queryValueRequestKey, scheduleQueryValues } from "./queryCompletion";
 import type { QueryColumn, QuerySuggestion } from "./queryCompletion";
 import "./QueryInput.css";
+import { parseStructureOptions } from "./StructureOptions";
+import { MoleculePreview } from "./MoleculePreview";
+
+
 
 type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> & {
   value: string; onChange: (value: string) => void;
@@ -21,7 +25,9 @@ export function QueryInput({ value, onChange, onKeyDown, onFocus, onBlur, onSele
   const [active, setActive] = useState(-1);
   const [remote, setRemote] = useState<{ key: string; values: unknown }>();
   const context = useMemo(() => queryContext(value, caret, columns), [value, caret, columns]);
-  const requestKey = queryValueRequestKey(context);
+  const options = parseStructureOptions(context.operator);
+  const baseRequestKey = queryValueRequestKey(context);
+  const requestKey = baseRequestKey ? JSON.stringify([baseRequestKey, context.column?.smiles ? options : null]) : "";
   const suggestions = useMemo(() => querySuggestions(context, columns, remote?.key === requestKey ? remote.values : []), [context, columns, remote, requestKey]);
   const open = focused && !dismissed && suggestions.length > 0;
   const showValueHint = focused && !dismissed && context.kind === "value" && context.prefix.trim() === "";
@@ -37,12 +43,13 @@ export function QueryInput({ value, onChange, onKeyDown, onFocus, onBlur, onSele
 
   useEffect(() => {
     if (!focused || dismissed || !requestKey) return;
-    const [column, prefix] = JSON.parse(requestKey) as [string, string];
+    const [column, prefix] = JSON.parse(baseRequestKey) as [string, string];
+    const options = JSON.parse(requestKey)[1];
     return scheduleQueryValues(async (signal) => {
-      const response = await api.get(`/autocomplete/${encodeURIComponent(column)}`, { params: { value: prefix }, signal });
+      const response = await api.get(`/autocomplete/${encodeURIComponent(column)}`, { params: { value: prefix, ...(context.column?.smiles ? { mode: "structure", ...options } : {}) }, signal });
       return response.data?.values;
     }, (values) => setRemote({ key: requestKey, values }));
-  }, [requestKey, focused, dismissed]);
+  }, [requestKey, baseRequestKey, focused, dismissed, context.column?.smiles]);
 
   useLayoutEffect(() => {
     if (pendingCaret.current === null) return;
@@ -97,8 +104,11 @@ export function QueryInput({ value, onChange, onKeyDown, onFocus, onBlur, onSele
       {suggestions.map((suggestion, index) => <li key={suggestion.insert} id={`${id}-${index}`}
         role="option" aria-selected={index === selected}
         onMouseDown={(event) => event.preventDefault()} onClick={() => choose(suggestion)}>
+        {context.kind === "value" && context.column?.smiles && <MoleculePreview smiles={suggestion.label} />}
+        <div className="molecule-suggestion__text">
         <span>{suggestion.label}</span>
         {suggestion.detail && suggestion.detail !== suggestion.label && <small>{suggestion.detail}</small>}
+        </div>
       </li>)}
     </ul>}
     </div>}

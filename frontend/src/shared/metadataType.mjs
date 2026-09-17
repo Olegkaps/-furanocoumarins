@@ -199,3 +199,9 @@ export function compareMetadataResultTypes(left, right) {
   if (a !== b) return a < b ? -1 : 1;
   return left === right ? 0 : left < right ? -1 : 1;
 }
+
+/** Legacy chemical aliases use '=' within scalar names cells. */
+export function isChemicalNameList(column, type) {
+  return column === "names" && !hasMetadataTypeToken(type, "set") &&
+    (hasMetadataTypeToken(type, "chemical") || hasMetadataTypeToken(type, "table_chemical"));
+}

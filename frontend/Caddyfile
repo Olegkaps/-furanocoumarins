@@ -3,6 +3,7 @@
         /metadata \
         /metadata-versions \
         /metadata-versions/* \
+        /autocomplete \
         /autocomplete/* \
         /article/* \
         /pages/* \

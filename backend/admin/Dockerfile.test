@@ -1,10 +1,11 @@
-FROM golang:1.25-alpine
+FROM golang:1.25-bookworm
 
-RUN apk add --no-cache poppler-utils
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils librdkit-dev libboost-dev && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/app
 
-ENV CGO_ENABLED=0
+ENV CGO_ENABLED=1
+ENV GO_TEST_TAGS=rdkit
 ENV GOOS=linux
 ENV ENV_TYPE=TEST
 

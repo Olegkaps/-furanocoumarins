@@ -470,17 +470,12 @@ test("passwordless migrated superuser has immediate authority, repeat magic logi
 	]) {
 		await page.goto("/search");
 		await dismissAdminTour(page);
-		await page.getByRole("button", { name: "Chemicals", exact: true }).click();
-		await page.getByLabel(new RegExp(`${field}:`)).fill(fragment);
-		await page.locator(".suggestion-item").getByText(choice, { exact: true }).click();
-		// Opening another section and remounting the selected field must retain
-		// both the visible value and its predicate in the final AND expression.
-		await page.getByRole("button", { name: "Chemicals", exact: true }).click();
-		const speciesToggle = page.getByRole("button", { name: "Species", exact: true });
-		if (await speciesToggle.getAttribute("aria-expanded") !== "true") await speciesToggle.click();
-		await page.locator('[data-tour="search-autocomplete"] input').fill("Ruta graveolens");
-		await page.getByRole("button", { name: "Chemicals", exact: true }).click();
-		await expect(page.getByLabel(new RegExp(`${field}:`))).toHaveValue(choice);
+		const input = page.getByRole("combobox");
+		await input.fill(fragment);
+		await page.getByRole("option").filter({ hasText: choice }).filter({ hasText: field }).click();
+		await input.fill("Ruta graveolens");
+		await page.getByRole("option").filter({ hasText: "Ruta graveolens" }).click();
+		await expect(page.getByRole("list", { name: "Search conditions" })).toContainText(choice);
 		const expectedPredicates = [expression, "species = 'Ruta graveolens'"].sort();
 		const searchResponse = page.waitForResponse((response) =>
 			new URL(response.url()).pathname === "/search" &&
@@ -1026,7 +1021,7 @@ test("public scientific search builds queries, groups domain results, and anonym
 	];
 	let capturedQuery = "";
 	await page.route("**/metadata", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ metadata }) }));
-	await page.route("**/autocomplete/species?*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: '{"values":["Ruta graveolens"]}' }));
+	await page.route("**/autocomplete?*", (route) => route.fulfill({ json: { suggestions: [{ column: "species", show_name: "Species", value: "Ruta graveolens" }] } }));
 	await page.route("**/search?*", (route) => {
 		capturedQuery = new URL(route.request().url()).searchParams.get("q") ?? "";
 		return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ metadata, data: [
@@ -1037,7 +1032,6 @@ test("public scientific search builds queries, groups domain results, and anonym
 	});
 	await page.goto("/search");
 	await dismissAdminTour(page);
-	await page.getByRole("button", { name: /Species/ }).click();
 	const speciesInput = page.locator('[data-tour="search-autocomplete"] input');
 	await speciesInput.fill("Ruta");
 	await page.getByText("Ruta graveolens", { exact: true }).click();
@@ -1096,14 +1090,13 @@ test("scientific grouping keeps delimiter-collision tuples distinct", async ({ p
 		{ column: "references", name: "References", description: "Literature", type: "table_ ref[]" },
 	];
 	await page.route("**/metadata", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ metadata }) }));
-	await page.route("**/autocomplete/species?*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: '{"values":["c"]}' }));
+	await page.route("**/autocomplete?*", (route) => route.fulfill({ json: { suggestions: [{ column: "species", show_name: "Species", value: "c" }] } }));
 	await page.route("**/search?*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ metadata, data: [
 		{ chemical: "ab", species: "c", references: "same-ref" },
 		{ chemical: "a", species: "bc", references: "same-ref" },
 	] }) }));
 	await page.goto("/search");
 	await dismissAdminTour(page);
-	await page.getByRole("button", { name: /Species/ }).click();
 	const speciesInput = page.locator('[data-tour="search-autocomplete"] input');
 	await speciesInput.fill("c");
 	await page.getByText("c", { exact: true }).click();

@@ -59,6 +59,7 @@ func NewApp(container *app.Container) *fiber.App {
 	create := createhandler.NewHandler(container)
 
 	app.Get("/metadata", search.GetCurrentMetadata)
+	app.Get("/autocomplete", search.Autocomplete)
 	app.Get("/autocomplete/:column", search.Autocomplete)
 	app.Get("/search", search.SearchMainApp)
 	app.Get("/article/:id", bibtex.GetArticle)

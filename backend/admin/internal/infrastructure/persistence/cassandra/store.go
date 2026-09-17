@@ -1,6 +1,7 @@
 package cassandra
 
 import (
+	"admin/internal/autocomplete"
 	"context"
 	"database/sql"
 	"errors"
@@ -16,8 +17,13 @@ var ErrNotConfigured = errors.New("cassandra is not configured")
 
 // Store owns Cassandra session lifecycle.
 type Store struct {
-	cluster *gocql.ClusterConfig
-	db      *sql.DB
+	cluster           *gocql.ClusterConfig
+	db                *sql.DB
+	autocompleteMu    sync.RWMutex
+	autocompleteBuild sync.Mutex
+	structureBuild    sync.Mutex
+	autocompleteIndex *autocomplete.Index
+	autocompleteKey   string
 }
 
 func NewStore(cluster *gocql.ClusterConfig) *Store {

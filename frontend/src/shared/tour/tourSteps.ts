@@ -59,7 +59,7 @@ export const TOUR_STEPS: Record<TourId, TourStep[]> = {
   search: [
     {
       title: "Search",
-      body: "Build a query from Species and Chemicals fields, then open results as a table.",
+      body: "Find values across all database columns using one input. Choose suggestions to build exact conditions.",
     },
     {
       target: "nav",
@@ -69,29 +69,20 @@ export const TOUR_STEPS: Record<TourId, TourStep[]> = {
     },
     {
       target: "search-section-species",
-      title: "Species filters",
-      body: "This section lists taxonomy and species fields. They combine with AND in the final query.",
-      prepare: "search-open-species",
-      placement: "side",
-    },
-    {
-      target: "search-info-tip",
-      title: "Field info (ⓘ)",
-      body: "Hover or focus the info icon next to a field name to read what it means.",
-      prepare: "search-open-species",
+      title: "Choose columns",
+      body: "Optionally narrow suggestions to columns grouped by species, chemicals, or publications. All columns are searched by default.",
       placement: "side",
     },
     {
       target: "search-autocomplete",
       title: "Autocomplete",
-      body: "Start typing in a field to see matching suggestions from the database, then pick one or keep editing.",
-      prepare: "search-open-species",
+      body: "Type a name or publication text. Fuzzy matches show their column names. Select a value to add an exact condition; choose Any (OR) to match any selected value or All (AND) to require every selected value. Any (OR) is the default.",
       placement: "side",
     },
     {
-      target: "search-section-chemicals",
-      title: "Chemicals section",
-      body: "Expand Chemicals the same way for chemical attributes. Info tips and autocomplete work there too.",
+      target: "search-structure",
+      title: "SMILES substructure",
+      body: "Switch to structure matching, paste SMILES or draw a fragment. Psoralen and angelicin templates are ready to use or copy. Choose bond, heteroatom and stereochemistry options, then select a matching stored structure.",
       placement: "side",
     },
     {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ChevronRight, ArrowUpRightFromSquare } from "@gravity-ui/icons";
+import { compactStructureQuery } from "./StructureOptions";
 import { QueryInput } from "./QueryInput";
 
 /** Search form that only updates the URL; data loading is owned by useCompareSeries. */
@@ -12,10 +13,10 @@ export function SearchLine({
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("query") ?? "";
-  const [request, setRequest] = useState(query);
+  const [request, setRequest] = useState(() => compactStructureQuery(query));
 
   useEffect(() => {
-    setRequest(query);
+    setRequest(compactStructureQuery(query));
   }, [query]);
 
   return (
