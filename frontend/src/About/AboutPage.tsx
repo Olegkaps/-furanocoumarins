@@ -7,7 +7,7 @@ export default function AboutPage() {
   const { subpageID } = useParams();
   return (
     <>
-      <FullNavigation pageName="about" />
+      <FullNavigation pageName={subpageID ? undefined : "about"} />
       <PageTour tourId="about" />
       <About subpageID={subpageID} />
     </>

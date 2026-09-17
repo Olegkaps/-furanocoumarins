@@ -2,11 +2,11 @@ export type AboutSubpage = { id: string; name: string; icon: string };
 
 export const ABOUT_ICON_CHOICES = [
   { value: "info", label: "Info" },
-  { value: "book", label: "Book" },
-  { value: "document", label: "Document" },
-  { value: "flask", label: "Research" },
-  { value: "leaf", label: "Plant" },
-  { value: "table", label: "Data" },
+  { value: "chemicals", label: "Chemicals" },
+  { value: "species", label: "Species" },
+  { value: "references", label: "References" },
+  { value: "methods", label: "Methods" },
+  { value: "data", label: "Data" },
 ] as const;
 
 export function aboutPageStorageName(id: string) {

@@ -13,6 +13,7 @@ type EditablePageContentProps = {
   handleSave: (e: React.FormEvent) => void;
   charCount: number;
   overLimit: boolean;
+  showEditButton?: boolean;
 };
 
 export function EditablePageContent({
@@ -26,12 +27,13 @@ export function EditablePageContent({
   handleSave,
   charCount,
   overLimit,
+  showEditButton = true,
 }: EditablePageContentProps) {
-  const showEditButton = (getToken() ?? "") !== "" && !editMode;
+  const canEdit = showEditButton && (getToken() ?? "") !== "" && !editMode;
 
   return (
     <>
-      {showEditButton && (
+      {canEdit && (
         <button
           type="button"
           onClick={() => setEditMode(true)}

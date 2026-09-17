@@ -28,8 +28,10 @@ const aboutPagesCatalogName = "about-subpages"
 var aboutPageID = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,47}$`)
 
 var aboutPageIcons = map[string]bool{
-	"info": true, "book": true, "document": true,
-	"flask": true, "leaf": true, "table": true,
+	"info": true, "chemicals": true, "species": true,
+	"references": true, "methods": true, "data": true,
+	// Keep legacy catalog values readable and editable after the picker changed.
+	"book": true, "document": true, "flask": true, "leaf": true, "table": true,
 }
 
 // AboutPage is the public navigation data for one admin-authored About subpage.
