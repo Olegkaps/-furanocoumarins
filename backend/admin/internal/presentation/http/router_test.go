@@ -69,6 +69,7 @@ func TestEveryDomainMutationDeniesAuthenticatedNonAdmin(t *testing.T) {
 		{fiber.MethodPost, "/metadata-versions/validate"},
 		{fiber.MethodDelete, "/table/not-a-time"}, {fiber.MethodDelete, "/tables"},
 		{fiber.MethodPut, "/bibtex"}, {fiber.MethodPut, "/pages/about"}, {fiber.MethodPut, "/admin/about/pages"},
+		{fiber.MethodGet, "/admin/images"}, {fiber.MethodPost, "/admin/images"}, {fiber.MethodPut, "/admin/images/not-an-id"}, {fiber.MethodDelete, "/admin/images/not-an-id"},
 	} {
 		req := httptest.NewRequest(target.method, target.path, nil)
 		req.Header.Set("Authorization", "Bearer non-admin")

@@ -37,8 +37,11 @@ type Config struct {
 	S3Bucket       string        `env:"S3_BUCKET"`
 	S3Region       string        `env:"S3_REGION" env-default:"us-east-1"`
 	S3UsePathStyle bool          `env:"S3_USE_PATH_STYLE" env-default:"true"`
-	SearchCacheTTL time.Duration `env:"SEARCH_CACHE_TTL" env-default:"5m"`
-	AuthMasterURL  string        `env:"AUTH_MASTER_URL" env-default:"http://authd:8080"`
+	// S3PublicBaseURL is the public bucket URL used in markdown image links.
+	// It must point at a bucket endpoint that allows read access, never at credentials.
+	S3PublicBaseURL string        `env:"S3_PUBLIC_BASE_URL"`
+	SearchCacheTTL  time.Duration `env:"SEARCH_CACHE_TTL" env-default:"5m"`
+	AuthMasterURL   string        `env:"AUTH_MASTER_URL" env-default:"http://authd:8080"`
 	// Public copy for taxonomy controls is deployed with the backend because
 	// workbook classifications and their sources are administrator-configured.
 	TaxonomyInfo                    string `env:"TAXONOMY_INFO" env-default:"Taxonomy according to NCBI is given starting with subtribes. Taxonomy of genus and species is given according to original articles, POWO site and Pimenov (the expert in Apiaceae taxonomy) opinion."`

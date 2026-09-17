@@ -15,6 +15,8 @@
         /admin/publication-reader/document \
         /admin/publication-reader/analyze \
 		/admin/about/pages \
+		/admin/images \
+		/admin/images/* \
         /get-tables-list \
         /create-table \
         /table-imports/* \

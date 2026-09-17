@@ -17,6 +17,7 @@ import (
 	bibtexhandler "admin/internal/presentation/http/bibtex"
 	confighandler "admin/internal/presentation/http/config"
 	createhandler "admin/internal/presentation/http/create"
+	imageshandler "admin/internal/presentation/http/images"
 	pageshandler "admin/internal/presentation/http/pages"
 	publicationhandler "admin/internal/presentation/http/publicationreader"
 	"admin/internal/presentation/http/response"
@@ -57,6 +58,7 @@ func NewApp(container *app.Container) *fiber.App {
 	tables := tableshandler.NewHandler(container)
 	bibtex := bibtexhandler.NewHandler(container)
 	pages := pageshandler.NewHandler(container)
+	images := imageshandler.NewHandler(container)
 	create := createhandler.NewHandler(container)
 	config := confighandler.New(settings.C)
 
@@ -119,6 +121,10 @@ func NewApp(container *app.Container) *fiber.App {
 	app.Put("/bibtex", admin, bibtex.UpdateFile)
 	app.Put("/pages/:name", admin, pages.PutPage)
 	app.Put("/admin/about/pages", admin, pages.PutAboutPages)
+	app.Get("/admin/images", admin, images.List)
+	app.Post("/admin/images", admin, images.Upload)
+	app.Put("/admin/images/:id", admin, images.Replace)
+	app.Delete("/admin/images/:id", admin, images.Delete)
 
 	return app
 }

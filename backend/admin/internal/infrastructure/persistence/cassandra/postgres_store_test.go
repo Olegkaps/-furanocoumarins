@@ -1,6 +1,7 @@
 package cassandra
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 
@@ -9,6 +10,23 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestWithImageLibraryLockCommitsAfterMutation(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	mock.ExpectBegin()
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock\(\$1\)`).WithArgs(imageLibraryLock).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	called := false
+	err = NewPostgresStore(db).WithImageLibraryLock(context.Background(), func() error {
+		called = true
+		return nil
+	})
+	require.NoError(t, err)
+	require.True(t, called)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
 
 func TestPostgresPrefixFailures(t *testing.T) {
 	for _, tc := range []struct {

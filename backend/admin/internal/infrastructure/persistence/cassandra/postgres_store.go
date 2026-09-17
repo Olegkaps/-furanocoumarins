@@ -23,6 +23,29 @@ import (
 	"admin/internal/presentation/http/response"
 )
 
+const imageLibraryLock int64 = 684321092
+
+// WithImageLibraryLock serializes image mutations across backend replicas.
+// PostgreSQL releases the lock if a backend stops, so an interrupted request
+// cannot leave the shared image library unavailable.
+func (s *Store) WithImageLibraryLock(ctx context.Context, mutate func() error) error {
+	if s == nil || s.db == nil {
+		return mutate()
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, imageLibraryLock); err != nil {
+		return err
+	}
+	if err = mutate(); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func pgTable(name string) (string, error) {
 	parts := strings.Split(name, ".")
 	if len(parts) != 2 {

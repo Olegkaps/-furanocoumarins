@@ -60,6 +60,7 @@ function App() {
               <Route path="/admin" element={<AdminApp />}/>
               <Route path="/admin/metadata" element={<AdminApp metadataPage />}/>
               <Route path="/admin/publication-reader" element={<AdminApp publicationReaderPage />}/>
+              <Route path="/admin/images" element={<AdminApp imageLibraryPage />}/>
               <Route path="/reference/:article_id" element={<Reference />}/>
           </Routes>
         </div>

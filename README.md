@@ -191,7 +191,7 @@ it when `authd` starts; the legacy PostgreSQL schema is only the migration sourc
 
 Editable page content (About page, substance descriptions by SMILES at `/page/:smiles`) is stored in S3-compatible object storage. The backend serves content from S3 and writes to it when an admin saves changes.
 
-- **Local/dev:** MinIO via `docker-compose.local.yaml` (service `minio`). The bucket is created automatically on first save.
+- **Local/dev:** MinIO via `docker-compose.local.yaml` (service `minio`). The entire `pages` bucket is anonymously readable and listable because local development stores no private data; existing volumes receive policy-file updates within 15 seconds.
 - **Production:** cloud S3 — set `S3_ENDPOINT`, credentials, and bucket in `env/.env` before deploy.
 
 Without S3 (or with empty `S3_ENDPOINT`), editable pages will not work.
@@ -199,6 +199,7 @@ Without S3 (or with empty `S3_ENDPOINT`), editable pages will not work.
 Backend environment variables for go-auth (see `backend/admin/settings/settings.go`):
 
 - `S3_ENDPOINT` — e.g. `http://minio:9000`
+- `S3_PUBLIC_BASE_URL` — public bucket URL (for example `https://storage.example.org/furanocoumarins`) used by the shared admin image library when copying Markdown links. In production, grant anonymous read access only to the objects intended to be public; this URL contains no credentials.
 - `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`
 - `S3_BUCKET` — e.g. `pages`
 - `S3_REGION`, `S3_USE_PATH_STYLE` (optional)

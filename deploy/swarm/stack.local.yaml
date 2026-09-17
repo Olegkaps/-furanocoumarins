@@ -44,5 +44,24 @@ services:
       minio:
         condition: service_healthy
 
+  # Swarm does not retain Compose one-shot dependencies. Reconcile the local
+  # policy continuously so existing MinIO volumes receive policy updates.
+  minio-policy:
+    image: minio/minio:latest
+    entrypoint: ["/bin/sh", "/init/reconcile-local-policy.sh"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - ../../deploy/minio/admin-images-public-read.json:/policy/public-read.json:ro
+      - ../../deploy/minio/reconcile-local-policy.sh:/init/reconcile-local-policy.sh:ro
+    networks:
+      - back
+    logging: *default-logging
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+
 volumes:
   minio_data:

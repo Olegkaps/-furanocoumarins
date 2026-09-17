@@ -7,6 +7,7 @@ import {
   Database,
   FileCode,
   BookOpen,
+  Picture,
   Gear,
   Magnifier,
 } from "@gravity-ui/icons";
@@ -55,7 +56,7 @@ function NavIcon({
 
 export interface FullNavigationProps {
   /** Mark this page’s icon as selected and non-clickable */
-  pageName?: "home" | "about" | "history" | "cache" | "admin" | "metadata" | "publication-reader";
+  pageName?: "home" | "about" | "history" | "cache" | "admin" | "metadata" | "publication-reader" | "images";
 }
 
 export default function FullNavigation({ pageName }: FullNavigationProps) {
@@ -123,6 +124,9 @@ export default function FullNavigation({ pageName }: FullNavigationProps) {
           </NavIcon>
           <NavIcon to="/admin/publication-reader" title="Publication reader" current={pageName === "publication-reader"} className="nav-icon-link--admin">
             <BookOpen width={28} height={28} />
+          </NavIcon>
+          <NavIcon to="/admin/images" title="Image library" current={pageName === "images"} className="nav-icon-link--admin">
+            <Picture width={28} height={28} />
           </NavIcon>
         </div>
       )}

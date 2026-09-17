@@ -12,18 +12,19 @@ import { PageTour } from "../shared/tour/PageTour";
 import AccountSecurity from "./AccountSecurity";
 import MetadataEditor from "./MetadataEditor";
 import PublicationReader from "./PublicationReader";
+import ImageLibrary from "./ImageLibrary";
 
-export function AdminApp({ metadataPage = false, publicationReaderPage = false }: { metadataPage?: boolean; publicationReaderPage?: boolean }) {
+export function AdminApp({ metadataPage = false, publicationReaderPage = false, imageLibraryPage = false }: { metadataPage?: boolean; publicationReaderPage?: boolean; imageLibraryPage?: boolean }) {
   const username = getName();
   if (!isTokenExists()) return <Navigate to="/login" />;
   return (
     <div>
-      <FullNavigation pageName={publicationReaderPage ? "publication-reader" : metadataPage ? "metadata" : "admin"} />
+      <FullNavigation pageName={publicationReaderPage ? "publication-reader" : metadataPage ? "metadata" : imageLibraryPage ? "images" : "admin"} />
       {!metadataPage && !publicationReaderPage && <PageTour tourId="admin" />}
       <div className="admin-page" style={{ paddingTop: 8 }}>
         <div className="admin-topbar" style={{ marginBottom: 8 }} data-tour="admin-header">
           <h1 className="admin-topbar__title" style={{ fontSize: "1.75rem" }}>
-            {publicationReaderPage ? "Publication reader" : metadataPage ? "Import metadata" : "Administration"}
+            {publicationReaderPage ? "Publication reader" : metadataPage ? "Import metadata" : imageLibraryPage ? "Image library" : "Administration"}
           </h1>
           <div className="admin-user">
             <p className="admin-user__name">{username}</p>
@@ -33,7 +34,7 @@ export function AdminApp({ metadataPage = false, publicationReaderPage = false }
           </div>
         </div>
       </div>
-      {publicationReaderPage ? <div className="admin-page">
+      {imageLibraryPage ? <div className="admin-page"><Link to="/admin" className="btn">Back to administration</Link><ImageLibrary /></div> : publicationReaderPage ? <div className="admin-page">
         <Link to="/admin" className="btn">Back to administration</Link>
         <PublicationReader />
       </div> : metadataPage ? <div className="admin-page metadata-page">
