@@ -14,6 +14,7 @@ const server = await createServer({
 });
 after(() => server.close());
 const { default: Tree } = await server.ssrLoadModule("/src/SearchApp/PhylogeneticTree.tsx");
+const { PublicConfigContext } = await server.ssrLoadModule("/src/shared/publicConfig.ts");
 
 test("public tree rank controls follow numeric hierarchy and selected taxonomy", () => {
   const response = { data: [], metadata: [
@@ -33,4 +34,16 @@ test("public tree rank controls follow numeric hierarchy and selected taxonomy",
       ["1. Family", "2. Accepted genus", "3. Species"]);
   }
   assert.deepEqual(response, before);
+});
+
+test("tree taxonomy tooltip uses deployed public config", () => {
+  const response = { data: [], metadata: [
+    { column: "species", name: "Species", type: "search table_specie clas[0]" },
+    { column: "genus", name: "Genus", type: "table_specie clas[1]" },
+  ] };
+  const html = renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: ["/tree"] },
+    createElement(PublicConfigContext.Provider, { value: { taxonomy_info: "Configured taxonomy documentation" } },
+      createElement(Tree, { response }))));
+  assert.match(html, /Configured taxonomy documentation/);
+  assert.doesNotMatch(html, /Pimenov/);
 });

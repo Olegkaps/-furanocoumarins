@@ -39,6 +39,11 @@ type Config struct {
 	S3UsePathStyle bool          `env:"S3_USE_PATH_STYLE" env-default:"true"`
 	SearchCacheTTL time.Duration `env:"SEARCH_CACHE_TTL" env-default:"5m"`
 	AuthMasterURL  string        `env:"AUTH_MASTER_URL" env-default:"http://authd:8080"`
+	// Public copy for taxonomy controls is deployed with the backend because
+	// workbook classifications and their sources are administrator-configured.
+	TaxonomyInfo                    string `env:"TAXONOMY_INFO" env-default:"Taxonomy according to NCBI is given starting with subtribes. Taxonomy of genus and species is given according to original articles, POWO site and Pimenov (the expert in Apiaceae taxonomy) opinion."`
+	ClassificationAutocompleteLabel string `env:"CLASSIFICATION_AUTOCOMPLETE_LABEL" env-default:"genus + species"`
+	ClassificationAutocompleteHint  string `env:"CLASSIFICATION_AUTOCOMPLETE_HINT" env-default:"Generated from the genus and species columns."`
 
 	// API use requires explicit opt-in; neither credentials nor a model default enable it.
 	AliceAPIEnabled bool   `env:"ALICE_API_ENABLED" env-default:"false"`

@@ -59,3 +59,12 @@ func TestLocalDefaultsMatchBrowserOriginAndAllowCredentials(t *testing.T) {
 		t.Fatalf("local CORS = origins %q credentials %v", config.AllowOrigins, config.AllowCredentials)
 	}
 }
+
+func TestPublicClassificationCopyIsEnvironmentBacked(t *testing.T) {
+	for _, fieldName := range []string{"TaxonomyInfo", "ClassificationAutocompleteLabel", "ClassificationAutocompleteHint"} {
+		field, ok := reflect.TypeOf(Config{}).FieldByName(fieldName)
+		if !ok || field.Tag.Get("env") == "" || field.Tag.Get("env-default") == "" {
+			t.Fatalf("%s must be environment-backed public copy: %+v", fieldName, field)
+		}
+	}
+}

@@ -43,6 +43,21 @@ func TestNewAppPing(t *testing.T) {
 	require.Equal(t, fiber.StatusOK, resp.StatusCode)
 }
 
+func TestNewAppConfigIsPublic(t *testing.T) {
+	container, err := app.New(app.Options{EnvType: "TEST"})
+	require.NoError(t, err)
+
+	resp, err := presentation.NewApp(container).Test(httptest.NewRequest(fiber.MethodGet, "/config", nil))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, fiber.StatusOK, resp.StatusCode)
+	var body map[string]string
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	require.NotEmpty(t, body["taxonomy_info"])
+	require.NotEmpty(t, body["classification_autocomplete_label"])
+	require.NotEmpty(t, body["classification_autocomplete_hint"])
+}
+
 func TestEveryDomainMutationDeniesAuthenticatedNonAdmin(t *testing.T) {
 	container, err := app.New(app.Options{EnvType: "TEST", AuthMaster: &routeAuth{admin: false}})
 	require.NoError(t, err)

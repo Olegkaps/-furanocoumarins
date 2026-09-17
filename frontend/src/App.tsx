@@ -19,6 +19,7 @@ import HistoryPage from "./SearchApp/HistoryPage";
 import CachePage from "./SearchApp/CachePage";
 import { CacheSchemaBanner } from "./shared/CacheSchemaBanner";
 import { restoreCookieSession } from "./shared/api";
+import { PublicConfigProvider } from "./shared/PublicConfigProvider";
 
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
   }
 
   return (
+    <PublicConfigProvider>
     <BrowserRouter>
       <div className="app-shell">
         <div className="app-shell__main">
@@ -63,6 +65,7 @@ function App() {
         <SiteFooter />
       </div>
     </BrowserRouter>
+    </PublicConfigProvider>
   )
 }
 

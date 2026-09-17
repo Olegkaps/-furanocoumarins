@@ -64,6 +64,7 @@ export function InfoTip({
         type="button"
         className="info-tip__button"
         aria-label={label ?? "More information"}
+        title={text}
         aria-describedby={open ? tipId : undefined}
         aria-expanded={open}
       >

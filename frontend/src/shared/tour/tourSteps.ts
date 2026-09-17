@@ -35,14 +35,14 @@ function queryHelpSteps(target?: string): TourStep[] {
       target,
       title: "Operators and values",
       body: "Use = for exact text, != for different text, and LIKE for case-insensitive patterns (% matches any length, _ matches one character). CONTAINS matches one exact member of a set. Text also supports <, <=, > and >= as text comparisons, not numeric comparisons.",
-      examples: ["names LIKE 'Neo%'", "type_structure CONTAINS 'ang'"],
+      examples: ["column LIKE 'prefix%'", "set_column CONTAINS 'one member'"],
       placement: "side",
     },
     {
       target,
       title: "AND, OR and parentheses",
-      body: "AND requires both conditions; OR accepts either. AND binds more tightly than OR. Parentheses group conditions and can be nested. Write AND, OR, LIKE and CONTAINS in uppercase. These examples use columns from the furanocoumarin dataset.",
-      examples: ["familia = 'Apiaceae' AND (type_structure CONTAINS 'ang' OR type_structure CONTAINS 'lin')"],
+      body: "AND requires both conditions; OR accepts either. AND binds more tightly than OR. Parentheses group conditions and can be nested. Write AND, OR, LIKE and CONTAINS in uppercase.",
+      examples: ["column_a = 'value' AND (set_column CONTAINS 'one member' OR column_b = 'other value')"],
       placement: "side",
     },
     {

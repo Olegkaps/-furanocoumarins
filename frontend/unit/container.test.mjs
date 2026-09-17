@@ -18,6 +18,7 @@ test("frontend container serves the SPA without nginx PID files", () => {
   assert.match(caddyfile, /^\s*try_files \{path\} \/index\.html$/m);
   assert.match(caddyfile, /^\s*file_server$/m);
   assert.match(caddyfile, /^\s*\/auth\/\* \\$/m);
+  assert.match(caddyfile, /^\s*\/config \\$/m);
   assert.match(caddyfile, /^\s*\/get-tables-list \\$/m);
   assert.match(caddyfile, /^\s*@search_api \{$/m);
   assert.match(caddyfile, /^\s*path \/search$/m);

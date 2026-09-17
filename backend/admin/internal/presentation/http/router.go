@@ -15,6 +15,7 @@ import (
 	"admin/internal/app"
 	authmasterhandler "admin/internal/presentation/http/authmaster"
 	bibtexhandler "admin/internal/presentation/http/bibtex"
+	confighandler "admin/internal/presentation/http/config"
 	createhandler "admin/internal/presentation/http/create"
 	pageshandler "admin/internal/presentation/http/pages"
 	publicationhandler "admin/internal/presentation/http/publicationreader"
@@ -57,7 +58,9 @@ func NewApp(container *app.Container) *fiber.App {
 	bibtex := bibtexhandler.NewHandler(container)
 	pages := pageshandler.NewHandler(container)
 	create := createhandler.NewHandler(container)
+	config := confighandler.New(settings.C)
 
+	app.Get("/config", config.Get)
 	app.Get("/metadata", search.GetCurrentMetadata)
 	app.Get("/autocomplete", search.Autocomplete)
 	app.Get("/autocomplete/:column", search.Autocomplete)

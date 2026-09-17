@@ -16,6 +16,8 @@ const pair = [
 ];
 test("classification uses ranks and matching tags, respecting search and ambiguity", () => {
   assert.equal(withClassificationColumn(pair).at(-1).column, "__classification_name");
+  assert.equal(withClassificationColumn(pair).at(-1).show_name, "epithet + taxon_parent");
+  assert.equal(withClassificationColumn(pair, "Configured parent + child").at(-1).show_name, "Configured parent + child");
   assert.deepEqual(classificationRanks([pair[0]]), []);
   assert.deepEqual(classificationRanks([pair[0], { ...pair[1], type: "clas[1] specie" }]), []);
   assert.deepEqual(classificationRanks([pair[0], { ...pair[1], type: "search clas[1][other]" }]), []);

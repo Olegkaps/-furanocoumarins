@@ -15,6 +15,7 @@ import { InfoTip } from "../shared/ui/InfoTip";
 import { QueryCompareBar, type CompareSeries } from "./QueryCompareBar";
 import { hasMetadataTypeToken } from "../shared/metadataType";
 import { selectTreeTaxonomy } from "./treeTaxonomy";
+import { usePublicConfig } from "../shared/publicConfig";
 import {
   appendCladeClause,
   readCompareQueriesFromParams,
@@ -1507,9 +1508,6 @@ function PhilogeneticTree({
   );
 }
 
-const TAXONOMY_INFO =
-  "Taxonomy according to NCBI is given starting with subtribes. Taxonomy of genus and species is given according to original articles, POWO site and Pimenov (the expert in Apiaceae taxonomy) opinion.";
-
 const DEPTH_INFO =
   "Limits which taxonomic ranks are drawn. Levels before “from” are folded into one path stem; levels after “to” are hidden. Counts are unchanged. If “to” is not set, it is chosen automatically so at most a configured number of leaf tips are drawn.";
 
@@ -1528,6 +1526,7 @@ function PhilogeneticTreeOrNull({
   primaryQuery?: string;
   compareBarPrimaryQuery?: string;
 }) {
+  const publicConfig = usePublicConfig();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const tag = searchParams.get("tag") || "original";
@@ -1649,7 +1648,7 @@ function PhilogeneticTreeOrNull({
       <div className="tree-toolbar__group" data-tour="tree-taxonomy">
         <span className="tree-toolbar__label">
           Select classification
-          <InfoTip text={TAXONOMY_INFO} label="About taxonomy sources" />
+          {publicConfig.taxonomy_info && <InfoTip text={publicConfig.taxonomy_info} label="About taxonomy sources" />}
         </span>
         <div className="tree-toolbar__buttons">
           {taxonomy.tags.map((item) => (

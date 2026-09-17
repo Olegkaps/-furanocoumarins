@@ -27,6 +27,8 @@ import "./UnifiedSearch.css";
 
 import { StructureDrawer } from "./StructureDrawer";
 import { MoleculePreview } from "./MoleculePreview";
+import { usePublicConfig } from "../shared/publicConfig";
+import { ClassificationAutocompleteNote } from "./ClassificationAutocompleteNote";
 type Column = {
   column: string;
   name?: string;
@@ -65,7 +67,12 @@ function SearchApp() {
   const navigate = useNavigate();
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
-  const [columns, setColumns] = useState<Column[]>([]);
+  const [metadataColumns, setMetadataColumns] = useState<Column[]>([]);
+  const publicConfig = usePublicConfig();
+  const columns = useMemo(
+    () => withClassificationColumn(metadataColumns, publicConfig.classification_autocomplete_label),
+    [metadataColumns, publicConfig.classification_autocomplete_label],
+  );
   const [value, setValue] = useState("");
   const [filter, setFilter] = useState<string[] | null>(null);
   const [structure, setStructure] = useState(false);
@@ -88,7 +95,7 @@ function SearchApp() {
       .then((response) => {
         if (!live) return;
         guardMetadataCatalog(response.data?.metadata, response.data);
-        setColumns(withClassificationColumn((response.data.metadata ?? []).filter((c: Column) => hasMetadataTypeToken(c.type, "search") || hasMetadataTypeToken(c.type, "SMILES"))));
+        setMetadataColumns((response.data.metadata ?? []).filter((c: Column) => hasMetadataTypeToken(c.type, "search") || hasMetadataTypeToken(c.type, "SMILES")));
       })
       .catch(() => {
         if (live)
@@ -407,7 +414,7 @@ function SearchApp() {
                             )
                           }
                         />
-                        <span>{label(c)}{c.column === classificationColumn && <small id={`${id}-generated-classification`} className="unified-search__generated-note">Generated from the genus and species columns.</small>}</span>
+                        <span>{label(c)}{c.column === classificationColumn && <ClassificationAutocompleteNote id={`${id}-generated-classification`} />}</span>
                       </label>
                     ))}
                     </div>

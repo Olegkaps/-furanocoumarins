@@ -20,9 +20,14 @@ export function classificationRanks(columns: SearchColumn[]): SearchColumn[][] {
     .map(ranks => ranks.map(rank => rank[0]));
 }
 
-export function withClassificationColumn(columns: SearchColumn[]): SearchColumn[] {
-  return classificationRanks(columns).length
-    ? [...columns, { column: classificationColumn, show_name: "genus + species", type: "search specie" }]
+export function withClassificationColumn(columns: SearchColumn[], displayName?: string): SearchColumn[] {
+  const ranks = classificationRanks(columns);
+  return ranks.length
+    ? [...columns, {
+      column: classificationColumn,
+      show_name: displayName || ranks[0].map(column => column.show_name || column.name || column.column).join(" + "),
+      type: "search specie",
+    }]
     : columns;
 }
 
