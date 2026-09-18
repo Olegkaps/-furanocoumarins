@@ -2,6 +2,7 @@ export type TaxonLink = { rank: number; name: string; source_column?: string };
 
 export type Taxon = TaxonLink & {
   title: string;
+  query_column?: string;
   parent?: TaxonLink;
   children: TaxonLink[];
 };

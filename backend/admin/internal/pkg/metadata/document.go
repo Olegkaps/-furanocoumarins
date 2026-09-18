@@ -35,26 +35,28 @@ type Classification struct {
 	Tag   string `json:"tag,omitempty"`
 }
 type Column struct {
-	Name           string          `json:"name"`
-	Label          string          `json:"label,omitempty"`
-	Description    string          `json:"description,omitempty"`
-	Example        *string         `json:"example,omitempty"`
-	DataType       string          `json:"data_type"`
-	PrimaryKey     bool            `json:"primary_key,omitempty"`
-	ExternalSheet  string          `json:"external_sheet,omitempty"`
-	DefaultColumn  string          `json:"default_column,omitempty"`
-	Search         bool            `json:"search,omitempty"`
-	ShowInResults  bool            `json:"show_in_results,omitempty"`
-	ResultOrder    *int            `json:"result_order,omitempty"`
-	Domain         string          `json:"domain,omitempty"`
-	Reference      bool            `json:"reference,omitempty"`
-	Smiles         bool            `json:"smiles,omitempty"`
-	ListName       bool            `json:"list_name,omitempty"`
-	Hidden         bool            `json:"hidden,omitempty"`
-	Classification *Classification `json:"classification,omitempty"`
-	LinkTemplate   string          `json:"link_template,omitempty"`
-	SetChoices     []string        `json:"set_choices,omitempty"`
-	LegacyFlags    []string        `json:"legacy_flags,omitempty"`
+	Name               string          `json:"name"`
+	Label              string          `json:"label,omitempty"`
+	Description        string          `json:"description,omitempty"`
+	Example            *string         `json:"example,omitempty"`
+	DataType           string          `json:"data_type"`
+	PrimaryKey         bool            `json:"primary_key,omitempty"`
+	ExternalSheet      string          `json:"external_sheet,omitempty"`
+	DefaultColumn      string          `json:"default_column,omitempty"`
+	Search             bool            `json:"search,omitempty"`
+	ShowInResults      bool            `json:"show_in_results,omitempty"`
+	ResultOrder        *int            `json:"result_order,omitempty"`
+	ShowOnChemicalPage bool            `json:"show_on_chemical_page,omitempty"`
+	ShowOnSpeciesPage  bool            `json:"show_on_species_page,omitempty"`
+	Domain             string          `json:"domain,omitempty"`
+	Reference          bool            `json:"reference,omitempty"`
+	Smiles             bool            `json:"smiles,omitempty"`
+	ListName           bool            `json:"list_name,omitempty"`
+	Hidden             bool            `json:"hidden,omitempty"`
+	Classification     *Classification `json:"classification,omitempty"`
+	LinkTemplate       string          `json:"link_template,omitempty"`
+	SetChoices         []string        `json:"set_choices,omitempty"`
+	LegacyFlags        []string        `json:"legacy_flags,omitempty"`
 }
 
 // Decode rejects misspellings rather than silently discarding editor fields.
@@ -233,6 +235,16 @@ func (d Document) Validate() error {
 					return fmt.Errorf("main is the root sheets group and cannot be a join target")
 				}
 			}
+			domain := c.Domain
+			if inferred != "" {
+				domain = inferred
+			}
+			if c.ShowOnChemicalPage && (domain != "chemical" || c.Hidden) {
+				return fmt.Errorf("show_on_chemical_page is only available for visible chemical column %s.%s", s.Name, c.Name)
+			}
+			if c.ShowOnSpeciesPage && (domain != "species" || c.Hidden) {
+				return fmt.Errorf("show_on_species_page is only available for visible species column %s.%s", s.Name, c.Name)
+			}
 			if c.ResultOrder != nil && (!c.ShowInResults || *c.ResultOrder < 0 || *c.ResultOrder > 9999) {
 				return fmt.Errorf("result_order needs show_in_results and must be 0..9999")
 			}
@@ -284,6 +296,20 @@ func (d Document) Validate() error {
 				}
 			}
 		}
+	}
+	chemicalPages, speciesPages := 0, 0
+	for _, s := range d.Sheets {
+		for _, c := range s.Columns {
+			if c.ShowOnChemicalPage {
+				chemicalPages++
+			}
+			if c.ShowOnSpeciesPage {
+				speciesPages++
+			}
+		}
+	}
+	if chemicalPages > 7 || speciesPages > 7 {
+		return fmt.Errorf("at most seven fields may be shown on each entity page")
 	}
 	if _, ok := sheets["main"]; !ok {
 		return fmt.Errorf("main sheet is required")
@@ -402,7 +428,7 @@ func inferredDomain(sheet, external string) string {
 
 func reservedFlag(s string) bool {
 	switch s {
-	case "primary", "search", "invisible", "set", "SMILES", "smiles", "list_name", "chemical", "specie", "publication", "external", "default", "clas", "link":
+	case "primary", "search", "invisible", "set", "SMILES", "smiles", "list_name", "chemical", "specie", "publication", "chemical_page", "species_page", "external", "default", "clas", "link":
 		return true
 	}
 	return strings.HasPrefix(s, "table_")
@@ -479,6 +505,8 @@ func (c Column) LegacyType() string {
 	add(c.Reference, "ref[]")
 	add(c.Smiles, "SMILES")
 	add(c.ListName, "list_name")
+	add(c.ShowOnChemicalPage, "chemical_page")
+	add(c.ShowOnSpeciesPage, "species_page")
 	if c.DataType == "set" {
 		if len(c.SetChoices) > 0 {
 			flags = append(flags, "set["+strings.Join(c.SetChoices, " ")+"]")
@@ -540,6 +568,10 @@ func ColumnFromLegacy(row []string) (Column, error) {
 			c.Domain = "species"
 		case "publication":
 			c.Domain = "publication"
+		case "chemical_page":
+			c.ShowOnChemicalPage = true
+		case "species_page":
+			c.ShowOnSpeciesPage = true
 		case "ref[]":
 			c.Reference = true
 		case "set", "set[<>]":

@@ -21,9 +21,10 @@ type TaxonLink struct {
 
 type Taxon struct {
 	TaxonLink
-	Title    string      `json:"title"`
-	Parent   *TaxonLink  `json:"parent,omitempty"`
-	Children []TaxonLink `json:"children"`
+	Title       string      `json:"title"`
+	QueryColumn string      `json:"query_column,omitempty"`
+	Parent      *TaxonLink  `json:"parent,omitempty"`
+	Children    []TaxonLink `json:"children"`
 }
 
 type taxonomyColumn struct {
@@ -144,7 +145,7 @@ func effectiveTaxonomyTag(tag string) string {
 }
 
 func buildTaxon(columns []taxonomyColumn, requested int, name string, rows [][]string) *Taxon {
-	result := &Taxon{TaxonLink: TaxonLink{Rank: columns[requested].rank, Name: name}, Title: name, Children: []TaxonLink{}}
+	result := &Taxon{TaxonLink: TaxonLink{Rank: columns[requested].rank, Name: name}, Title: name, QueryColumn: columns[requested].name, Children: []TaxonLink{}}
 	if columns[requested].rank == 0 {
 		if genus := firstRankValue(columns, rows, 1); genus != "" && !strings.EqualFold(genus, name) {
 			result.Title = genus + " " + name
@@ -192,15 +193,6 @@ func firstValue(rows [][]string, index int) string {
 		return ""
 	}
 	return values[0]
-}
-
-func valueAtRank(columns []taxonomyColumn, row []string, rank int) string {
-	for i, column := range columns {
-		if column.rank == rank {
-			return row[i]
-		}
-	}
-	return ""
 }
 
 func firstRankValue(columns []taxonomyColumn, rows [][]string, rank int) string {

@@ -4,6 +4,9 @@ import FullNavigation from "../FullNavigation/FullNavigation";
 import { EditablePageContent } from "../features/editable-page/EditablePageContent";
 import { useEditablePage } from "../features/editable-page/useEditablePage";
 import { api } from "../shared/api";
+import { EntityDetailTable } from "../SearchApp/EntityDetailTable";
+import { entityCondition, entityPageColumns, rowFromEntitySearch } from "../SearchApp/entityPageDetails";
+import DataMeta from "../SearchApp/DataMeta";
 import { type Taxon, taxonChildLabel, taxonPageName, taxonPath } from "./taxonPage";
 import "./TaxonomyPage.css";
 
@@ -20,6 +23,7 @@ export default function TaxonPage() {
   const [taxon, setTaxon] = useState<Taxon | null>(null);
   const [loadingTaxon, setLoadingTaxon] = useState(valid);
   const [missing, setMissing] = useState(false);
+  const [details, setDetails] = useState<{ meta: DataMeta[]; row: Map<string, string> } | null>(null);
   const state = useEditablePage(valid ? taxonPageName(rank, name) : null);
 
   useEffect(() => {
@@ -35,6 +39,20 @@ export default function TaxonPage() {
     return () => { current = false; };
   }, [valid, rank, name]);
 
+  useEffect(() => {
+    setDetails(null);
+    if (rank !== 0 || !taxon?.query_column) return;
+    let current = true;
+    void api.get<{ metadata: Array<{ column: string; name: string; description: string; type: string }> }>("/metadata").then(({ data }) => {
+      const meta = entityPageColumns(data.metadata, "species");
+      if (meta.length === 0) return null;
+      const queryMeta = data.metadata.find(column => column.column === taxon.query_column);
+      if (!queryMeta) return null;
+      return api.get<{ metadata: Array<{ column: string; name: string; description: string; type: string }>; data: Array<Record<string, unknown>> }>("/search", { params: { q: entityCondition(queryMeta, name), columns: meta.map(column => column.name).join(","), limit: 2 } }).then(({ data: response }) => ({ meta, row: rowFromEntitySearch(response) }));
+    }).then(value => { if (current) setDetails(value?.row ? { meta: value.meta, row: value.row } : null); }).catch(() => { if (current) setDetails(null); });
+    return () => { current = false; };
+  }, [rank, name, taxon?.query_column]);
+
   if (!valid || missing) return <><FullNavigation /><main style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}><p className="empty-state">Taxon page not found.</p></main></>;
   if (loadingTaxon || state.loading) return <><FullNavigation /><main style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}>Loading…</main></>;
   if (!taxon) return null;
@@ -48,6 +66,7 @@ export default function TaxonPage() {
         {taxon.parent && <nav className="taxon-parent-nav" aria-label="Taxon navigation"><Link to={taxonPath(taxon.parent)}><span aria-hidden="true">←</span><span><small>Parent taxon</small>{taxon.parent.name}</span></Link>{taxon.parent.source_column && <small className="taxon-parent-nav__source">from {taxon.parent.source_column}</small>}</nav>}
         {taxon.children.length > 0 && <section className="taxon-children"><details open><summary><span>Children</span><small>{taxon.children.length}</small></summary><ul>{taxon.children.map(child => <TaxonLinkItem key={`${child.rank}:${child.name}`} parent={taxon} taxon={child} />)}</ul></details></section>}
       </div>}
+      {details && <aside aria-label="Species details" style={{ float: "right", width: "min(340px, 40%)", margin: "0 0 16px 24px" }}><EntityDetailTable meta={details.meta} row={details.row} /></aside>}
       <EditablePageContent {...state} />
     </main>
   </>;

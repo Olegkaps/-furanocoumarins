@@ -14,6 +14,7 @@ import { isEmpty } from "../shared/api";
 import { Container, ScrollableContainer } from "../shared/ui";
 import config from "../config";
 import DataMeta from "./DataMeta";
+import { EntityDetailTable } from "./EntityDetailTable";
 import DataRows from "./RowsData";
 import { type CountMode } from "./PhylogeneticTree";
 import { InfoTip } from "../shared/ui/InfoTip";
@@ -715,44 +716,8 @@ export function RankedSelectList({
   );
 }
 
-function DetailAttributeTable({
-  meta,
-  row,
-  kind,
-}: {
-  meta: DataMeta[];
-  row: Map<string, string>;
-  kind: "chemical" | "specie";
-}) {
-  let markedInfo = false;
-  return (
-    <table style={{ width: "100%", tableLayout: "fixed" }}>
-      <tbody>
-        {meta.map((meta_val, ind) => {
-          if (kind === "chemical") {
-            if (!meta_val.is_chemical || meta_val.type === "smiles") return null;
-          } else if (!meta_val.is_specie || meta_val.classification_level != null) {
-            return null;
-          }
-          const tipTour =
-            !markedInfo && meta_val.description?.trim()
-              ? ((markedInfo = true), "table-detail-info")
-              : undefined;
-          return (
-            <tr key={meta_val.name}>
-              <td style={{ width: "42%", wordBreak: "break-word" }}>
-                <InfoTip text={meta_val.description} dataTour={tipTour} />
-                &nbsp;{meta_val.show_name}
-              </td>
-              <td style={{ width: "58%", wordBreak: "break-word" }}>
-                {meta[ind].render(row.get(meta_val.name))}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
+function DetailAttributeTable({ meta, row, kind }: { meta: DataMeta[]; row: Map<string, string>; kind: "chemical" | "specie" }) {
+  return <EntityDetailTable meta={meta.filter(column => kind === "chemical" ? column.is_chemical && column.type !== "smiles" : column.is_specie && column.classification_level == null)} row={row} />;
 }
 
 function SidePanel({
@@ -1622,6 +1587,8 @@ function ResultTableOrNull({
           {
             isListName: hasMetadataTypeToken(full_type, "list_name"),
             classificationLevel,
+            showOnChemicalPage: hasMetadataTypeToken(full_type, "chemical_page"),
+            showOnSpeciesPage: hasMetadataTypeToken(full_type, "species_page"),
           },
         ),
       );

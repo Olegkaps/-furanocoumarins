@@ -1,7 +1,12 @@
+import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import FullNavigation from "../FullNavigation/FullNavigation";
 import { useEditablePage } from "../features/editable-page/useEditablePage";
 import { EditablePageContent } from "../features/editable-page/EditablePageContent";
+import { api } from "../shared/api";
+import { EntityDetailTable } from "../SearchApp/EntityDetailTable";
+import { entityCondition, entityPageColumns, rowFromEntitySearch } from "../SearchApp/entityPageDetails";
+import DataMeta from "../SearchApp/DataMeta";
 
 function resolveSmiles(
   smilesParam: string | undefined,
@@ -35,6 +40,21 @@ export default function SubstancePage() {
   const smiles = resolveSmiles(smilesEncoded, searchParams);
 
   const state = useEditablePage(smiles);
+  const [details, setDetails] = useState<{ meta: DataMeta[]; row: Map<string, string> } | null>(null);
+
+  useEffect(() => {
+    setDetails(null);
+    if (!smiles) return;
+    let current = true;
+    void api.get<{ metadata: Array<{ column: string; name: string; description: string; type: string }> }>("/metadata").then(({ data }) => {
+      const meta = entityPageColumns(data.metadata, "chemical");
+      const smilesColumn = data.metadata.find(column => /(?:^|\\s)SMILES(?:\\s|$)/.test(column.type))?.column;
+      if (!smilesColumn || meta.length === 0) return null;
+      const smilesMeta = data.metadata.find(column => column.column === smilesColumn)!;
+      return api.get<{ metadata: Array<{ column: string; name: string; description: string; type: string }>; data: Array<Record<string, unknown>> }>("/search", { params: { q: entityCondition(smilesMeta, smiles), columns: meta.map(column => column.name).join(","), limit: 2 } }).then(({ data: response }) => ({ meta, row: rowFromEntitySearch(response) }));
+    }).then(value => { if (current) setDetails(value?.row ? { meta: value.meta, row: value.row } : null); }).catch(() => { if (current) setDetails(null); });
+    return () => { current = false; };
+  }, [smiles]);
 
   if (smiles === null || smiles === "") {
     return (
@@ -85,6 +105,7 @@ export default function SubstancePage() {
         >
           SMILES: {smiles}
         </div>
+        {details && <aside aria-label="Chemical details" style={{ float: "right", width: "min(340px, 40%)", margin: "0 0 16px 24px" }}><EntityDetailTable meta={details.meta} row={details.row} /></aside>}
         <EditablePageContent
           content={state.content}
           error={state.error}

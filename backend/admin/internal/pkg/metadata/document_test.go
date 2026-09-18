@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
@@ -39,7 +40,7 @@ func TestDocumentRejectsInvalidContracts(t *testing.T) {
 	}
 }
 func TestDocumentRoundTripLegacyModifiers(t *testing.T) {
-	for _, legacy := range []string{"", "search table_2 chemical", "primary invisible", "set[alpha beta] search", "set[<>]", "ref[] link[/reference/%s]", "clas[3][powo] table_specie", "external[classification] default[speciesid]", "text keycolumn", "table_chemical list_name"} {
+	for _, legacy := range []string{"", "search table_2 chemical", "primary invisible", "set[alpha beta] search", "set[<>]", "ref[] link[/reference/%s]", "clas[3][powo] table_specie", "external[classification] default[speciesid]", "text keycolumn", "table_chemical list_name", "chemical chemical_page", "specie species_page"} {
 		c, err := ColumnFromLegacy([]string{"main", "value", legacy, "description", "Label"})
 		require.NoError(t, err)
 		again, err := ColumnFromLegacy([]string{"main", "value", c.LegacyType(), "description", "Label"})
@@ -60,6 +61,22 @@ func TestDocumentRoundTripLegacyModifiers(t *testing.T) {
 	require.Error(t, err)
 	_, err = Decode(make([]byte, MaxDocumentBytes+1))
 	require.ErrorContains(t, err, "1 MiB")
+}
+
+func TestEntityPageFieldsRequireVisibleMatchingDomainAndAreBounded(t *testing.T) {
+	d := validDocument()
+	d.Sheets = append(d.Sheets, Sheet{Name: "structures", SourceSheets: []string{"Structures"}, Columns: []Column{{Name: "chemicalid", DataType: "text", PrimaryKey: true}, {Name: "name", DataType: "text", Domain: "chemical", ShowOnChemicalPage: true}}})
+	require.NoError(t, d.Validate())
+	d.Sheets[1].Columns[1].ShowOnChemicalPage = true
+	require.ErrorContains(t, d.Validate(), "show_on_chemical_page")
+	d.Sheets[1].Columns[1].ShowOnChemicalPage = false
+	d.Sheets[2].Columns[1].Hidden = true
+	require.ErrorContains(t, d.Validate(), "show_on_chemical_page")
+	d.Sheets[2].Columns[1].Hidden = false
+	for i := 0; i < 7; i++ {
+		d.Sheets[2].Columns = append(d.Sheets[2].Columns, Column{Name: fmt.Sprintf("field%d", i), DataType: "text", Domain: "chemical", ShowOnChemicalPage: true})
+	}
+	require.ErrorContains(t, d.Validate(), "at most seven")
 }
 
 func TestSharedKeysResolveWithoutChangingSavedDefinition(t *testing.T) {

@@ -33,7 +33,7 @@ function parseDraft(raw: string): Document {
     s && typeof s.name === "string" && Array.isArray(s.source_sheets) && s.source_sheets.every(v => typeof v === "string") &&
     Array.isArray(s.columns) && s.columns.every(c => c && typeof c.name === "string" && ["text", "set"].includes(c.data_type) &&
       (["label", "description", "external_sheet", "default_column", "domain", "link_template"] as const).every(key => c[key] === undefined || typeof c[key] === "string") &&
-      (["primary_key", "search", "show_in_results", "reference", "smiles", "list_name", "hidden"] as const).every(key => c[key] === undefined || typeof c[key] === "boolean") &&
+      (["primary_key", "search", "show_in_results", "show_on_chemical_page", "show_on_species_page", "reference", "smiles", "list_name", "hidden"] as const).every(key => c[key] === undefined || typeof c[key] === "boolean") &&
       (c.result_order == null || typeof c.result_order === "number") &&
       (c.example == null || typeof c.example === "string") &&
       (c.legacy_flags === undefined || Array.isArray(c.legacy_flags) && c.legacy_flags.every(v => typeof v === "string")) &&
@@ -236,7 +236,7 @@ function ColumnEditor({ column: c, resolvedColumn, sheet, sheets, onChange, onRe
   const inferredDomain = columnDomain(sheet.name, { ...c, external_sheet: target, domain: undefined });
   const domain = inferredDomain || c.domain;
   const text = (key: "name" | "label" | "description" | "link_template", label: string) => <label>{label}<input value={c[key] ?? ""} onChange={e => onChange({ ...c, [key]: e.target.value })} /></label>;
-  const flags: [keyof Column, string][] = [["search", "Use in search"], ["show_in_results", "Show in results table"], ["reference", "Publication references"], ...(domain === "chemical" ? [["smiles", "SMILES structure"] as [keyof Column, string], ["list_name", "Use as chemical list name"] as [keyof Column, string]] : []), ["hidden", "Hide from all result views (overrides display)"]];
+  const flags: [keyof Column, string][] = [["search", "Use in search"], ["show_in_results", "Show in results table"], ...(domain === "chemical" ? [["show_on_chemical_page", "Show on chemical page"] as [keyof Column, string], ["smiles", "SMILES structure"] as [keyof Column, string], ["list_name", "Use as chemical list name"] as [keyof Column, string]] : domain === "species" ? [["show_on_species_page", "Show on species page"] as [keyof Column, string]] : []), ["reference", "Publication references"], ["hidden", "Hide from all result views (overrides display)"]];
   const title = `${c.name || "New column"}${c.primary_key ? " · Primary key" : ""}`;
   return <details className="metadata-column" data-sheet={sheet.name} data-column={c.name}>
     <summary>{title}</summary>
@@ -249,7 +249,7 @@ function ColumnEditor({ column: c, resolvedColumn, sheet, sheets, onChange, onRe
       <label>Example (optional)<input value={c.example ?? ""} placeholder={`value from column ${c.name || "X"}`} onChange={e => onChange({ ...c, example: e.target.value === "" ? null : e.target.value })} /><small>Empty is stored as null. It never prevents a preview.</small></label>
       {c.show_in_results && <label>Result position (optional, starts at 0)<input type="number" min="0" step="1" value={c.result_order ?? ""} onChange={e => onChange({ ...c, result_order: e.target.value === "" ? undefined : Number(e.target.value) })} /></label>}
     </div>
-    <div className="metadata-flags">{flags.map(([key, label]) => <label key={key}><input type="checkbox" checked={Boolean(c[key])} onChange={e => onChange({ ...c, [key]: e.target.checked, ...(key === "show_in_results" && !e.target.checked ? { result_order: undefined } : {}) })} />{label}</label>)}</div>
+    <div className="metadata-flags">{flags.map(([key, label]) => <label key={key}><input type="checkbox" checked={Boolean(c[key])} onChange={e => onChange({ ...c, [key]: e.target.checked, ...(key === "show_in_results" && !e.target.checked ? { result_order: undefined } : {}), ...(key === "hidden" && e.target.checked ? { show_on_chemical_page: undefined, show_on_species_page: undefined } : {}) })} />{label}</label>)}</div>
     {c.data_type === "set" && <small>Available values come from imported data.</small>}
     {c.smiles && domain !== "chemical" && <p role="alert">SMILES is only allowed for chemicals. <button type="button" className="btn" onClick={() => onChange({ ...c, smiles: undefined })}>Remove SMILES setting</button></p>}
     {c.list_name && domain !== "chemical" && <p role="alert">Chemical list names are only allowed for chemicals. <button type="button" className="btn" onClick={() => onChange({ ...c, list_name: undefined })}>Remove list-name setting</button></p>}
