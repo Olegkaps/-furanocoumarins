@@ -54,14 +54,21 @@ test("sample query follows text/set operators and only includes current preview 
   assert.equal(previewValue(field("tags", { example: "" })), "");
 });
 
-test("publication columns are supported without inventing future search controls", () => {
+test("reachable publication search columns appear in the public search preview", () => {
   const doc = document(); doc.schema_version = 2;
   doc.sheets[0].columns.push(field("unused", { external_sheet: "publications", search: true, show_in_results: true }));
   const model = buildMetadataPreview(doc);
   assert.deepEqual(model.errors, []);
   assert.equal(model.columns.find(c => c.name === "unused").domain, "publication");
   assert.ok(model.results.some(c => c.name === "unused"));
-  assert.ok(!model.search.some(c => c.name === "unused"));
+  assert.ok(model.search.some(c => c.name === "unused"));
+});
+
+test("reference fields enter the preview search catalog without needing a search flag", () => {
+  const doc = document();
+  doc.sheets[0].columns.push(field("reference_id", { reference: true }));
+  const model = buildMetadataPreview(doc);
+  assert.ok(model.search.some(column => column.name === "reference_id"));
 });
 
 test("sharing non-key columns preserves their inferred entity and settings", () => {
@@ -96,6 +103,20 @@ test("structure previews respect cell rendering precedence and are not duplicate
   model = buildMetadataPreview(doc);
   assert.ok(model.chemicals.some(c => c.name === "smiles"));
   assert.deepEqual(model.structures, []);
+});
+
+test("entity page previews use their own selected fields, independently of search and result fields", () => {
+  const doc = document();
+  const chemical = doc.sheets[2].columns.find(c => c.name === "chemical");
+  const species = doc.sheets[1].columns.find(c => c.name === "species");
+  chemical.show_on_chemical_page = true;
+  species.show_on_species_page = true;
+  doc.sheets[2].columns.push(field("chemical_note", { show_on_chemical_page: true }));
+  doc.sheets[1].columns.push(field("species_note", { show_on_species_page: true }));
+  const model = buildMetadataPreview(doc);
+  assert.deepEqual(model.chemicalPage.map(c => c.name), ["chemical", "chemical_note"]);
+  assert.deepEqual(model.speciesPage.map(c => c.name), ["species", "species_note"]);
+  assert.deepEqual(model.results.map(c => c.name), ["note"]);
 });
 
 test("classification levels descend and equal levels share a row across classification systems", () => {

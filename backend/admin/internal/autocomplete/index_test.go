@@ -101,13 +101,17 @@ func TestHomeSearchScopeHonorsMetadataFlags(t *testing.T) {
 		{Suggestion: Suggestion{Column: "hidden", Type: "text", Value: "value"}},
 		{Suggestion: Suggestion{Column: "fake", Type: "set[search smiles]", Value: "value"}},
 		{Suggestion: Suggestion{Column: "structure", Type: "SMILES", Value: "CC"}},
+		{Suggestion: Suggestion{Column: "reference", Type: "ref[]", Value: "paper-1"}},
 	}
-	idx, err := New(context.Background(), entries, []string{"enabled", "hidden", "fake", "structure"})
+	idx, err := New(context.Background(), entries, []string{"enabled", "hidden", "fake", "structure", "reference"})
 	require.NoError(t, err)
 	defer idx.Close()
 	columns, err := idx.SearchColumns(nil)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"enabled", "structure"}, columns)
+	require.ElementsMatch(t, []string{"enabled", "structure", "reference"}, columns)
+	columns, err = idx.SearchColumns([]string{"reference"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"reference"}, columns)
 	columns, err = idx.SearchColumns([]string{"hidden"})
 	require.NoError(t, err)
 	require.Empty(t, columns)

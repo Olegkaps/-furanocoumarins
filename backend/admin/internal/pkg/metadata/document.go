@@ -297,20 +297,6 @@ func (d Document) Validate() error {
 			}
 		}
 	}
-	chemicalPages, speciesPages := 0, 0
-	for _, s := range d.Sheets {
-		for _, c := range s.Columns {
-			if c.ShowOnChemicalPage {
-				chemicalPages++
-			}
-			if c.ShowOnSpeciesPage {
-				speciesPages++
-			}
-		}
-	}
-	if chemicalPages > 7 || speciesPages > 7 {
-		return fmt.Errorf("at most seven fields may be shown on each entity page")
-	}
 	if _, ok := sheets["main"]; !ok {
 		return fmt.Errorf("main sheet is required")
 	}

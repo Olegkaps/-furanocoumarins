@@ -101,6 +101,7 @@ class DataMeta {
   is_specie: boolean
   is_list_name: boolean
   classification_level: number | null
+  classification_tag: string | null
   show_on_chemical_page: boolean
   show_on_species_page: boolean
 
@@ -111,7 +112,7 @@ class DataMeta {
     description: string,
     data: string,
     group_type: string,
-    options: { isListName?: boolean; classificationLevel?: number | null; showOnChemicalPage?: boolean; showOnSpeciesPage?: boolean } = {},
+    options: { isListName?: boolean; classificationLevel?: number | null; classificationTag?: string | null; showOnChemicalPage?: boolean; showOnSpeciesPage?: boolean } = {},
   ) {
     // TO DO: validate type
     this.type = type
@@ -125,6 +126,7 @@ class DataMeta {
     this.is_grouping = this.is_chemical || this.is_specie
     this.is_list_name = options.isListName ?? false
     this.classification_level = options.classificationLevel ?? null
+    this.classification_tag = options.classificationTag ?? null
     this.show_on_chemical_page = options.showOnChemicalPage ?? false
     this.show_on_species_page = options.showOnSpeciesPage ?? false
   }

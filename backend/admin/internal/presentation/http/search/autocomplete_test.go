@@ -86,6 +86,38 @@ func TestAutocompleteHTTPContracts(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestAutocompleteSearchScopeIncludesReferenceColumns(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	store := cassandra.NewPostgresStore(db)
+	h := NewHandler(&app.Container{Cassandra: store})
+	server := fiber.New()
+	server.Get("/autocomplete", h.Autocomplete)
+	version := func() {
+		mock.ExpectQuery("SELECT table_data,table_meta").WillReturnRows(sqlmock.NewRows([]string{"data", "meta", "key"}).AddRow("chemdb.data", "chemdb.meta", "v1"))
+	}
+	version()
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT "column",show_name,type`).WillReturnRows(sqlmock.NewRows([]string{"column", "show_name", "type"}).AddRow("reference", "Publication", "ref[]"))
+	mock.ExpectQuery("SELECT article_id,bibtex_text").WillReturnRows(sqlmock.NewRows([]string{"id", "text"}).AddRow("paper-1", "title={Phototoxic coumarins}"))
+	mock.ExpectQuery("SELECT DISTINCT member.value").WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("paper-1"))
+	mock.ExpectCommit()
+	version()
+	resp, err := server.Test(httptest.NewRequest("GET", "/autocomplete?scope=search&value=phototoxic", nil))
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+	var body struct {
+		Suggestions []autocomplete.Suggestion `json:"suggestions"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	require.NoError(t, resp.Body.Close())
+	require.Len(t, body.Suggestions, 1)
+	require.Equal(t, "reference", body.Suggestions[0].Column)
+	require.Equal(t, "publications", body.Suggestions[0].Group)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestSearchStructureFailureStatus(t *testing.T) {
 	for _, tc := range []struct {
 		err    error

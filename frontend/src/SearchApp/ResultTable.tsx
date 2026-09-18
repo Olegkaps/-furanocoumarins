@@ -717,7 +717,7 @@ export function RankedSelectList({
 }
 
 function DetailAttributeTable({ meta, row, kind }: { meta: DataMeta[]; row: Map<string, string>; kind: "chemical" | "specie" }) {
-  return <EntityDetailTable meta={meta.filter(column => kind === "chemical" ? column.is_chemical && column.type !== "smiles" : column.is_specie && column.classification_level == null)} row={row} />;
+  return <EntityDetailTable meta={meta.filter(column => kind === "chemical" ? column.is_chemical && column.type !== "smiles" : column.is_specie)} row={row} />;
 }
 
 function SidePanel({
@@ -1539,6 +1539,7 @@ function ResultTableOrNull({
       let data_type = "";
       let additional_data = "";
       let classificationLevel: number | null = null;
+      let classificationTag: string | null = null;
 
       const full_type = meta_item["type"];
       const linkModifier = getMetadataTypeModifier(full_type, "link");
@@ -1555,6 +1556,7 @@ function ResultTableOrNull({
       }
       if (classificationModifier && /^\d+$/.test(classificationModifier[0])) {
         classificationLevel = Number(classificationModifier[0]);
+        classificationTag = classificationModifier[1] === undefined || classificationModifier[1] === "default" || classificationModifier[1] === "original" ? "original" : classificationModifier[1];
       }
 
       if (hasMetadataTypeToken(full_type, "chemical")) {
@@ -1573,7 +1575,10 @@ function ResultTableOrNull({
       } else if (hasMetadataTypeToken(full_type, "specie") || classificationModifier) {
         group_type = "specie";
       }
-      if (!hasMetadataTypeToken(full_type, "table_") && !classificationModifier) {
+      // Result placement is opt-in. Classification still carries its rank and
+      // source metadata when selected, but must not leak every taxonomy column
+      // into result-side entity panels merely because it is classification.
+      if (!hasMetadataTypeToken(full_type, "table_")) {
         group_type = "ignore";
       }
       data_meta.push(
@@ -1586,7 +1591,7 @@ function ResultTableOrNull({
           group_type,
           {
             isListName: hasMetadataTypeToken(full_type, "list_name"),
-            classificationLevel,
+            classificationLevel, classificationTag,
             showOnChemicalPage: hasMetadataTypeToken(full_type, "chemical_page"),
             showOnSpeciesPage: hasMetadataTypeToken(full_type, "species_page"),
           },

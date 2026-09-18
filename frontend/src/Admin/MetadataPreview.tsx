@@ -1,12 +1,16 @@
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { BookOpen, BranchesRight, ChevronDown, ChevronRight, Magnifier, Molecule } from "@gravity-ui/icons";
-import { buildMetadataPreview, classificationRows, previewQuery, previewValue, type MetadataDocument, type MetadataPreviewModel, type PreviewColumn } from "./metadataPreviewModel";
+import { BookOpen, BranchesRight, Molecule } from "@gravity-ui/icons";
+import { buildMetadataPreview, classificationRows, previewValue, type MetadataDocument, type MetadataPreviewModel, type PreviewColumn } from "./metadataPreviewModel";
 import { safeMetadataLink } from "../shared/metadataType";
-import Autocomplete from "../SearchApp/Autocomplete";
+import { SearchForm, type SearchColumn } from "../SearchApp/SearchApp";
+import DataMeta from "../SearchApp/DataMeta";
 import { Container } from "../shared/ui";
 import { InfoTip } from "../shared/ui/InfoTip";
+import { ChemicalPageView } from "../SubstancePage/SubstancePage";
+import { TaxonPageView } from "../TaxonPage/TaxonomyPage";
+import { ReadOnlyPageContent } from "../features/editable-page/EditablePageContent";
 
-const views = ["Search", "Results table", "Classification"] as const;
+const views = ["Search", "Results table", "Chemical page", "Species page", "Classification"] as const;
 type EditColumn = (column: PreviewColumn) => void;
 const EditColumnContext = createContext<EditColumn | undefined>(undefined);
 function ColumnTarget({ column, children }: { column: PreviewColumn; children: ReactNode }) {
@@ -15,7 +19,7 @@ function ColumnTarget({ column, children }: { column: PreviewColumn; children: R
     aria-label={`Edit ${column.sheet}.${column.name}`} onClick={() => onEditColumn(column)}>{children}</button> : <>{children}</>;
 }
 
-export default function MetadataPreview({ document, onEditColumn, onOpenEditor, editorOpen = false }: { document?: MetadataDocument; onEditColumn?: EditColumn; onOpenEditor?: () => void; editorOpen?: boolean }) {
+export default function MetadataPreview({ document, validating = false, onEditColumn, onOpenEditor, editorOpen = false }: { document?: MetadataDocument; validating?: boolean; onEditColumn?: EditColumn; onOpenEditor?: () => void; editorOpen?: boolean }) {
   const [view, setView] = useState<typeof views[number]>("Search");
   const model = buildMetadataPreview(document);
   return <EditColumnContext.Provider value={onEditColumn}><aside className="metadata-preview" aria-labelledby="preview-title">
@@ -26,9 +30,11 @@ export default function MetadataPreview({ document, onEditColumn, onOpenEditor, 
     <div className="metadata-preview-tabs" role="group" aria-label="Preview view">
       {views.map(name => <button key={name} className="btn" type="button" aria-pressed={view === name} onClick={() => setView(name)}>{name}</button>)}
     </div>
-    {model.errors.length > 0 ? <div role="status"><h3>Preview unavailable</h3><ul>{model.errors.map((error, index) => <li key={index}>{error}</li>)}</ul></div> : <>
+    {validating && !document ? <div role="status"><h3>Checking draft preview…</h3><p>Validating JSON and join rules.</p></div> : model.errors.length > 0 ? <div role="status"><h3>Preview unavailable</h3><ul>{model.errors.map((error, index) => <li key={index}>{error}</li>)}</ul></div> : <>
       {view === "Search" && <SearchPreview columns={model.search} />}
       {view === "Results table" && <ResultsPreview model={model} />}
+      {view === "Chemical page" && <EntityPagePreview kind="chemical" columns={model.chemicalPage} smilesColumn={model.structures[0]} />}
+      {view === "Species page" && <EntityPagePreview kind="species" columns={model.speciesPage} />}
       {view === "Classification" && <ClassificationPreview columns={model.classification} />}
       {model.warnings.length > 0 && <ul className="metadata-preview-warnings">{model.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
       {model.sourceOnly.length > 0 && <p>Preserved source-only sheets (not joined into public views): {model.sourceOnly.join(", ")}.</p>}
@@ -37,36 +43,40 @@ export default function MetadataPreview({ document, onEditColumn, onOpenEditor, 
 }
 
 export function SearchPreview({ columns }: { columns: PreviewColumn[] }) {
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [open, setOpen] = useState({ species: true, chemical: true });
   const [submitted, setSubmitted] = useState(false);
-  const query = previewQuery(columns, values);
+  const [query, setQuery] = useState("");
+  const searchColumns = columns.map(previewSearchColumn);
   return <section aria-label="Search preview">
     <div className="metadata-preview-scroll" role="region" aria-label="Public search form" tabIndex={0}>
-    <form className="search-form metadata-public-search" onSubmit={e => { e.preventDefault(); setSubmitted(true); }}>
-      <h2>Search</h2>
-      {([['species', 'Species', BranchesRight], ['chemical', 'Chemicals', Molecule]] as const).map(([domain, title, Icon], index) => <div key={domain} style={{ marginBottom: 12 }}>
-        <button type="button" className="section-toggle" aria-expanded={open[domain]} onClick={() => setOpen(previous => ({ ...previous, [domain]: !previous[domain] }))}>
-          <span style={{ display: "flex", color: "var(--color-muted)", flexShrink: 0 }} aria-hidden>{open[domain] ? <ChevronDown /> : <ChevronRight />}</span>
-          <h2><Icon width={22} height={22} aria-hidden />{title}</h2>
-        </button>
-        {open[domain] && <ul>{columns.filter(c => c.domain === domain).map(c => <li key={c.name} style={{ width: 400, position: "relative" }}>
-          <div><InfoTip text={c.description || ""} /> <ColumnTarget column={c}>{c.label || c.name}:</ColumnTarget>{columns.indexOf(c) > 0 && <span className="metadata-search-and">AND</span>}<br />
-            <Autocomplete ariaLabel={c.label || c.name} value={values[c.name] ?? ""} placeholder="Enter..." style={{ position: "relative", left: "20%", width: 300, height: 30, borderColor: "var(--color-border)" }}
-              onChange={value => setValues(previous => ({ ...previous, [c.name]: value }))} onSelect={() => undefined}
-              fetchSuggestions={async query => (c.set_choices?.length ? c.set_choices : c.example ? [c.example] : []).filter(value => value.toLowerCase().includes(query.toLowerCase()))} />
-            <hr style={{ border: 0, margin: 0, height: 15 }} />
-          </div>
-          <small className="metadata-search-example"><ColumnTarget column={c}>{previewValue(c)}</ColumnTarget></small>
-        </li>)}{!columns.some(c => c.domain === domain) && <li>No searchable fields in this group.</li>}</ul>}
-        {index === 0 && <hr style={{ border: "1px solid var(--color-border)" }} />}
-      </div>)}
-      <button type="submit" className="btn btn-primary metadata-search-submit">Search <Magnifier aria-hidden /></button>
-    </form>
+      <SearchForm metadataColumns={searchColumns} fetchSuggestions={async request => draftSuggestions(columns, request.value, request.columns)} onSearch={value => { setQuery(value); setSubmitted(true); }}
+        columnLabel={(column, label) => {
+          const source = columns.find(candidate => candidate.name === column.column);
+          return source ? <ColumnTarget column={source}>{label}</ColumnTarget> : label;
+        }} />
     </div>
     <h3>Sample query</h3><output className="metadata-preview-query">{query || (submitted ? "Enter at least one parameter." : "Enter a value above to see the query.")}</output>
     <small>Suggestions use only the draft’s examples and set choices. Search displays this query without requesting data.</small>
   </section>;
+}
+
+function previewSearchColumn(column: PreviewColumn): SearchColumn {
+  const classification = column.classification ? ` clas[${column.classification.level}][${previewClassificationTag(column)}]` : "";
+  const domain = column.reference || column.domain === "publication" ? "publication" : column.domain === "species" ? "specie" : "chemical";
+  return { column: column.name, name: column.name, show_name: column.label || column.name, type: `${domain} search${column.reference ? " ref[]" : ""}${column.data_type === "set" ? " set" : ""}${column.smiles ? " SMILES" : ""}${classification}` };
+}
+
+function previewClassificationTag(column: PreviewColumn) {
+  const tag = column.classification?.tag;
+  return !tag || tag === "default" ? "original" : tag;
+}
+
+function draftSuggestions(columns: PreviewColumn[], value: string, selected: SearchColumn[]) {
+  const needle = value.toLowerCase();
+  return selected.flatMap(column => {
+    const source = columns.find(candidate => candidate.name === column.column);
+    if (!source) return [];
+    return (source.set_choices?.length ? source.set_choices : source.example ? [source.example] : []).filter(candidate => candidate.toLowerCase().includes(needle)).map(candidate => ({ column: column.column, show_name: column.show_name || column.column, value: candidate }));
+  });
 }
 
 export function ResultsPreview({ model }: { model: MetadataPreviewModel }) {
@@ -105,6 +115,43 @@ function EntityPanel({ kind, columns, selected }: { kind: "chemical" | "species"
       <span className="ranked-select-list__count">{kind === "chemical" ? "species" : "chemicals"}: 1</span>
     </div></li></ol>}
   </Container>;
+}
+
+export function EntityPagePreview({ kind, columns, smilesColumn }: { kind: "chemical" | "species"; columns: PreviewColumn[]; smilesColumn?: PreviewColumn }) {
+  const title = kind === "chemical" ? "Chemical page" : "Species page";
+  const details = { meta: columns.map(column => previewDataMeta(column, kind)), row: new Map(columns.map(column => [column.name, previewValue(column)])) };
+  const configuredSmiles = smilesColumn ?? columns.find(column => column.smiles);
+  const smiles = configuredSmiles ? previewValue(configuredSmiles) : "CCO";
+  const detailLabel = (column: DataMeta) => {
+    const source = columns.find(candidate => candidate.name === column.name);
+    return source ? <ColumnTarget column={source}>{column.show_name}</ColumnTarget> : column.show_name;
+  };
+  const content = <ReadOnlyPageContent content={kind === "chemical" ? "## Example chemical description\n\nThis representative Markdown content shows how an imported chemical page will read next to its structure and selected details." : "## Example species description\n\nThis representative Markdown content shows the page description beside its taxonomy links and selected details."} error={null} />;
+  return <section aria-label={`${title} preview`}>
+    <h3>{title}</h3>
+    <p>This uses the public {kind} page frame with example content only. It cannot load data, navigate, or edit a page.</p>
+    {kind === "chemical" ? <ChemicalPageView smiles={smiles} details={details} renderDetailLabel={detailLabel}>
+      {content}
+    </ChemicalPageView> : <TaxonPageView taxon={previewTaxon(columns)} details={details} renderDetailLabel={detailLabel} renderTaxonLink={(_, content) => <span className="metadata-preview-taxon-link">{content}</span>}>
+      {content}
+    </TaxonPageView>}
+  </section>;
+}
+
+function previewTaxon(columns: PreviewColumn[]) {
+  const titleColumn = columns.find(column => column.classification?.level === 0) ?? columns[0];
+  const title = titleColumn ? previewValue(titleColumn) : "Example species";
+  return { rank: titleColumn?.classification?.level ?? 0, name: title, title, parent: { rank: 1, name: "Example genus" }, children: [{ rank: -1, name: "Example child taxon", source_column: "classification" }] };
+}
+
+function previewDataMeta(column: PreviewColumn, kind: "chemical" | "species") {
+  // A draft preview must never expose a live destination. Keep the public
+  // table's layout but render configured links as ordinary example text.
+  const type = column.smiles ? "smiles" : column.reference ? "reference" : column.classification ? "clas" : "";
+  return new DataMeta(type, column.name, column.label || column.name, column.description || "", column.link_template || "", kind === "species" ? "specie" : "chemical", {
+    classificationLevel: column.classification?.level ?? null,
+    classificationTag: previewClassificationTag(column),
+  });
 }
 
 function ObservationsPreview({ columns }: { columns: PreviewColumn[] }) {

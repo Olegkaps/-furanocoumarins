@@ -76,7 +76,7 @@ func TestEntityPageFieldsRequireVisibleMatchingDomainAndAreBounded(t *testing.T)
 	for i := 0; i < 7; i++ {
 		d.Sheets[2].Columns = append(d.Sheets[2].Columns, Column{Name: fmt.Sprintf("field%d", i), DataType: "text", Domain: "chemical", ShowOnChemicalPage: true})
 	}
-	require.ErrorContains(t, d.Validate(), "at most seven")
+	require.NoError(t, d.Validate())
 }
 
 func TestSharedKeysResolveWithoutChangingSavedDefinition(t *testing.T) {

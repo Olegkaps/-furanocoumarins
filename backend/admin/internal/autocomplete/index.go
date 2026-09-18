@@ -78,7 +78,7 @@ func New(ctx context.Context, entries []Entry, columns []string) (*Index, error)
 		if parseErr == nil && c.DataType == "set" {
 			out.setColumns[e.Column] = true
 		}
-		if parseErr == nil && (c.Search || c.Smiles) {
+		if parseErr == nil && (c.Search || c.Smiles || c.Reference) {
 			out.searchColumns[e.Column] = true
 		}
 		if err := ctx.Err(); err != nil {

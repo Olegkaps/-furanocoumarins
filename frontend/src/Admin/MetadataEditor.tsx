@@ -3,7 +3,7 @@ import { api, getToken, isTokenExists } from "./utils";
 import { Navigate } from "react-router-dom";
 import "./MetadataEditor.css";
 import MetadataPreview from "./MetadataPreview";
-import { columnDomain, copyCommonColumn } from "./metadataPreviewModel";
+import { columnDomain, copyCommonColumn, entityPageDefaults } from "./metadataPreviewModel";
 import type { MetadataColumn as Column, MetadataSheet as Sheet, MetadataDocument as Document, PreviewColumn } from "./metadataPreviewModel";
 type Version = { version: number; document: Document; created_at: string; created_by: string; provenance: string; published: boolean };
 
@@ -19,7 +19,10 @@ const blankDocument: Document = { schema_version: 2, importable: true, sheets: [
 ] };
 const format = (value: unknown) => JSON.stringify(value, null, 2);
 const headers = () => ({ Authorization: `Bearer ${getToken()}` });
-const editableCopy = (document: Document): Document => ({ ...document, schema_version: 2, sheets: document.sheets.map(sheet => ({ ...sheet, columns: sheet.columns.map(column => ({ ...column, example: column.example ?? null })) })) });
+// Entity pages carry the detail fields that the search form and observation
+// table do not both already expose. This affects only the editable draft; a
+// published version remains immutable until an admin saves it.
+const editableCopy = (document: Document): Document => entityPageDefaults({ ...document, schema_version: 2, sheets: document.sheets.map(sheet => ({ ...sheet, columns: sheet.columns.map(column => ({ ...column, example: column.example ?? null })) })) });
 function errorMessage(error: unknown): string {
   const response = (error as { response?: { status?: number; data?: { error?: string } } }).response;
   if (response?.status === 409) return "Another admin published a version. Your draft is preserved. Refresh the latest version, review the changes, then save again.";
@@ -56,8 +59,13 @@ export default function MetadataEditor() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [columnRequest, setColumnRequest] = useState<Pick<PreviewColumn, "sheet" | "name"> | null>(null);
   const editor = useRef<HTMLElement>(null);
+  const jsonEditor = useRef<HTMLTextAreaElement>(null);
+  const jsonFindInput = useRef<HTMLInputElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
+  const [jsonFind, setJsonFind] = useState("");
+  const [jsonFindOpen, setJsonFindOpen] = useState(false);
+  const [jsonFindStatus, setJsonFindStatus] = useState("");
   const [validation, setValidation] = useState<{ raw: string; valid: boolean; message: string; resolved?: Document }>({ raw: "", valid: false, message: "Loading definition…" });
 
   const openEditor = (column?: PreviewColumn) => {
@@ -97,6 +105,18 @@ export default function MetadataEditor() {
       target.scrollIntoView({ block: "center", behavior: "instant" });
     } else closeButton.current?.focus();
   }, [editorOpen, columnRequest]);
+  useEffect(() => {
+    if (!editorOpen || mode !== "json") return;
+    const onFind = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        setJsonFindOpen(true);
+        window.setTimeout(() => jsonFindInput.current?.focus(), 0);
+      }
+    };
+    window.addEventListener("keydown", onFind);
+    return () => window.removeEventListener("keydown", onFind);
+  }, [editorOpen, mode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -104,7 +124,11 @@ export default function MetadataEditor() {
       setVersions(data);
       const latest = data.filter(v => v.published).sort((a, b) => b.version - a.version)[0];
       setBaseVersion(latest?.version ?? 0);
-      if (latest) { setRaw(format(editableCopy(latest.document))); setSelected(String(latest.version)); }
+      if (latest) {
+        const draft = editableCopy(latest.document);
+        setRaw(format(draft)); setSelected(String(latest.version));
+        setDirty(format(draft) !== format(latest.document));
+      }
       else setNotice("No published metadata yet. Complete a definition and save it before importing.");
     }).catch(error => { if (!controller.signal.aborted) setNotice(errorMessage(error)); })
       .finally(() => { if (!controller.signal.aborted) setBusy(false); });
@@ -131,6 +155,7 @@ export default function MetadataEditor() {
   try { doc = parseDraft(raw); } catch { /* Raw JSON remains editable even when invalid. */ }
   const validated = validation.raw === raw && validation.valid;
   const resolved = validated ? validation.resolved : undefined;
+  const previewValidating = !!doc && !validated && (validation.raw !== raw || validation.message === "Checking JSON and group rules…");
   const update = (value: Document) => { setRaw(format(value)); setDirty(true); setNotice(""); };
   const updateSheet = (index: number, sheet: Sheet) => {
     if (doc) update({ ...doc, sheets: doc.sheets.map((item, i) => i === index ? sheet : item) });
@@ -139,12 +164,30 @@ export default function MetadataEditor() {
     if (next === "ui") {
       try { parseDraft(raw); } catch (error) { setNotice((error as Error).message); return; }
     }
-    setMode(next); setNotice("");
+    setMode(next); setJsonFindOpen(false); setNotice("");
+  };
+  const selectJsonMatch = (backward = false) => {
+    const textarea = jsonEditor.current;
+    const query = jsonFind;
+    if (!textarea || !query) return;
+    const text = raw.toLocaleLowerCase();
+    const needle = query.toLocaleLowerCase();
+    const start = backward ? textarea.selectionStart - 1 : textarea.selectionEnd;
+    let index = backward ? text.lastIndexOf(needle, start) : text.indexOf(needle, start);
+    if (index < 0) index = backward ? text.lastIndexOf(needle) : text.indexOf(needle);
+    if (index >= 0) {
+      textarea.setSelectionRange(index, index + query.length);
+      setJsonFindStatus("");
+    } else {
+      setJsonFindStatus(`No matches for “${query}”.`);
+    }
+    jsonFindInput.current?.focus();
   };
   const loadVersion = (id: string) => {
     if (dirty && !window.confirm("Replace your unsaved metadata draft?")) return;
     const version = versions.find(v => String(v.version) === id);
-    setSelected(id); setRaw(format(editableCopy(version?.document ?? blankDocument))); setDirty(false); setNotice("");
+    const draft = editableCopy(version?.document ?? blankDocument);
+    setSelected(id); setRaw(format(draft)); setDirty(format(draft) !== format(version?.document ?? blankDocument)); setNotice("");
     setMode(version?.document.importable === false ? "json" : "ui");
   };
   const refreshLatest = async () => {
@@ -172,7 +215,7 @@ export default function MetadataEditor() {
 
   if (!isTokenExists()) return <Navigate to="/login" />;
   return <div className={`metadata-workbench${editorOpen ? " metadata-workbench--editing" : ""}`}>
-    <MetadataPreview document={resolved} onEditColumn={openEditor} onOpenEditor={() => openEditor()} editorOpen={editorOpen} />
+    <MetadataPreview document={resolved} validating={previewValidating} onEditColumn={openEditor} onOpenEditor={() => openEditor()} editorOpen={editorOpen} />
     <section ref={editor} id="metadata-side-editor" className="metadata-editor" hidden={!editorOpen} aria-labelledby="metadata-title">
     <div className="metadata-panel-heading"><h2 id="metadata-title">Import metadata</h2><button ref={closeButton} className="btn" type="button" onClick={closeEditor}>Close editor</button></div>
     <fieldset className="metadata-body" disabled={busy}>
@@ -196,9 +239,21 @@ export default function MetadataEditor() {
     <p role="status" className={`metadata-validation ${validated ? "is-valid" : ""}`}>{validation.raw === raw ? validation.message : "Checking JSON and group rules…"}</p>
     {resolved && <JoinSummary document={resolved} />}
     {doc?.importable === false && <p role="alert">This historical snapshot is incomplete and cannot be used for imports. Its original declarations are retained in JSON. Supply the worksheet mappings and column definitions, then set importable to true before publishing.</p>}
-    {mode === "json" ? <label className="metadata-json-label">Metadata JSON
-      <textarea className="metadata-json" spellCheck={false} value={raw} onChange={e => { setRaw(e.target.value); setDirty(true); }} />
-    </label> : doc && <div>
+    {mode === "json" ? <>
+      {jsonFindOpen && <div className="metadata-json-find" role="search" aria-label="Find in metadata JSON">
+        <label>Find in JSON<input ref={jsonFindInput} value={jsonFind} onChange={e => { setJsonFind(e.target.value); setJsonFindStatus(""); }} onKeyDown={e => {
+          if (e.key === "Enter") { e.preventDefault(); selectJsonMatch(e.shiftKey); }
+          if (e.key === "Escape") { e.preventDefault(); setJsonFindOpen(false); jsonEditor.current?.focus(); }
+        }} /></label>
+        <button className="btn" type="button" onClick={() => selectJsonMatch(true)} disabled={!jsonFind}>Previous</button>
+        <button className="btn" type="button" onClick={() => selectJsonMatch()} disabled={!jsonFind}>Next</button>
+        <button className="btn" type="button" aria-label="Close JSON search" onClick={() => { setJsonFindOpen(false); jsonEditor.current?.focus(); }}>Close</button>
+        <p role="status" className="metadata-json-find-status">{jsonFindStatus}</p>
+      </div>}
+      <label className="metadata-json-label">Metadata JSON
+        <textarea ref={jsonEditor} className="metadata-json" spellCheck={false} value={raw} onChange={e => { setRaw(e.target.value); setDirty(true); }} />
+      </label>
+    </> : doc && <div>
       {doc.sheets.map((sheet, si) => <details className="metadata-sheet" key={si} open={doc.sheets.length === 1 ? true : undefined}>
         <summary>{sheet.name || "Unnamed sheets group"} <span>· {sheet.columns.length} columns · {sheet.source_sheets.join(", ")}</span></summary>
         <div className="metadata-fields">

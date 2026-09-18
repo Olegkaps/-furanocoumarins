@@ -10,8 +10,20 @@ export function copyCommonColumn(sheetName, column) {
   return { ...column, domain: columnDomain(sheetName, column), primary_key: false, external_sheet: undefined };
 }
 
+// A loaded version becomes a new draft before these defaults are applied.
+// Existing published definitions are therefore never rewritten implicitly.
+export function entityPageDefaults(document) {
+  return { ...document, sheets: document.sheets.map(sheet => ({ ...sheet, columns: sheet.columns.map(column => {
+    const domain = columnDomain(sheet.name, column);
+    if (column.hidden || (column.search && column.show_in_results)) return { ...column };
+    if (domain === "chemical") return { ...column, show_on_chemical_page: true };
+    if (domain === "species") return { ...column, show_on_species_page: true };
+    return { ...column };
+  }) })) };
+}
+
 export function buildMetadataPreview(document) {
-  const model = { columns: [], search: [], results: [], chemicals: [], species: [], structures: [], classification: [], sourceOnly: [], errors: [], warnings: [] };
+  const model = { columns: [], search: [], results: [], chemicals: [], species: [], chemicalPage: [], speciesPage: [], structures: [], classification: [], sourceOnly: [], errors: [], warnings: [] };
   if (!document || ![1, 2].includes(document.schema_version) || !document.importable || !Array.isArray(document.sheets)) {
     model.errors.push("Complete a valid, importable JSON definition to see previews.");
     return model;
@@ -57,13 +69,15 @@ export function buildMetadataPreview(document) {
     }
   }
   model.columns = [...columns.values()];
-  model.search = model.columns.filter(c => c.search && ["chemical", "species"].includes(c.domain));
-  if (model.columns.some(c => c.search && !["chemical", "species"].includes(c.domain))) model.warnings.push("Search fields need a Chemical or Species entity to appear in the current public search form. Publication is reserved for future use.");
+  model.search = model.columns.filter(c => c.reference || c.search && ["chemical", "species", "publication"].includes(c.domain));
+  if (model.columns.some(c => c.search && !["chemical", "species", "publication"].includes(c.domain) && !c.reference)) model.warnings.push("Search fields need a Chemical, Species, or Publication entity to appear in the current public search form.");
   const displayed = model.columns.filter(c => c.show_in_results && !c.hidden).sort((a, b) => (a.result_order ?? Infinity) - (b.result_order ?? Infinity));
   model.results = displayed.filter(c => !c.domain || c.domain === "publication");
   const isStructure = c => c.smiles && !c.link_template && !c.classification;
   model.chemicals = displayed.filter(c => c.domain === "chemical" && !isStructure(c));
   model.species = displayed.filter(c => c.domain === "species");
+  model.chemicalPage = model.columns.filter(c => c.domain === "chemical" && c.show_on_chemical_page && !c.hidden);
+  model.speciesPage = model.columns.filter(c => c.domain === "species" && c.show_on_species_page && !c.hidden);
   model.structures = model.columns.filter(c => isStructure(c) && !c.hidden);
   model.classification = model.columns.filter(c => c.classification && !c.hidden).sort((a, b) => b.classification.level - a.classification.level);
   return model;

@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import FullNavigation from "../FullNavigation/FullNavigation";
 import { useEditablePage } from "../features/editable-page/useEditablePage";
 import { EditablePageContent } from "../features/editable-page/EditablePageContent";
 import { api } from "../shared/api";
 import { EntityDetailTable } from "../SearchApp/EntityDetailTable";
-import { entityCondition, entityPageColumns, rowFromEntitySearch } from "../SearchApp/entityPageDetails";
+import { fetchEntityPageDetails, type MetadataResponse, type SearchResponse } from "../SearchApp/entityPageDetails";
 import DataMeta from "../SearchApp/DataMeta";
 
 function resolveSmiles(
@@ -34,6 +34,15 @@ function smilesCanvasId(smiles: string): string {
   return `smiles_${Math.abs(hash).toString(36)}`;
 }
 
+export function ChemicalPageView({ smiles, details, children, maxWidth = "800px", renderDetailLabel }: { smiles: string; details: { meta: DataMeta[]; row: Map<string, string> } | null; children: ReactNode; maxWidth?: string | number; renderDetailLabel?: (column: DataMeta) => ReactNode }) {
+  return <div style={{ padding: "24px", maxWidth, margin: "0 auto" }}>
+    <div key={smiles} style={{ marginBottom: "24px" }}><canvas id={smilesCanvasId(smiles)} className="smiles" data-smiles={smiles} /></div>
+    <div style={{ marginBottom: "8px", color: "var(--color-muted)", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: "14px" }}>SMILES: {smiles}</div>
+    {details && <aside aria-label="Chemical details" style={{ float: "right", width: "min(340px, 40%)", margin: "0 0 16px 24px" }}><EntityDetailTable meta={details.meta.filter(column => column.type !== "smiles")} row={details.row} hideEmpty renderLabel={renderDetailLabel} /></aside>}
+    {children}
+  </div>;
+}
+
 export default function SubstancePage() {
   const { smiles: smilesEncoded } = useParams<{ smiles: string }>();
   const [searchParams] = useSearchParams();
@@ -46,14 +55,15 @@ export default function SubstancePage() {
     setDetails(null);
     if (!smiles) return;
     let current = true;
-    void api.get<{ metadata: Array<{ column: string; name: string; description: string; type: string }> }>("/metadata").then(({ data }) => {
-      const meta = entityPageColumns(data.metadata, "chemical");
-      const smilesColumn = data.metadata.find(column => /(?:^|\\s)SMILES(?:\\s|$)/.test(column.type))?.column;
-      if (!smilesColumn || meta.length === 0) return null;
-      const smilesMeta = data.metadata.find(column => column.column === smilesColumn)!;
-      return api.get<{ metadata: Array<{ column: string; name: string; description: string; type: string }>; data: Array<Record<string, unknown>> }>("/search", { params: { q: entityCondition(smilesMeta, smiles), columns: meta.map(column => column.name).join(","), limit: 2 } }).then(({ data: response }) => ({ meta, row: rowFromEntitySearch(response) }));
-    }).then(value => { if (current) setDetails(value?.row ? { meta: value.meta, row: value.row } : null); }).catch(() => { if (current) setDetails(null); });
-    return () => { current = false; };
+    const controller = new AbortController();
+    // Entity pages must follow the currently active dataset immediately. Their
+    // metadata and detail projections are deliberately not served from a
+    // browser cache left behind by a previous table activation.
+    void api.get<MetadataResponse>("/metadata", { signal: controller.signal, params: { entity_page: Date.now() } }).then(async ({ data }) => {
+      const smilesColumn = data.metadata.find(column => /(?:^|\s)SMILES(?:\s|$)/.test(column.type))?.column;
+      return smilesColumn ? fetchEntityPageDetails(data, "chemical", smilesColumn, smiles, controller.signal, async (params, signal) => (await api.get<SearchResponse>("/search", { params: { ...params, entity_page: data.timestamp }, signal })).data) : null;
+    }).then(value => { if (current) setDetails(value); }).catch(() => { if (current) setDetails(null); });
+    return () => { current = false; controller.abort(); };
   }, [smiles]);
 
   if (smiles === null || smiles === "") {
@@ -81,31 +91,7 @@ export default function SubstancePage() {
   return (
     <>
       <FullNavigation />
-      <div
-        style={{
-          padding: "24px",
-          maxWidth: state.editMode ? "1400px" : "800px",
-          margin: "0 auto",
-        }}
-      >
-        <div key={smiles} style={{ marginBottom: "24px" }}>
-          <canvas
-            id={smilesCanvasId(smiles)}
-            className="smiles"
-            data-smiles={smiles}
-          />
-        </div>
-        <div
-          style={{
-            marginBottom: "8px",
-            color: "var(--color-muted)",
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-            fontSize: "14px",
-          }}
-        >
-          SMILES: {smiles}
-        </div>
-        {details && <aside aria-label="Chemical details" style={{ float: "right", width: "min(340px, 40%)", margin: "0 0 16px 24px" }}><EntityDetailTable meta={details.meta} row={details.row} /></aside>}
+      <ChemicalPageView smiles={smiles} details={details} maxWidth={state.editMode ? "1400px" : "800px"}>
         <EditablePageContent
           content={state.content}
           error={state.error}
@@ -118,7 +104,7 @@ export default function SubstancePage() {
           charCount={state.charCount}
           overLimit={state.overLimit}
         />
-      </div>
+      </ChemicalPageView>
     </>
   );
 }

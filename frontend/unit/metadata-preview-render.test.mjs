@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
-import { buildMetadataPreview } from "../src/Admin/metadataPreviewModel.mjs";
+import { buildMetadataPreview, entityPageDefaults } from "../src/Admin/metadataPreviewModel.mjs";
 
 // Transform the actual TSX without opening a browser, socket, or file watcher.
 const server = await createServer({
@@ -15,6 +15,7 @@ const server = await createServer({
 });
 after(() => server.close());
 const preview = await server.ssrLoadModule("/src/Admin/MetadataPreview.tsx");
+const searchApp = await server.ssrLoadModule("/src/SearchApp/SearchApp.tsx");
 
 const column = (name, options = {}) => ({ name, data_type: "text", ...options });
 const document = { schema_version: 2, importable: true, sheets: [
@@ -46,15 +47,57 @@ test("invalid metadata renders recovery instead of fabricated preview records", 
 
 test("search preview renders the public search form with safe local examples", () => {
   const html = renderToStaticMarkup(createElement(preview.default, { document }));
-  assert.match(html, /class="search-form/);
-  assert.match(html, /class="section-toggle"/);
-  assert.match(html, /class="autocomplete-input"/);
-  assert.match(html, /<input[^>]*aria-label="Chemical"/);
-  assert.match(html, /<li[^>]+style="width:400px;position:relative"/);
-  assert.match(html, /class="autocomplete-container"[^>]+style="[^"]*left:20%;width:300px;height:30px/);
+  assert.match(html, /class="search-form unified-search"/);
+  assert.match(html, /data-tour="search-form"/);
+  assert.match(html, /Choose columns \(3\)/);
+  assert.match(html, /SMILES substructure/);
+  assert.match(html, /data-tour="search-submit"/);
+  assert.match(html, /type="checkbox" aria-label="Species"/);
+  assert.match(html, /type="checkbox" aria-label="Chemical"/);
+  assert.match(html, /type="checkbox" aria-label="citation"/);
+  assert.doesNotMatch(html, /type="checkbox" aria-label="smiles"/);
+  assert.match(html, /SMILES substructure/);
   assert.doesNotMatch(html, /<a\b/);
   assert.doesNotMatch(html, />Entity details<\/button>/);
   assert.match(html, />Results table<\/button>/);
+});
+
+test("the live search catalog keeps reference types and places them in Publications", () => {
+  const catalog = searchApp.searchableMetadataColumns([
+    { column: "title", type: "search publication" },
+    { column: "reference_id", type: "table_0 ref[]" },
+    { column: "hidden_note", type: "table_1" },
+  ]);
+  assert.deepEqual(catalog.map(column => [column.column, column.type]), [
+    ["title", "search publication"], ["reference_id", "table_0 ref[]"],
+  ]);
+  const html = renderToStaticMarkup(createElement(preview.SearchPreview, { columns: [{ name: "reference_id", sheet: "main", data_type: "text", reference: true, example: "paper-1" }] }));
+  assert.match(html, /Publications/);
+  assert.match(html, /aria-label="reference_id"/);
+});
+
+test("search preview includes reachable publication fields in the public publications group", () => {
+  const draft = structuredClone(document);
+  draft.sheets[0].columns.push(column("publication_id", { external_sheet: "publications" }));
+  draft.sheets.push({ name: "publications", columns: [
+    column("publication_id", { primary_key: true }),
+    column("publication_title", { label: "Publication title", search: true, example: "Example paper" }),
+  ] });
+  const html = renderToStaticMarkup(createElement(preview.default, { document: draft }));
+  assert.match(html, /Publications/);
+  assert.match(html, /aria-label="Publication title"/);
+});
+
+test("search preview supports the public generated genus and species control", () => {
+  const draft = structuredClone(document);
+  const classification = draft.sheets.find(sheet => sheet.name === "classification").columns;
+  classification.push(
+    column("genus_rank", { label: "Genus", search: true, classification: { level: 1, tag: "default" }, example: "Heracleum" }),
+    column("species_rank", { label: "Species rank", search: true, classification: { level: 0, tag: "default" }, example: "sphondylium" }),
+  );
+  const html = renderToStaticMarkup(createElement(preview.default, { document: draft, onEditColumn() {} }));
+  assert.match(html, /aria-label="Species rank \+ Genus"/);
+  assert.doesNotMatch(html, /Edit undefined\./);
 });
 
 test("results preview includes both selection states, entities, references and SMILES", () => {
@@ -71,6 +114,52 @@ test("results preview includes both selection states, entities, references and S
   assert.match(html, /value from column species/);
   assert.match(html, /&lt;script&gt;unsafe&lt;\/script&gt;/);
   assert.doesNotMatch(html, /<script\b|<a\b|<iframe\b|class="smiles"/);
+});
+
+test("entity page previews use public page frames with Markdown and non-navigating taxonomy", () => {
+  const draft = structuredClone(document);
+  draft.sheets[1].columns.find(c => c.name === "chemical").show_on_chemical_page = true;
+  draft.sheets[1].columns.push(column("external_record", { label: "External record", show_on_chemical_page: true, link_template: "https://example.test/%s", example: "record-1" }));
+  draft.sheets[2].columns.find(c => c.name === "species").show_on_species_page = true;
+  const model = buildMetadataPreview(draft);
+  const chemical = renderToStaticMarkup(createElement(preview.EntityPagePreview, { kind: "chemical", columns: model.chemicalPage }));
+  assert.match(chemical, /aria-label="Chemical page preview"/);
+  assert.match(chemical, /SMILES: CCO/);
+  assert.match(chemical, /Example chemical description/);
+  assert.match(chemical, /Ethanol/);
+  assert.match(chemical, /record-1/);
+  assert.doesNotMatch(chemical, /href=/);
+  assert.doesNotMatch(chemical, /unsafe/);
+  const species = renderToStaticMarkup(createElement(preview.EntityPagePreview, { kind: "species", columns: model.speciesPage }));
+  assert.match(species, /aria-label="Species page preview"/);
+  assert.match(species, /value from column species/);
+  assert.match(species, /Classification rank 0/);
+  assert.match(species, /Parent taxon/);
+  assert.match(species, /Children/);
+  assert.match(species, /Example species description/);
+  assert.doesNotMatch(species, /<a\b|>Edit</);
+});
+
+test("preview reports checking rather than an invalid definition while the editor validates a parseable draft", () => {
+  const html = renderToStaticMarkup(createElement(preview.default, { validating: true }));
+  assert.match(html, /Checking draft preview/);
+  assert.doesNotMatch(html, /Complete a valid, importable JSON definition/);
+});
+
+test("editing a version selects entity detail fields unless search and results already show them", () => {
+  const draft = structuredClone(document);
+  const structures = draft.sheets[1].columns;
+  const classification = draft.sheets[2].columns;
+  structures.push(column("results_only", { show_in_results: true }), column("search_only", { search: true }), column("both", { search: true, show_in_results: true }), column("hidden", { hidden: true }));
+  classification.push(column("species_note"));
+  const edited = entityPageDefaults(draft);
+  const find = (sheet, name) => edited.sheets.find(s => s.name === sheet).columns.find(c => c.name === name);
+  assert.equal(find("structures", "results_only").show_on_chemical_page, true);
+  assert.equal(find("structures", "search_only").show_on_chemical_page, true);
+  assert.equal(find("structures", "both").show_on_chemical_page, undefined);
+  assert.equal(find("structures", "hidden").show_on_chemical_page, undefined);
+  assert.equal(find("classification", "species_note").show_on_species_page, true);
+  assert.equal(draft.sheets[1].columns.some(c => c.show_on_chemical_page), false);
 });
 
 test("missing examples keep every panel usable without drawing placeholder molecules", () => {
@@ -107,5 +196,6 @@ test("preview provides sheet-qualified editor targets and a collapsed editor tog
   assert.match(html, /aria-expanded="false" aria-controls="metadata-side-editor"/);
   assert.match(html, /data-preview-sheet="structures" data-preview-column="chemical" aria-label="Edit structures.chemical"/);
   assert.match(html, /data-preview-sheet="classification" data-preview-column="species" aria-label="Edit classification.species"/);
-  assert.doesNotMatch(html, /<label[^>]*>.*<button/);
+  assert.doesNotMatch(html, />Edit<\/button>/);
+  assert.doesNotMatch(html, /<label[^>]*>(?:(?!<\/label>).)*<button/);
 });

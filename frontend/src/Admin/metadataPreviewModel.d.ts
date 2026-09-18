@@ -13,7 +13,7 @@ export type MetadataDocument = { schema_version: number; importable: boolean; sh
 export type PreviewColumn = MetadataColumn & { sheet: string };
 export type MetadataPreviewModel = {
   columns: PreviewColumn[]; search: PreviewColumn[]; results: PreviewColumn[];
-  chemicals: PreviewColumn[]; species: PreviewColumn[]; structures: PreviewColumn[];
+  chemicals: PreviewColumn[]; species: PreviewColumn[]; chemicalPage: PreviewColumn[]; speciesPage: PreviewColumn[]; structures: PreviewColumn[];
   classification: PreviewColumn[]; sourceOnly: string[]; errors: string[]; warnings: string[];
 };
 export function buildMetadataPreview(document?: MetadataDocument): MetadataPreviewModel;
@@ -22,3 +22,4 @@ export function previewQuery(columns: PreviewColumn[], values: Record<string, st
 export function previewValue(column: PreviewColumn): string;
 export function columnDomain(sheetName: string, column: MetadataColumn): MetadataColumn["domain"];
 export function copyCommonColumn(sheetName: string, column: MetadataColumn): MetadataColumn;
+export function entityPageDefaults(document: MetadataDocument): MetadataDocument;

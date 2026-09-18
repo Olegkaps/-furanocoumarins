@@ -22,6 +22,7 @@ import {
   StructureOptions,
   defaultStructureOptions,
   structureOperator,
+  type StructureSearchOptions,
 } from "./StructureOptions";
 import "./UnifiedSearch.css";
 
@@ -29,23 +30,41 @@ import { StructureDrawer } from "./StructureDrawer";
 import { MoleculePreview } from "./MoleculePreview";
 import { usePublicConfig } from "../shared/publicConfig";
 import { ClassificationAutocompleteNote } from "./ClassificationAutocompleteNote";
-type Column = {
+export type SearchColumn = {
   column: string;
   name?: string;
   show_name?: string;
   type: string;
 };
-type Suggestion = {
+export type SearchSuggestion = {
   column: string;
   show_name: string;
   value: string;
   text?: string;
   conditions?: ClassificationCondition[];
 };
-const suggestionKey = (s: Suggestion) => JSON.stringify([s.column, s.value, s.conditions]);
-const label = (column: Column) =>
+export type SearchSuggestionRequest = {
+  value: string;
+  columns: SearchColumn[];
+  filter: string[] | null;
+  structure: boolean;
+  options: StructureSearchOptions;
+  signal: AbortSignal;
+};
+export type SearchSuggestionProvider = (request: SearchSuggestionRequest) => Promise<SearchSuggestion[]>;
+export type SearchFormProps = {
+  metadataColumns: SearchColumn[];
+  fetchSuggestions: SearchSuggestionProvider;
+  onSearch: (query: string) => void;
+  classificationLabel?: string;
+  columnLabel?: (column: SearchColumn, label: string) => React.ReactNode;
+  columnAction?: (column: SearchColumn) => React.ReactNode;
+  externalError?: string;
+};
+const suggestionKey = (s: SearchSuggestion) => JSON.stringify([s.column, s.value, s.conditions]);
+const label = (column: SearchColumn) =>
   column.show_name || column.name || column.column;
-function group(column: Column) {
+function group(column: SearchColumn) {
   if (
     hasMetadataTypeToken(column.type, "specie") ||
     getMetadataTypeModifier(column.type, "clas")
@@ -63,54 +82,46 @@ function group(column: Column) {
     return "Publications";
   return "Other columns";
 }
-function SearchApp() {
-  const navigate = useNavigate();
+
+export function searchableMetadataColumns(metadataColumns: SearchColumn[]) {
+  return metadataColumns.filter(column =>
+    hasMetadataTypeToken(column.type, "search") ||
+    hasMetadataTypeToken(column.type, "SMILES") ||
+    hasMetadataTypeToken(column.type, "ref[]"),
+  );
+}
+
+export function SearchForm({ metadataColumns, fetchSuggestions, onSearch, classificationLabel, columnLabel, columnAction, externalError = "" }: SearchFormProps) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
-  const [metadataColumns, setMetadataColumns] = useState<Column[]>([]);
-  const publicConfig = usePublicConfig();
   const columns = useMemo(
-    () => withClassificationColumn(metadataColumns, publicConfig.classification_autocomplete_label),
-    [metadataColumns, publicConfig.classification_autocomplete_label],
+    () => withClassificationColumn(metadataColumns, classificationLabel),
+    [metadataColumns, classificationLabel],
   );
   const [value, setValue] = useState("");
   const [filter, setFilter] = useState<string[] | null>(null);
   const [structure, setStructure] = useState(false);
   const [options, setOptions] = useState(defaultStructureOptions);
   const [sketch, setSketch] = useState(false);
-  const [conditions, setConditions] = useState<Suggestion[]>([]);
+  const [conditions, setConditions] = useState<SearchSuggestion[]>([]);
   const [combination, setCombination] = useState<"OR" | "AND">("OR");
   const [remote, setRemote] = useState<{
     key: string;
-    suggestions: Suggestion[];
+    suggestions: SearchSuggestion[];
     error?: string;
   }>();
   const [focused, setFocused] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [active, setActive] = useState(-1);
   const [error, setError] = useState("");
-  useEffect(() => {
-    let live = true;
-    cachedGet("/metadata")
-      .then((response) => {
-        if (!live) return;
-        guardMetadataCatalog(response.data?.metadata, response.data);
-        setMetadataColumns((response.data.metadata ?? []).filter((c: Column) => hasMetadataTypeToken(c.type, "search") || hasMetadataTypeToken(c.type, "SMILES")));
-      })
-      .catch(() => {
-        if (live)
-          setError("Could not load search columns. Reload to try again.");
-      });
-    return () => {
-      live = false;
-    };
-  }, []);
   const selectedColumns = useMemo(
     () =>
       columns.filter(
         (c) =>
           (filter === null || filter.includes(c.column)) &&
-          (!structure || hasMetadataTypeToken(c.type, "SMILES")),
+          (structure
+            ? hasMetadataTypeToken(c.type, "SMILES")
+            : !hasMetadataTypeToken(c.type, "SMILES")),
       ),
     [columns, filter, structure],
   );
@@ -130,23 +141,13 @@ function SearchApp() {
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const response = await api.get("/autocomplete", {
-          signal: controller.signal,
-          params: {
-            value: value.trim(),
-            scope: "search",
-            ...(filter === null
-              ? {}
-              : { columns: selectedColumns.map((c) => c.column).join(",") }),
-            ...(structure ? { mode: "structure", ...options } : {}),
-          },
-        });
+        const received = await fetchSuggestions({ value: value.trim(), columns: selectedColumns, filter, structure, options, signal: controller.signal });
         if (!controller.signal.aborted)
           setRemote({
             key: requestKey,
-            suggestions: (response.data?.suggestions ?? [])
+            suggestions: received
               .filter(
-                (s: Suggestion) =>
+                (s: SearchSuggestion) =>
                   selectedColumns.some((c) => c.column === s.column) &&
                   typeof s.value === "string" &&
                   (s.column !== classificationColumn || Boolean(classificationSelection(s.conditions, columns))),
@@ -177,7 +178,7 @@ function SearchApp() {
     columns,
     filter,
     structure,
-    options,
+    options, fetchSuggestions,
   ]);
   useEffect(() => {
     if (selected >= 0)
@@ -185,7 +186,7 @@ function SearchApp() {
         .getElementById(`${id}-${selected}`)
         ?.scrollIntoView({ block: "nearest" });
   }, [selected, id]);
-  function choose(suggestion: Suggestion) {
+  function choose(suggestion: SearchSuggestion) {
     setConditions((previous) =>
       previous.some(
         (s) => suggestionKey(s) === suggestionKey(suggestion),
@@ -217,12 +218,9 @@ function SearchApp() {
       ? classificationTyped(value.trim(), columns)
       : structure ? `${c.column} ${structureOperator(options)} ${searchLiteral(value.trim())}` : valueCondition(c, value.trim())).join(" OR ") : "";
     const query = [exact, typed ? `(${typed})` : ""].filter(Boolean).join(` ${combination} `);
-    navigate(`/table?query=${encodeURIComponent(query)}`);
+    onSearch(query);
   }
   return (
-    <>
-      <FullNavigation pageName="home" />
-      <PageTour tourId="search" />
       <form
         onSubmit={submit}
         className="search-form unified-search"
@@ -385,7 +383,9 @@ function SearchApp() {
               const members = columns.filter(
                 (c) =>
                   group(c) === name &&
-                  (!structure || hasMetadataTypeToken(c.type, "SMILES")),
+                  (structure
+                    ? hasMetadataTypeToken(c.type, "SMILES")
+                    : !hasMetadataTypeToken(c.type, "SMILES")),
               );
               return (
                 members.length > 0 && (
@@ -393,10 +393,11 @@ function SearchApp() {
                     <summary>{name} <small>{members.filter(c => selectedColumns.some(s => s.column === c.column)).length}/{members.length}</small></summary>
                     <div className="unified-search__column-grid">
                     {members.map((c) => (
-                      <label key={c.column}>
-                        <input
+                      <div key={c.column}>
+                        {columnLabel ? <>
+                          <input
                           type="checkbox"
-                          aria-label={c.column === classificationColumn ? label(c) : undefined}
+                          aria-label={label(c)}
                           aria-describedby={c.column === classificationColumn ? `${id}-generated-classification` : undefined}
                           checked={selectedColumns.some(
                             (s) => s.column === c.column,
@@ -414,8 +415,23 @@ function SearchApp() {
                             )
                           }
                         />
-                        <span>{label(c)}{c.column === classificationColumn && <ClassificationAutocompleteNote id={`${id}-generated-classification`} />}</span>
-                      </label>
+                          <span>{columnLabel(c, label(c))}{c.column === classificationColumn && <ClassificationAutocompleteNote id={`${id}-generated-classification`} />}</span>
+                        </> : <label>
+                          <input
+                            type="checkbox"
+                            aria-label={c.column === classificationColumn ? label(c) : undefined}
+                            aria-describedby={c.column === classificationColumn ? `${id}-generated-classification` : undefined}
+                            checked={selectedColumns.some((s) => s.column === c.column)}
+                            onChange={(e) => setFilter(
+                              e.target.checked
+                                ? [...selectedColumns.map((s) => s.column), c.column]
+                                : selectedColumns.filter((s) => s.column !== c.column).map((s) => s.column),
+                            )}
+                          />
+                          <span>{label(c)}{c.column === classificationColumn && <ClassificationAutocompleteNote id={`${id}-generated-classification`} />}</span>
+                        </label>}
+                        {columnAction?.(c)}
+                      </div>
                     ))}
                     </div>
                   </details>
@@ -463,11 +479,36 @@ function SearchApp() {
             </ul>
           </>
         )}
-        {error && <p role="alert">{error}</p>}
+        {(externalError || error) && <p role="alert">{externalError || error}</p>}
 
       </form>
-    </>
   );
+}
+function SearchApp() {
+  const navigate = useNavigate();
+  const publicConfig = usePublicConfig();
+  const [metadataColumns, setMetadataColumns] = useState<SearchColumn[]>([]);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let live = true;
+    cachedGet("/metadata").then(response => {
+      if (!live) return;
+      guardMetadataCatalog(response.data?.metadata, response.data);
+      setMetadataColumns(searchableMetadataColumns(response.data.metadata ?? []));
+    }).catch(() => { if (live) setError("Could not load search columns. Reload to try again."); });
+    return () => { live = false; };
+  }, []);
+  const fetchSuggestions: SearchSuggestionProvider = async request => {
+    const response = await api.get("/autocomplete", { signal: request.signal, params: {
+      value: request.value, scope: "search",
+      ...(request.filter === null ? {} : { columns: request.columns.map(column => column.column).join(",") }),
+      ...(request.structure ? { mode: "structure", ...request.options } : {}),
+    } });
+    return response.data?.suggestions ?? [];
+  };
+  return <><FullNavigation pageName="home" /><PageTour tourId="search" />
+    <SearchForm metadataColumns={metadataColumns} fetchSuggestions={fetchSuggestions} onSearch={query => navigate(`/table?query=${encodeURIComponent(query)}`)} classificationLabel={publicConfig.classification_autocomplete_label} externalError={error} />
+  </>;
 }
 export default SearchApp;
 export { AppResultTable } from "./ResultTablePage";

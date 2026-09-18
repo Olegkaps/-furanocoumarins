@@ -18,6 +18,7 @@ after(() => server.close());
 const { default: ResultTable } = await server.ssrLoadModule("/src/SearchApp/ResultTable.tsx");
 const { RankedSelectList, entityValues, rowsFromResponseData } = await server.ssrLoadModule("/src/SearchApp/ResultTable.tsx");
 const { SearchLink } = await server.ssrLoadModule("/src/SearchApp/SearchLine.tsx");
+const { filterResponse } = await server.ssrLoadModule("/src/SearchApp/searchApi.tsx");
 
 test("grouped rows reuse immutable plus snapshots and invalidate changed data, metadata and keys", () => {
   const meta = [
@@ -76,7 +77,7 @@ const metadata = [
   { column: "chemical_id", name: "Chemical ID", type: "table_chemical keycolumn", description: "" },
   { column: "trivial_names", name: "Trivial names", type: "table_chemical", description: "" },
   { column: "classification_id", name: "Species ID", type: "table_specie keycolumn", description: "" },
-  { column: "family", name: "Family", type: "clas[7]", description: "" },
+  { column: "family", name: "Family", type: "table_specie clas[7]", description: "" },
   { column: "genus", name: "Genus", type: "table_specie clas[1]", description: "" },
   { column: "species", name: "Species", type: "table_specie clas[0]", description: "" },
   { column: "referenceid", name: "Reference", type: "table_0 ref[]", description: "" },
@@ -138,9 +139,34 @@ test("a selected species links to its rank-zero taxon page", () => {
 
   assert.match(html, /href="\/taxon\/0\?name=dahurica"/);
   assert.match(html, />Open species page</);
+  assert.match(html, /Family/);
+  assert.match(html, /Genus/);
+  assert.match(html, /Species/);
+  assert.match(html, />Apiaceae</);
+  assert.match(html, />Angelica</);
+  assert.match(html, />dahurica</);
+});
+
+test("unselected classification does not enter result detail panels", () => {
+  const unselected = metadata.map((item) =>
+    item.column === "family" ? { ...item, type: "clas[7]" } : item,
+  );
+  const html = renderToStaticMarkup(createElement(MemoryRouter, {}, createElement(ResultTable, {
+    metadata: unselected,
+    data: [data[0]],
+  })));
+
   assert.doesNotMatch(html, />Family</);
-  assert.doesNotMatch(html, />Genus</);
-  assert.doesNotMatch(html, />Species</);
+  assert.doesNotMatch(html, />Apiaceae</);
+});
+
+test("result-table classifications replace NoValue variants with their original rank", () => {
+  const metadata = [
+    { column: "family_original", name: "Family", type: "table_specie clas[4]", description: "" },
+    { column: "family_powo", name: "POWO family", type: "table_specie clas[4][powo]", description: "" },
+  ];
+  const filtered = filterResponse({ metadata, data: [{ family_original: "Apiaceae", family_powo: "NoValue" }] });
+  assert.equal(filtered.data[0].family_powo, "Apiaceae");
 });
 
 test("results side lists honor an explicit chemical list name column", () => {

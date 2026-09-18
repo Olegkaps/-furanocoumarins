@@ -16,6 +16,12 @@ type EditablePageContentProps = {
   showEditButton?: boolean;
 };
 
+export function ReadOnlyPageContent({ content, error }: Pick<EditablePageContentProps, "content" | "error">) {
+  if (error) return <p style={{ color: "var(--color-danger)" }}>{error}</p>;
+  if (content === "") return <p style={{ color: "var(--color-muted)" }}>Page content has not been added yet.</p>;
+  return <div className="about-markdown" style={{ lineHeight: 1.6 }}><ReactMarkdown>{content}</ReactMarkdown></div>;
+}
+
 export function EditablePageContent({
   content,
   error,
@@ -133,19 +139,7 @@ export function EditablePageContent({
           </div>
         </form>
       ) : (
-        <>
-          {error && <p style={{ color: "var(--color-danger)" }}>{error}</p>}
-          {!error && content === "" && (
-            <p style={{ color: "var(--color-muted)" }}>
-              Page content has not been added yet.
-            </p>
-          )}
-          {!error && content !== "" && (
-            <div className="about-markdown" style={{ lineHeight: 1.6 }}>
-              <ReactMarkdown>{content}</ReactMarkdown>
-            </div>
-          )}
-        </>
+        <ReadOnlyPageContent content={content} error={error} />
       )}
     </>
   );

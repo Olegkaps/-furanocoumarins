@@ -63,7 +63,7 @@ export function filterResponse(searchResponse: { [index: string]: any }) {
         meta_defaults[curr_num] = { default: "", custom: [] };
       }
       const curr_tag = classification[1] ?? "default";
-      if (curr_tag === "default") {
+      if (curr_tag === "default" || curr_tag === "original") {
         meta_defaults[curr_num]["default"] = meta_item["column"];
       } else {
         meta_defaults[curr_num]["custom"].push(meta_item["column"]);
@@ -86,10 +86,8 @@ export function filterResponse(searchResponse: { [index: string]: any }) {
         const default_col = obj["default"];
         obj["custom"].forEach((col: string) => {
           const value = row[col] ?? "";
-          if (value.replaceAll(" ", "") === "") {
+          if (value.replaceAll(" ", "") === "" || value.replaceAll(" ", "") === "NoValue") {
             row[col] = row[default_col];
-          } else if (value.replaceAll(" ", "") === "NoValue") {
-            row[col] = "";
           }
         });
       });
