@@ -69,6 +69,7 @@ func NewApp(container *app.Container) *fiber.App {
 	app.Get("/search", search.SearchMainApp)
 	app.Get("/article/:id", bibtex.GetArticle)
 	app.Get("/pages/:name", pages.GetPage)
+	app.Get("/taxa/:rank", pages.GetTaxon)
 	app.Get("/about/pages", pages.GetAboutPages)
 
 	app.Get("/ping", response.Resp200)

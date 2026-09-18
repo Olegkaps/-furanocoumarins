@@ -8,6 +8,7 @@
         /autocomplete/* \
         /article/* \
         /pages/* \
+		/taxa/* \
 		/about/pages \
         /ping \
         /auth/* \

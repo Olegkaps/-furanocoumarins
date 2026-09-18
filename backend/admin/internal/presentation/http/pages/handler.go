@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -97,6 +98,23 @@ func (h *Handler) GetPage(c *fiber.Ctx) error {
 
 	c.Set("Content-Type", "text/markdown; charset=utf-8")
 	return c.Send(body)
+}
+
+// GetTaxon returns the active dataset's taxonomy context for one original
+// classification rank and name. Markdown itself remains a normal editable page.
+func (h *Handler) GetTaxon(c *fiber.Ctx) error {
+	rank, err := strconv.Atoi(c.Params("rank"))
+	if err != nil {
+		return response.Resp400(c, fmt.Errorf("classification rank must be an integer"))
+	}
+	taxon, err := h.Container.Cassandra.Taxonomy(c.UserContext(), rank, c.Query("name"))
+	if err != nil {
+		return response.RespErr(c, err)
+	}
+	if taxon == nil {
+		return response.Resp404(c)
+	}
+	return c.JSON(taxon)
 }
 
 // GetAboutPages returns the public About subpage navigation. A site without a

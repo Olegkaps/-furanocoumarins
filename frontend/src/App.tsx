@@ -14,6 +14,7 @@ import { AdminApp, AdminLogin, AdminLogout, AdminReset, AdminAdmit, AdminMagicCa
 import Register from "./Admin/Register";
 import { Reference } from "./Reference/Reference";
 import SubstancePage from "./SubstancePage/SubstancePage";
+import TaxonPage from "./TaxonPage/TaxonomyPage";
 import { SiteFooter } from "./shared/SiteFooter";
 import HistoryPage from "./SearchApp/HistoryPage";
 import CachePage from "./SearchApp/CachePage";
@@ -49,6 +50,7 @@ function App() {
               <Route path="/page" element={<SubstancePage />}/>
               {/* Legacy path form; redirects via SubstancePage query parsing */}
               <Route path="/page/:smiles" element={<SubstancePage />}/>
+              <Route path="/taxon/:rank" element={<TaxonPage />}/>
               <Route path="/table" element={<AppResultTable />}/>
               <Route path="/tree" element={<AppPhilogeneticTree />}/>
               <Route path="/login" element={<AdminLogin />}/>

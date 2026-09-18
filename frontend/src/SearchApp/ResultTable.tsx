@@ -18,6 +18,7 @@ import DataRows from "./RowsData";
 import { type CountMode } from "./PhylogeneticTree";
 import { InfoTip } from "../shared/ui/InfoTip";
 import { substancePagePath } from "../shared/substanceUrl";
+import { taxonPath, type TaxonLink } from "../TaxonPage/taxonPage";
 import { QueryCompareBar, type CompareSeries } from "./QueryCompareBar";
 import { CitationPopover } from "../shared/ui/CitationPopover";
 import { compareMetadataResultTypes, getMetadataTypeModifier, hasMetadataTypeToken } from "../shared/metadataType";
@@ -401,6 +402,20 @@ function findSpecieRow(
   return null;
 }
 
+// A species page is the lowest original classification rank. The page itself
+// supplies the genus + species title from the source taxonomy.
+function speciesTaxonLink(
+  row: Map<string, string> | null,
+  meta: DataMeta[],
+): TaxonLink | undefined {
+  if (!row) return undefined;
+  const speciesColumn = meta.find((column) =>
+    column.is_specie && column.classification_level === 0,
+  );
+  const name = speciesColumn ? (row.get(speciesColumn.name) ?? "").trim() : "";
+  return name ? { rank: 0, name } : undefined;
+}
+
 /** SMILES keyed by chemical name across every compare series (no specie filter). */
 function buildChemicalSmilesMap(
   primaryRows: DataRows[],
@@ -716,7 +731,7 @@ function DetailAttributeTable({
         {meta.map((meta_val, ind) => {
           if (kind === "chemical") {
             if (!meta_val.is_chemical || meta_val.type === "smiles") return null;
-          } else if (!meta_val.is_specie) {
+          } else if (!meta_val.is_specie || meta_val.classification_level != null) {
             return null;
           }
           const tipTour =
@@ -753,6 +768,7 @@ function SidePanel({
   detailRow,
   meta,
   smilesLink,
+  taxonLink,
 }: {
   kind: "chemical" | "specie";
   title: string;
@@ -766,6 +782,7 @@ function SidePanel({
   detailRow: Map<string, string> | null;
   meta: DataMeta[];
   smilesLink?: string;
+  taxonLink?: TaxonLink;
 }) {
   const BadgeIcon = kind === "chemical" ? Molecule : BranchesRight;
   const badgeClass =
@@ -819,6 +836,19 @@ function SidePanel({
                 className="link-button"
               >
                 Open substance page
+                <ArrowUpRightFromSquare />
+              </Link>
+            </p>
+          )}
+          {taxonLink && (
+            <p style={{ textAlign: "center", marginTop: 8, marginBottom: 12 }}>
+              <Link
+                to={taxonPath(taxonLink)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="link-button"
+              >
+                Open species page
                 <ArrowUpRightFromSquare />
               </Link>
             </p>
@@ -1117,6 +1147,7 @@ function ResultsWorkspace({
         }}
         detailRow={specieDetail}
         meta={meta}
+        taxonLink={speciesTaxonLink(specieDetail, meta)}
       />
     </div>
   );

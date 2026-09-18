@@ -130,6 +130,19 @@ test("results side lists display configured names instead of entity ids", () => 
   assert.doesNotMatch(html, /5-O-Methyl isogosferol</);
 });
 
+test("a selected species links to its rank-zero taxon page", () => {
+  const html = renderToStaticMarkup(createElement(MemoryRouter, {}, createElement(ResultTable, {
+    metadata,
+    data: [data[0]],
+  })));
+
+  assert.match(html, /href="\/taxon\/0\?name=dahurica"/);
+  assert.match(html, />Open species page</);
+  assert.doesNotMatch(html, />Family</);
+  assert.doesNotMatch(html, />Genus</);
+  assert.doesNotMatch(html, />Species</);
+});
+
 test("results side lists honor an explicit chemical list name column", () => {
   const explicitMetadata = metadata.map((item) =>
     item.column === "trivial_names"

@@ -440,17 +440,14 @@ tfoot td {
   background-color: var(--color-surface-alt);
 }
 
-.editable-markdown-preview img {
-  max-width: none;
-  height: auto;
-}
-
-.editable-markdown-preview {
+.about-markdown {
   min-width: 0;
 }
 
-.editable-markdown-preview * {
-  max-width: none;
+.about-markdown img {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 .site-nav {
