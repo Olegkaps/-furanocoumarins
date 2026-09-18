@@ -17,6 +17,7 @@ type CacheEntry = {
 
 const inflight = new Map<string, Promise<AxiosResponse>>();
 const memory = new Map<string, CacheEntry>();
+const AUTOCOMPLETE_TTL_MS = 15_000;
 
 let idbPromise: Promise<IDBDatabase> | null = null;
 
@@ -183,6 +184,19 @@ async function writeEntry(
   lsSetSmall(id, entry);
 }
 
+function readMemoryEntry(id: string, expectedKey: string): unknown | null {
+  const entry = memory.get(id);
+  if (!entry) return null;
+  if (entryMatches(entry, expectedKey, Date.now())) return entry.data;
+  memory.delete(id);
+  return null;
+}
+
+function writeMemoryEntry(id: string, expectedKey: string, data: unknown, ttl: number): void {
+  const now = Date.now();
+  memory.set(id, { key: expectedKey, data, writtenAt: now, expiresAt: now + ttl });
+}
+
 async function idbDelete(id: string): Promise<void> {
   try {
     const db = await openIdb();
@@ -246,10 +260,15 @@ function kindFromId(id: string): ApiCacheKind {
   if (id.startsWith("s:")) return "search";
   if (id.startsWith("metadata:")) return "metadata";
   if (id.startsWith("article:")) return "article";
+  if (id.startsWith("config:")) return "config";
+  if (id.startsWith("about-pages:")) return "about-pages";
+  if (id.startsWith("page:")) return "page";
+  if (id.startsWith("taxon:")) return "taxon";
+  if (id.startsWith("autocomplete:")) return "autocomplete";
   return "other";
 }
 
-export type ApiCacheKind = "search" | "metadata" | "article" | "other";
+export type ApiCacheKind = "search" | "metadata" | "article" | "config" | "about-pages" | "page" | "taxon" | "autocomplete" | "other";
 
 export type ApiCacheInfo = {
   id: string;
@@ -458,4 +477,96 @@ export async function cachedGet(
 
   inflight.set(id, request);
   return request;
+}
+
+async function cachedPublicGet(
+  kind: "config" | "about-pages" | "page" | "taxon",
+  logicalKey: string,
+  url: string,
+  reqConfig?: AxiosRequestConfig,
+): Promise<AxiosResponse> {
+  const id = entryId(kind, logicalKey);
+  const hit = await readEntry(id, logicalKey);
+  if (hit != null) return asAxiosOk(url, hit, reqConfig);
+
+  // An abort belongs to the component that supplied it. Never make another
+  // component inherit that cancellation through a shared in-flight request.
+  const canCoalesce = reqConfig?.signal == null;
+  const existing = canCoalesce ? inflight.get(id) : undefined;
+  if (existing) return existing;
+
+  const request = api.get(url, reqConfig).then(async response => {
+    if (response.status === 200) await writeEntry(id, logicalKey, response.data);
+    return response;
+  }).finally(() => {
+    if (canCoalesce) inflight.delete(id);
+  });
+  if (canCoalesce) inflight.set(id, request);
+  return request;
+}
+
+/** Public environment configuration; invalidated with every dataset activation. */
+export function cachedPublicConfig(reqConfig?: AxiosRequestConfig): Promise<AxiosResponse> {
+  return cachedPublicGet("config", "config", "/config", reqConfig);
+}
+
+/** Public About navigation catalog. Invalidate after an admin saves the catalog. */
+export function cachedAboutPages(reqConfig?: AxiosRequestConfig): Promise<AxiosResponse> {
+  return cachedPublicGet("about-pages", "about-pages", "/about/pages", reqConfig);
+}
+
+/** Public Markdown by its exact storage name. Invalidate after saving that page. */
+export function cachedEditablePage(pageName: string, reqConfig?: AxiosRequestConfig): Promise<AxiosResponse> {
+  const url = `/pages/${encodeURIComponent(pageName)}`;
+  return cachedPublicGet("page", pageName, url, reqConfig);
+}
+
+export async function invalidateCachedEditablePage(pageName: string): Promise<void> {
+  await deleteApiCacheEntry(entryId("page", pageName));
+}
+
+export async function invalidateCachedAboutPages(): Promise<void> {
+  await deleteApiCacheEntry(entryId("about-pages", "about-pages"));
+}
+
+/**
+ * Taxonomy is dataset-derived. Callers must provide the active metadata
+ * timestamp, so no entry can survive a dataset switch.
+ */
+export function cachedTaxon(
+  rank: number,
+  name: string,
+  metadataTimestamp: string | number,
+  reqConfig?: AxiosRequestConfig,
+): Promise<AxiosResponse> {
+  const url = `/taxa/${rank}`;
+  if (!metadataTimestamp) return api.get(url, { ...reqConfig, params: { ...reqConfig?.params, name } });
+  const logicalKey = JSON.stringify([metadataTimestamp, rank, name]);
+  return cachedPublicGet("taxon", logicalKey, url, { ...reqConfig, params: { ...reqConfig?.params, name } });
+}
+
+type AutocompleteParams = Record<string, string | number | boolean | undefined>;
+
+function autocompleteKey(path: string, params: AutocompleteParams): string {
+  return JSON.stringify([path, Object.entries(params)
+    .filter(([, value]) => value !== undefined)
+    .sort(([left], [right]) => left.localeCompare(right))]);
+}
+
+/**
+ * Exact autocomplete requests are useful while typing/backspacing, but remain
+ * memory-only and short-lived because they are derived from the active dataset.
+ */
+export async function cachedAutocomplete(
+  path: string,
+  params: AutocompleteParams,
+  reqConfig?: AxiosRequestConfig,
+): Promise<AxiosResponse> {
+  const logicalKey = autocompleteKey(path, params);
+  const id = entryId("autocomplete", logicalKey);
+  const hit = readMemoryEntry(id, logicalKey);
+  if (hit != null) return asAxiosOk(path, hit, reqConfig);
+  const response = await api.get(path, { ...reqConfig, params: { ...reqConfig?.params, ...params } });
+  if (response.status === 200) writeMemoryEntry(id, logicalKey, response.data, AUTOCOMPLETE_TTL_MS);
+  return response;
 }

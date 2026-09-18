@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, getToken } from "../shared/api";
+import { cachedAboutPages, invalidateCachedAboutPages } from "../shared/apiCache";
 import type { AboutSubpage } from "./aboutSubpageTypes";
 
 export function useAboutSubpages() {
@@ -10,7 +11,7 @@ export function useAboutSubpages() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get<{ pages?: AboutSubpage[] }>("/about/pages");
+      const response = await cachedAboutPages();
       setPages(response.data.pages ?? []);
       setError(null);
     } catch {
@@ -33,6 +34,7 @@ export function useAboutSubpages() {
     const response = await api.put<{ pages?: AboutSubpage[] }>("/admin/about/pages", { pages: next }, {
       headers: { Authorization: `Bearer ${token}` },
     });
+    await invalidateCachedAboutPages();
     setPages(response.data.pages ?? next);
     window.dispatchEvent(new Event("about-subpages-changed"));
   }, []);

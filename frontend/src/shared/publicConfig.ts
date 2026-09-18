@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import { api } from "./api";
+import { cachedPublicConfig } from "./apiCache";
 
 export type PublicConfig = {
   taxonomy_info?: string;
@@ -25,7 +25,7 @@ export function usePublicConfig() {
 
 export async function loadPublicConfig(signal?: AbortSignal): Promise<PublicConfig> {
   try {
-    const response = await api.get("/config", { signal });
+    const response = await cachedPublicConfig({ signal });
     return readPublicConfig(response.data);
   } catch {
     return {};

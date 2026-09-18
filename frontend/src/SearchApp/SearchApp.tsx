@@ -6,8 +6,7 @@ import {
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../shared/api";
-import { cachedGet } from "../shared/apiCache";
+import { cachedAutocomplete, cachedGet } from "../shared/apiCache";
 import { guardMetadataCatalog } from "../shared/schemaGuard";
 import {
   hasMetadataTypeToken,
@@ -499,11 +498,11 @@ function SearchApp() {
     return () => { live = false; };
   }, []);
   const fetchSuggestions: SearchSuggestionProvider = async request => {
-    const response = await api.get("/autocomplete", { signal: request.signal, params: {
+    const response = await cachedAutocomplete("/autocomplete", {
       value: request.value, scope: "search",
       ...(request.filter === null ? {} : { columns: request.columns.map(column => column.column).join(",") }),
       ...(request.structure ? { mode: "structure", ...request.options } : {}),
-    } });
+    }, { signal: request.signal });
     return response.data?.suggestions ?? [];
   };
   return <><FullNavigation pageName="home" /><PageTour tourId="search" />

@@ -4,6 +4,7 @@ import FullNavigation from "../FullNavigation/FullNavigation";
 import { EditablePageContent } from "../features/editable-page/EditablePageContent";
 import { useEditablePage } from "../features/editable-page/useEditablePage";
 import { api } from "../shared/api";
+import { cachedTaxon } from "../shared/apiCache";
 import { EntityDetailTable } from "../SearchApp/EntityDetailTable";
 import { fetchEntityPageDetails, type MetadataResponse, type SearchResponse } from "../SearchApp/entityPageDetails";
 import DataMeta from "../SearchApp/DataMeta";
@@ -41,7 +42,9 @@ export default function TaxonPage() {
     let current = true;
     setLoadingTaxon(true);
     setMissing(false);
-    void api.get<Taxon>(`/taxa/${rank}`, { params: { name } }).then(response => {
+    // Taxonomy entries are cacheable only for the active dataset. Fetch its
+    // identity afresh so another admin's activation cannot reuse an old key.
+    void api.get<MetadataResponse>("/metadata", { params: { taxon_cache_key: Date.now() } }).then(({ data }) => cachedTaxon(rank, name, data.timestamp)).then(response => {
       if (current) setTaxon(response.data);
     }).catch(error => {
       if (current) setMissing(error?.response?.status === 404);

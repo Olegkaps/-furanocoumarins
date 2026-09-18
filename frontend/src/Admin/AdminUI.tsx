@@ -8,6 +8,7 @@ import {
   FileArrowDown,
 } from "@gravity-ui/icons";
 import config from "../config";
+import { clearApiCache } from "../shared/apiCache";
 import "./Admin.css";
 
 class Table {
@@ -217,6 +218,7 @@ const AdminPage: React.FC = () => {
 			{},
 			{ headers: { Authorization: `Bearer ${token}` } },
 		);
+		await clearApiCache();
 		await fetchTables();
 		setTableNotice("Table is Active");
 	} catch (error: unknown) {

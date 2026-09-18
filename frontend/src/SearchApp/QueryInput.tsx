@@ -1,7 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { InputHTMLAttributes } from "react";
-import { cachedGet } from "../shared/apiCache";
-import { api } from "../shared/api";
+import { cachedAutocomplete, cachedGet } from "../shared/apiCache";
 import { applyQuerySuggestion, completionKey, queryColumns, queryContext, querySuggestions, queryValueRequestKey, scheduleQueryValues } from "./queryCompletion";
 import type { QueryColumn, QuerySuggestion } from "./queryCompletion";
 import "./QueryInput.css";
@@ -46,7 +45,7 @@ export function QueryInput({ value, onChange, onKeyDown, onFocus, onBlur, onSele
     const [column, prefix] = JSON.parse(baseRequestKey) as [string, string];
     const options = JSON.parse(requestKey)[1];
     return scheduleQueryValues(async (signal) => {
-      const response = await api.get(`/autocomplete/${encodeURIComponent(column)}`, { params: { value: prefix, ...(context.column?.smiles ? { mode: "structure", ...options } : {}) }, signal });
+      const response = await cachedAutocomplete(`/autocomplete/${encodeURIComponent(column)}`, { value: prefix, ...(context.column?.smiles ? { mode: "structure", ...options } : {}) }, { signal });
       return response.data?.values;
     }, (values) => setRemote({ key: requestKey, values }));
   }, [requestKey, baseRequestKey, focused, dismissed, context.column?.smiles]);

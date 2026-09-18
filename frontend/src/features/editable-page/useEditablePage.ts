@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api, getToken } from "../../shared/api";
+import { cachedEditablePage, invalidateCachedEditablePage } from "../../shared/apiCache";
 
 export const MAX_PAGE_CHARS = 10_000;
 
@@ -16,7 +17,7 @@ export function useEditablePage(pageName: string | null, defaultContent = "") {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get(`/pages/${encodeURIComponent(pageName)}`, {
+      const res = await cachedEditablePage(pageName, {
         responseType: "text",
       });
       const text = typeof res.data === "string" ? res.data : "";
@@ -70,6 +71,7 @@ export function useEditablePage(pageName: string | null, defaultContent = "") {
             Authorization: `Bearer ${token}`,
           },
         });
+        await invalidateCachedEditablePage(pageName);
         setContent(text);
         setEditMode(false);
         setEditText(text);
