@@ -16,6 +16,7 @@ import (
 type TaxonLink struct {
 	Rank         int    `json:"rank"`
 	Name         string `json:"name"`
+	ID           string `json:"id,omitempty"`
 	SourceColumn string `json:"source_column,omitempty"`
 }
 
@@ -35,17 +36,17 @@ type taxonomyColumn struct {
 // Taxonomy reads classification directly from the active dataset's preserved
 // source sheet.  The document is pinned to that dataset rather than using the
 // latest editable metadata definition.
-func (s *Store) Taxonomy(ctx context.Context, rank int, name string) (*Taxon, error) {
+func (s *Store) Taxonomy(ctx context.Context, rank int, name, id string) (*Taxon, error) {
 	if s == nil || s.db == nil {
 		return nil, ErrNotConfigured
 	}
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return nil, fmt.Errorf("taxon name is required")
+	name, id = strings.TrimSpace(name), strings.TrimSpace(id)
+	if name == "" && id == "" {
+		return nil, fmt.Errorf("taxon name or source ID is required")
 	}
-	var tableName string
+	var tableName, tableData string
 	var raw json.RawMessage
-	err := s.db.QueryRowContext(ctx, `SELECT t.table_species,m.document FROM chemdb.tables t JOIN chemdb.metadata_versions m ON m.version=t.metadata_version WHERE t.is_active AND t.is_ok`).Scan(&tableName, &raw)
+	err := s.db.QueryRowContext(ctx, `SELECT t.table_species,t.table_data,m.document FROM chemdb.tables t JOIN chemdb.metadata_versions m ON m.version=t.metadata_version WHERE t.is_active AND t.is_ok`).Scan(&tableName, &tableData, &raw)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("no active table found")
 	}
@@ -75,18 +76,48 @@ func (s *Store) Taxonomy(ctx context.Context, rank int, name string) (*Taxon, er
 	if requested < 0 {
 		return nil, fmt.Errorf("classification rank %d is unavailable", rank)
 	}
-	physical, err := pgTable(tableName)
+	primary := ""
+	physicalName := tableName
+	if id != "" {
+		// The public ID is defined by the immutable source catalog, not by a
+		// potentially different metadata primary-key declaration. Its table and
+		// primary key are therefore the only correct lookup target for /species/:id.
+		catalog, catalogErr := s.sourceCatalog(ctx, &Table{TableData: tableData, TableSpecies: tableName}, "species")
+		if catalogErr != nil {
+			return nil, catalogErr
+		}
+		primary, physicalName = catalog.primary, catalog.physical
+	}
+	// Legacy name routes read the historical taxonomy table, which need not
+	// retain the source-row primary-key column. Only ID routes need that column
+	// (and the indexed equality predicate that uses it).
+	if id != "" && primary != "" {
+		quotedPrimary, quoteErr := pgColumn(primary)
+		if quoteErr != nil {
+			return nil, quoteErr
+		}
+		quoted = append(quoted, quotedPrimary)
+	}
+	physical, err := pgTable(physicalName)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT `+strings.Join(quoted, ",")+` FROM `+physical)
+	query := `SELECT ` + strings.Join(quoted, ",") + ` FROM ` + physical
+	args := []any(nil)
+	if id != "" {
+		// ID routes identify one source classification row. Keep the legacy
+		// name mode unfiltered because it intentionally gathers descendants.
+		query += ` WHERE ` + quoted[len(quoted)-1] + `=$1`
+		args = append(args, id)
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	values := [][]string{}
 	for rows.Next() {
-		cells := make([]sql.NullString, len(columns))
+		cells := make([]sql.NullString, len(quoted))
 		pointers := make([]any, len(cells))
 		for i := range cells {
 			pointers[i] = &cells[i]
@@ -98,7 +129,10 @@ func (s *Store) Taxonomy(ctx context.Context, rank int, name string) (*Taxon, er
 		for i, cell := range cells {
 			row[i] = strings.TrimSpace(cell.String)
 		}
-		if row[requested] == name {
+		if taxonomyMatches(row, requested, name, id, len(columns)) {
+			if name == "" {
+				name = row[requested]
+			}
 			values = append(values, row)
 		}
 	}
@@ -109,6 +143,13 @@ func (s *Store) Taxonomy(ctx context.Context, rank int, name string) (*Taxon, er
 		return nil, nil
 	}
 	return buildTaxon(columns, requested, name, values), nil
+}
+
+func taxonomyMatches(row []string, requested int, name, id string, classificationColumns int) bool {
+	if id != "" {
+		return len(row) > classificationColumns && row[classificationColumns] == id
+	}
+	return row[requested] == name
 }
 
 func taxonomyColumns(document metadata.Document) []taxonomyColumn {
@@ -145,7 +186,11 @@ func effectiveTaxonomyTag(tag string) string {
 }
 
 func buildTaxon(columns []taxonomyColumn, requested int, name string, rows [][]string) *Taxon {
-	result := &Taxon{TaxonLink: TaxonLink{Rank: columns[requested].rank, Name: name}, Title: name, QueryColumn: columns[requested].name, Children: []TaxonLink{}}
+	id := ""
+	if columns[requested].rank == 0 && len(rows) > 0 && len(rows[0]) > len(columns) {
+		id = rows[0][len(columns)]
+	}
+	result := &Taxon{TaxonLink: TaxonLink{Rank: columns[requested].rank, Name: name, ID: id}, Title: name, QueryColumn: columns[requested].name, Children: []TaxonLink{}}
 	if columns[requested].rank == 0 {
 		if genus := firstRankValue(columns, rows, 1); genus != "" && !strings.EqualFold(genus, name) {
 			result.Title = genus + " " + name
@@ -167,7 +212,11 @@ func buildTaxon(columns []taxonomyColumn, requested int, name string, rows [][]s
 			key := fmt.Sprintf("%d\x00%s", columns[i].rank, child)
 			if !seen[key] {
 				seen[key] = true
-				result.Children = append(result.Children, TaxonLink{Rank: columns[i].rank, Name: child, SourceColumn: columns[i].label})
+				childID := ""
+				if columns[i].rank == 0 && len(row) > len(columns) {
+					childID = row[len(columns)]
+				}
+				result.Children = append(result.Children, TaxonLink{Rank: columns[i].rank, Name: child, ID: childID, SourceColumn: columns[i].label})
 			}
 			break
 		}

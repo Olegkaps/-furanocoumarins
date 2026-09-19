@@ -4,7 +4,7 @@ import { cachedEditablePage, invalidateCachedEditablePage } from "../../shared/a
 
 export const MAX_PAGE_CHARS = 10_000;
 
-export function useEditablePage(pageName: string | null, defaultContent = "") {
+export function useEditablePage(pageName: string | null, defaultContent = "", fallbackPageName: string | null = null) {
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +28,22 @@ export function useEditablePage(pageName: string | null, defaultContent = "") {
         e && typeof e === "object" && "response" in e
           ? (e as { response?: { status?: number } }).response?.status
           : undefined;
+      if (status === 404 && fallbackPageName) {
+        try {
+          const fallback = await cachedEditablePage(fallbackPageName, { responseType: "text" });
+          const text = typeof fallback.data === "string" ? fallback.data : "";
+          setContent(text);
+          setEditText(text);
+          return;
+        } catch (fallbackError: unknown) {
+          const fallbackStatus = fallbackError && typeof fallbackError === "object" && "response" in fallbackError
+            ? (fallbackError as { response?: { status?: number } }).response?.status : undefined;
+          if (fallbackStatus !== 404) {
+            setError("Failed to load page");
+            return;
+          }
+        }
+      }
       const msg = status === 404 ? null : "Failed to load page";
       setError(msg ?? null);
       if (!msg) {
@@ -37,7 +53,7 @@ export function useEditablePage(pageName: string | null, defaultContent = "") {
     } finally {
       setLoading(false);
     }
-  }, [pageName, defaultContent]);
+  }, [pageName, defaultContent, fallbackPageName]);
 
   useEffect(() => {
     if (pageName == null) {

@@ -1,10 +1,3 @@
-.truncated-text-container {
-  position: relative;
-  display: inline-block;
-  cursor: default;
-  max-width: 100%;
-}
-
 .truncated-text {
   display: block;
   overflow: hidden;
@@ -13,48 +6,9 @@
   max-width: 100%;
   word-break: break-all;
 }
-
-.tooltip {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  margin-bottom: 8px;
-  background: var(--color-surface);
-  color: var(--color-ink);
-  border: 1px solid var(--color-border);
-  padding: 8px 12px;
-  border-radius: var(--radius);
-  white-space: normal;
-  width: 300px;
-  z-index: 1000;
-  box-shadow: var(--shadow);
-}
-
-.tooltip::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 12px;
-  margin-top: -1px;
-  border: 6px solid transparent;
-  border-top-color: var(--color-border);
-}
-
-.tooltip-content {
-  display: flex;
-  align-items: center;
-  word-break: break-all;
-  gap: 8px;
-}
-
-.copy-button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-muted);
-  padding: 0;
-}
-
-.copy-button:hover {
-  color: var(--color-accent);
-}
+.truncated-text--button { width: 100%; border: 0; padding: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.truncated-text--button:hover, .truncated-text--button:focus-visible { color: var(--color-accent); text-decoration: underline; }
+.value-dialog-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: #0008; }
+.value-dialog { width: min(760px, 100%); max-height: min(80dvh, 720px); display: flex; flex-direction: column; gap: 14px; padding: 18px; border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); box-shadow: var(--shadow); }
+.value-dialog header, .value-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.value-dialog pre { margin: 0; padding: 12px; overflow: auto; border-radius: 6px; background: var(--color-surface-alt); white-space: pre-wrap; overflow-wrap: anywhere; font: 0.9rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }

@@ -70,6 +70,20 @@ test("catalog page exposes all three cursor-paginated source collections", () =>
   assert.doesNotMatch(html, /page=1/);
 });
 
+test("catalog entity cards use stable ID routes", async () => {
+  const source = await readFile(fileURLToPath(new URL("../src/Catalog/CatalogPage.tsx", import.meta.url)), "utf8");
+  assert.match(source, /chemicalPagePath\(id\)/);
+  assert.match(source, /speciesPagePath\(id\)/);
+  assert.doesNotMatch(source, /substancePagePath\(smiles\)/);
+});
+
+test("full-value controls are outside metadata anchors", async () => {
+  const source = await readFile(fileURLToPath(new URL("../src/SearchApp/DataMeta.tsx", import.meta.url)), "utf8");
+  const anchor = source.slice(source.indexOf("<a\n                    className=\"meta-link\""), source.indexOf("</a>"));
+  assert.doesNotMatch(anchor, /TruncatedText/);
+  assert.match(source, /controlOnly/);
+});
+
 test("catalog totals use a separate request that is independent of cursor navigation", async () => {
   const source = await readFile(fileURLToPath(new URL("../src/Catalog/CatalogPage.tsx", import.meta.url)), "utf8");
   assert.match(source, /\/catalog\/\$\{kind\}\/count/);

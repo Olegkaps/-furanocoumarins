@@ -49,6 +49,8 @@ function App() {
               <Route path="/history" element={<HistoryPage />}/>
               <Route path="/cache" element={<CachePage />}/>
               <Route path="/catalog" element={<CatalogPage />}/>
+              <Route path="/chemical/:id" element={<SubstancePage />}/>
+              <Route path="/species/:id" element={<TaxonPage />}/>
               <Route path="/page" element={<SubstancePage />}/>
               {/* Legacy path form; redirects via SubstancePage query parsing */}
               <Route path="/page/:smiles" element={<SubstancePage />}/>

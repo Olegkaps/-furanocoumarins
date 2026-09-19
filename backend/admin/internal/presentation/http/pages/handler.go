@@ -107,7 +107,7 @@ func (h *Handler) GetTaxon(c *fiber.Ctx) error {
 	if err != nil {
 		return response.Resp400(c, fmt.Errorf("classification rank must be an integer"))
 	}
-	taxon, err := h.Container.Cassandra.Taxonomy(c.UserContext(), rank, c.Query("name"))
+	taxon, err := h.Container.Cassandra.Taxonomy(c.UserContext(), rank, c.Query("name"), c.Query("id"))
 	if err != nil {
 		return response.RespErr(c, err)
 	}

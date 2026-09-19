@@ -35,6 +35,7 @@ func TestSourceCatalogSeeksUnjoinedRowsByPrimaryKey(t *testing.T) {
 	require.Equal(t, "Source only", page.Items[0]["name"])
 	require.Equal(t, "dW5qb2luZWQtMg", page.PreviousCursor)
 	require.Equal(t, "dW5qb2luZWQtMg", page.NextCursor)
+	require.Equal(t, "chemical_id", page.PrimaryColumn)
 	require.Equal(t, "Chemical", page.Columns[1].Name)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -149,6 +150,25 @@ func TestSourceCatalogRecordUsesOnlyDeclaredColumns(t *testing.T) {
 	record, err := store.pgSourceCatalogRecord(context.Background(), table, "chemicals", "smiles", "CCO")
 	require.NoError(t, err)
 	require.Equal(t, "unjoined-2", record.Item["chemical_id"])
+	require.Equal(t, "chemical_id", record.PrimaryColumn)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSourceCatalogRecordUsesDeclaredPrimaryID(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	store := NewPostgresStore(db)
+	table := &Table{TableData: "chemdb.data_fixture", TableSpecies: "chemdb.species_fixture"}
+	physical := SourceTableName(table.TableData, "structures")
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT to_regclass($1) IS NOT NULL`)).WithArgs(`"chemdb"."data_fixture_sources"`).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT physical_table,entity_kind,primary_column,columns_json FROM "chemdb"."data_fixture_sources" WHERE virtual_name=$1`)).WithArgs("structures").WillReturnRows(sqlmock.NewRows([]string{"physical_table", "entity_kind", "primary_column", "columns_json"}).AddRow(physical, "chemicals", "chemical_id", `[["structures","chemical_id","primary","Identifier","ID"],["structures","smiles","SMILES","","SMILES"]]`))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT row_to_json(source_row)::text FROM (SELECT * FROM ` + mustPGTable(t, physical) + ` WHERE "chemical_id"=$1 LIMIT 1) source_row`)).WithArgs("chemical-42").WillReturnRows(sqlmock.NewRows([]string{"row"}).AddRow(`{"chemical_id":"chemical-42","smiles":"CCO"}`))
+
+	record, err := store.pgSourceCatalogRecord(context.Background(), table, "chemicals", "chemical_id", "chemical-42")
+	require.NoError(t, err)
+	require.Equal(t, "chemical-42", record.Item["chemical_id"])
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

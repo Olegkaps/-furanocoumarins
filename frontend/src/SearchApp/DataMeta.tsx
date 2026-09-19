@@ -104,6 +104,9 @@ class DataMeta {
   classification_tag: string | null
   show_on_chemical_page: boolean
   show_on_species_page: boolean
+  is_primary: boolean
+  is_key_column: boolean
+  entity_kind: "chemical" | "specie" | ""
 
   constructor(
     type: string,
@@ -112,7 +115,7 @@ class DataMeta {
     description: string,
     data: string,
     group_type: string,
-    options: { isListName?: boolean; classificationLevel?: number | null; classificationTag?: string | null; showOnChemicalPage?: boolean; showOnSpeciesPage?: boolean } = {},
+    options: { isListName?: boolean; classificationLevel?: number | null; classificationTag?: string | null; showOnChemicalPage?: boolean; showOnSpeciesPage?: boolean; isPrimary?: boolean; isKeyColumn?: boolean; entityKind?: "chemical" | "specie" | "" } = {},
   ) {
     // TO DO: validate type
     this.type = type
@@ -129,6 +132,9 @@ class DataMeta {
     this.classification_tag = options.classificationTag ?? null
     this.show_on_chemical_page = options.showOnChemicalPage ?? false
     this.show_on_species_page = options.showOnSpeciesPage ?? false
+    this.is_primary = options.isPrimary ?? false
+    this.is_key_column = options.isKeyColumn ?? false
+    this.entity_kind = options.entityKind ?? ""
   }
 
   render(value: string | undefined) { // rewrite to classes
@@ -187,17 +193,14 @@ class DataMeta {
             <React.Fragment key={`${link.id}-${i}`}>
               {i > 0 && <span>, </span>}
               {href ? (
-                <a
-                  className="meta-link"
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <span className="meta-link__text">
-                    <TruncatedText text={link.text} maxLength={70} />
-                  </span>
-                  <ArrowUpRightFromSquare className="meta-link__icon" width={14} height={14} aria-hidden />
-                </a>
+                <span className="meta-link-list__item"><a
+                    className="meta-link"
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  ><span className="meta-link__text">{link.text.length > 70 ? `${link.text.slice(0, 70)}…` : link.text}</span><ArrowUpRightFromSquare className="meta-link__icon" width={14} height={14} aria-hidden /></a>
+                  {link.text.length > 70 && <TruncatedText text={link.text} maxLength={70} controlOnly />}
+                </span>
               ) : (
                 <span className="meta-link__text">
                   <TruncatedText text={link.text} maxLength={70} />

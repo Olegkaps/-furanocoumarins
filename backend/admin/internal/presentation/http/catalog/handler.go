@@ -83,6 +83,28 @@ func (h *Handler) Record(c *fiber.Ctx) error {
 	return response.JSON(c, record)
 }
 
+// Get returns a source entity by its stable, catalog-declared primary ID.
+func (h *Handler) Get(c *fiber.Ctx) error {
+	kind, id := c.Params("kind"), c.Params("id")
+	if kind != "chemicals" && kind != "species" {
+		return response.Resp400(c, fmt.Errorf("catalog record kind must be chemicals or species"))
+	}
+	if id == "" {
+		return response.Resp400(c, fmt.Errorf("id is required"))
+	}
+	record, err := h.Container.Cassandra.GetCatalogRecordByID(c.UserContext(), kind, id)
+	if errors.Is(err, cassandra.ErrCatalogUnavailable) {
+		return c.Status(fiber.StatusConflict).JSON(response.ErrorResponse{Error: err.Error()})
+	}
+	if err != nil {
+		return response.RespErr(c, err)
+	}
+	if record == nil {
+		return response.Resp404(c)
+	}
+	return response.JSON(c, record)
+}
+
 func boundedPositiveInt(raw string, min, max int, name string) (int, error) {
 	value, err := strconv.Atoi(raw)
 	if err != nil || value < min || value > max {

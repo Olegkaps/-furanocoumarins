@@ -115,13 +115,6 @@ func TestPostgresStoreIntegrationImportSearchActivationAndDeletion(t *testing.T)
 	require.False(t, exists)
 }
 
-func mustPGTable(t *testing.T, name string) string {
-	t.Helper()
-	value, err := pgTable(name)
-	require.NoError(t, err)
-	return value
-}
-
 func TestPostgresStoreIntegrationContainsAndArrayResults(t *testing.T) {
 	db := postgresIntegrationDB(t)
 	store := NewPostgresStore(db)

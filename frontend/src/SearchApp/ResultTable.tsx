@@ -266,10 +266,10 @@ export function rowsFromResponseData(
       const rawItem = data_item[m.name];
       const item = rawItem != null ? String(rawItem) : "";
       // SMILES is often typed without `table_`, so is_chemical is false — still attach to chem.
-      if (m.is_chemical || m.type === "smiles") {
+      if (m.is_chemical || m.type === "smiles" || ((m.is_primary || m.is_key_column) && m.entity_kind === "chemical")) {
         chem_row.set(m.name, item);
         chemicalIdentity.push([m.name, rawItem]);
-      } else if (m.is_specie) {
+      } else if (m.is_specie || ((m.is_primary || m.is_key_column) && m.entity_kind === "specie")) {
         specie_row.set(m.name, item);
         speciesIdentity.push([m.name, rawItem]);
       }
@@ -415,6 +415,21 @@ function speciesTaxonLink(
   );
   const name = speciesColumn ? (row.get(speciesColumn.name) ?? "").trim() : "";
   return name ? { rank: 0, name } : undefined;
+}
+
+function entityID(row: Map<string, string> | null, meta: DataMeta[], kind: "chemical" | "specie"): string {
+  // A primary query field is not necessarily the stable source-row ID. In
+  // particular, legacy datasets use SMILES and the rank-zero taxon as their
+  // primary values. Sending either to /chemical/:id or /species/:id makes the
+  // source-ID endpoint look up the wrong key. Keep those legacy page links
+  // until an actual non-display source ID is available in the result row.
+  const column = meta.find(item =>
+    (item.is_primary || item.is_key_column) &&
+    item.entity_kind === kind &&
+    item.type !== "smiles" &&
+    item.classification_level === null,
+  );
+  return column ? (row?.get(column.name) ?? "").trim() : "";
 }
 
 /** SMILES keyed by chemical name across every compare series (no specie filter). */
@@ -734,6 +749,7 @@ function SidePanel({
   meta,
   smilesLink,
   taxonLink,
+  entityID,
 }: {
   kind: "chemical" | "specie";
   title: string;
@@ -748,6 +764,7 @@ function SidePanel({
   meta: DataMeta[];
   smilesLink?: string;
   taxonLink?: TaxonLink;
+  entityID?: string;
 }) {
   const BadgeIcon = kind === "chemical" ? Molecule : BranchesRight;
   const badgeClass =
@@ -795,7 +812,7 @@ function SidePanel({
           {smilesLink != null && smilesLink !== "" && (
             <p style={{ textAlign: "center", marginTop: 8, marginBottom: 12 }}>
               <Link
-                to={substancePagePath(smilesLink)}
+                to={entityID ? `/chemical/${encodeURIComponent(entityID)}` : substancePagePath(smilesLink)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="link-button"
@@ -808,7 +825,7 @@ function SidePanel({
           {taxonLink && (
             <p style={{ textAlign: "center", marginTop: 8, marginBottom: 12 }}>
               <Link
-                to={taxonPath(taxonLink)}
+                to={entityID ? `/species/${encodeURIComponent(entityID)}` : taxonPath(taxonLink)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="link-button"
@@ -1049,6 +1066,7 @@ function ResultsWorkspace({
             ? chemicalSmiles.get(currentChemical) ?? ""
             : "")
         }
+        entityID={entityID(chemicalDetail, meta, "chemical")}
       />
 
       <div
@@ -1113,6 +1131,7 @@ function ResultsWorkspace({
         detailRow={specieDetail}
         meta={meta}
         taxonLink={speciesTaxonLink(specieDetail, meta)}
+        entityID={entityID(specieDetail, meta, "specie")}
       />
     </div>
   );
@@ -1544,6 +1563,7 @@ function ResultTableOrNull({
       const full_type = meta_item["type"];
       const linkModifier = getMetadataTypeModifier(full_type, "link");
       const classificationModifier = getMetadataTypeModifier(full_type, "clas");
+      const externalSheet = getMetadataTypeModifier(full_type, "external")?.[0];
       if (linkModifier) {
         data_type = "link";
         additional_data = linkModifier[0];
@@ -1559,20 +1579,20 @@ function ResultTableOrNull({
         classificationTag = classificationModifier[1] === undefined || classificationModifier[1] === "default" || classificationModifier[1] === "original" ? "original" : classificationModifier[1];
       }
 
-      if (hasMetadataTypeToken(full_type, "chemical")) {
-        if (hasMetadataTypeToken(full_type, "keycolumn")) {
-          chem_key_column = data_name;
-        }
-      } else if (hasMetadataTypeToken(full_type, "specie")) {
-        if (hasMetadataTypeToken(full_type, "keycolumn")) {
-          specie_key_column = data_name;
-        }
+      const entityKind = hasMetadataTypeToken(full_type, "chemical") || externalSheet === "structures"
+        ? "chemical" as const
+        : hasMetadataTypeToken(full_type, "specie") || classificationModifier || externalSheet === "classification"
+          ? "specie" as const
+          : "";
+      if (hasMetadataTypeToken(full_type, "keycolumn")) {
+        if (entityKind === "chemical") chem_key_column = data_name;
+        if (entityKind === "specie") specie_key_column = data_name;
       }
 
       let group_type = "";
-      if (hasMetadataTypeToken(full_type, "chemical")) {
+      if (entityKind === "chemical") {
         group_type = "chemical";
-      } else if (hasMetadataTypeToken(full_type, "specie") || classificationModifier) {
+      } else if (entityKind === "specie") {
         group_type = "specie";
       }
       // Result placement is opt-in. Classification still carries its rank and
@@ -1594,6 +1614,9 @@ function ResultTableOrNull({
             classificationLevel, classificationTag,
             showOnChemicalPage: hasMetadataTypeToken(full_type, "chemical_page"),
             showOnSpeciesPage: hasMetadataTypeToken(full_type, "species_page"),
+            isPrimary: hasMetadataTypeToken(full_type, "primary"),
+            isKeyColumn: hasMetadataTypeToken(full_type, "keycolumn"),
+            entityKind,
           },
         ),
       );

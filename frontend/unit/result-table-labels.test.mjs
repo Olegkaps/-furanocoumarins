@@ -131,13 +131,13 @@ test("results side lists display configured names instead of entity ids", () => 
   assert.doesNotMatch(html, /5-O-Methyl isogosferol</);
 });
 
-test("a selected species links to its rank-zero taxon page", () => {
+test("a selected species with a source keycolumn links to its canonical ID page", () => {
   const html = renderToStaticMarkup(createElement(MemoryRouter, {}, createElement(ResultTable, {
     metadata,
     data: [data[0]],
   })));
 
-  assert.match(html, /href="\/taxon\/0\?name=dahurica"/);
+  assert.match(html, /href="\/species\/sp-1"/);
   assert.match(html, />Open species page</);
   assert.match(html, /Family/);
   assert.match(html, /Genus/);
@@ -145,6 +145,30 @@ test("a selected species links to its rank-zero taxon page", () => {
   assert.match(html, />Apiaceae</);
   assert.match(html, />Angelica</);
   assert.match(html, />dahurica</);
+});
+
+test("display identities stay on legacy URLs while source keycolumns use canonical entity URLs", () => {
+  const chemicalMetadata = [
+    { column: "smiles", name: "SMILES", type: "table_chemical SMILES chemical", description: "" },
+    { column: "source_id", name: "Source ID", type: "keycolumn invisible external[structures]", description: "" },
+  ];
+  const chemicalHTML = renderToStaticMarkup(createElement(MemoryRouter, {}, createElement(ResultTable, {
+    metadata: chemicalMetadata,
+    data: [{ smiles: "C/C", source_id: "chemical-42" }],
+  })));
+  assert.match(chemicalHTML, /href="\/chemical\/chemical-42"/);
+  assert.doesNotMatch(chemicalHTML, /href="\/chemical\/C%2FC"/);
+
+  const speciesMetadata = [
+    { column: "species", name: "Species", type: "table_specie keycolumn primary clas[0] specie", description: "" },
+    { column: "source_id", name: "Source ID", type: "keycolumn invisible external[classification]", description: "" },
+  ];
+  const speciesHTML = renderToStaticMarkup(createElement(MemoryRouter, {}, createElement(ResultTable, {
+    metadata: speciesMetadata,
+    data: [{ species: "communis", source_id: "species-42" }],
+  })));
+  assert.match(speciesHTML, /href="\/species\/species-42"/);
+  assert.doesNotMatch(speciesHTML, /href="\/species\/communis"/);
 });
 
 test("unselected classification does not enter result detail panels", () => {

@@ -4,9 +4,10 @@ import { Archive, ChevronLeft, ChevronRight } from "@gravity-ui/icons";
 import FullNavigation from "../FullNavigation/FullNavigation";
 import { api } from "../shared/api";
 import { formatAuthors, parseBibtex } from "../shared/bibtex";
-import { cachedCatalogCountRequest, catalogPageNumber, classificationColumn, recordTitle, rememberCatalogPageNumber } from "./catalogModel";
+import { cachedCatalogCountRequest, catalogPageNumber, recordTitle, rememberCatalogPageNumber } from "./catalogModel";
 import { MoleculePreview } from "../SearchApp/MoleculePreview";
-import { substancePagePath } from "../shared/substanceUrl";
+import { chemicalPagePath } from "../shared/substanceUrl";
+import { speciesPagePath } from "../TaxonPage/taxonPage";
 import "./CatalogPage.css";
 
 type CatalogKind = "chemicals" | "species" | "publications";
@@ -14,6 +15,7 @@ type CatalogColumn = { column: string; name: string; type: string; description: 
 type CatalogResponse = {
   kind: CatalogKind;
   page_size: number;
+  primary_column: string;
   previous_cursor?: string;
   next_cursor?: string;
   columns: CatalogColumn[];
@@ -61,17 +63,11 @@ function chemicalName(columns: CatalogColumn[], item: Record<string, unknown>): 
   return names.split("=").map((name) => name.trim()).find(Boolean) || recordTitle("chemicals", columns, item);
 }
 
-function SourceCard({ kind, columns, item }: { kind: Exclude<CatalogKind, "publications">; columns: CatalogColumn[]; item: Record<string, unknown> }) {
+function SourceCard({ kind, columns, primaryColumn, item }: { kind: Exclude<CatalogKind, "publications">; columns: CatalogColumn[]; primaryColumn: string; item: Record<string, unknown> }) {
   const title = kind === "chemicals" ? chemicalName(columns, item) : recordTitle(kind, columns, item);
-  const speciesColumn = classificationColumn(columns, 0);
-  const species = speciesColumn ? textValue(item[speciesColumn]) : "";
   const smiles = columnValue(columns, item, (column) => /(?:^|\s)SMILES(?:\s|$)/i.test(column.type) || column.column.toLowerCase() === "smiles");
-  const id = columnValue(columns, item, (column) => /(?:^|\s)primary(?:\s|$)/.test(column.type) || /^(?:id|.*_id)$/i.test(column.column));
-  const destination = kind === "chemicals" && smiles
-    ? substancePagePath(smiles)
-    : kind === "species" && species
-      ? `/taxon/0?name=${encodeURIComponent(species)}`
-      : undefined;
+  const id = textValue(item[primaryColumn]);
+  const destination = id ? kind === "chemicals" ? chemicalPagePath(id) : speciesPagePath(id) : undefined;
   return <article className="catalog-card">
     <div className={kind === "chemicals" ? "catalog-card__chemical" : undefined}>
       <div className="catalog-card__main">
@@ -169,7 +165,7 @@ export default function CatalogPage() {
         {data.items.length === 0 ? <p className="empty-state">No records.</p> : <div className="catalog-grid">
           {data.items.map((item, index) => kind === "publications"
             ? <PublicationCard key={textValue(item.article_id) || index} item={item} />
-            : <SourceCard key={textValue(item[data.columns[0]?.column]) || index} kind={kind} columns={data.columns} item={item} />)}
+            : <SourceCard key={textValue(item[data.primary_column]) || index} kind={kind} columns={data.columns} primaryColumn={data.primary_column} item={item} />)}
         </div>}
         <nav className="catalog-pagination" aria-label="Catalog pages">
           <button type="button" className="btn" disabled={!data.previous_cursor} onClick={() => navigateCursor("before", data.previous_cursor!)}><ChevronLeft width={16} height={16} /> Previous</button>

@@ -8,11 +8,11 @@ import { cachedTaxon } from "../shared/apiCache";
 import { EntityDetailTable } from "../SearchApp/EntityDetailTable";
 import { fetchEntityPageDetails, sourceEntityPageDetails, type MetadataResponse, type SearchResponse, type SourceEntityRecord } from "../SearchApp/entityPageDetails";
 import DataMeta from "../SearchApp/DataMeta";
-import { type Taxon, taxonChildLabel, taxonPageName, taxonPath } from "./taxonPage";
+import { type Taxon, taxonChildLabel, taxonPageName, taxonPath, taxonRouteIsValid } from "./taxonPage";
 import "./TaxonomyPage.css";
 
-export function TaxonPageView({ taxon, details, children, renderTaxonLink, maxWidth = 800, renderDetailLabel }: { taxon: Taxon; details: { meta: DataMeta[]; row: Map<string, string> } | null; children: ReactNode; renderTaxonLink?: (link: { rank: number; name: string; source_column?: string }, content: ReactNode) => ReactNode; maxWidth?: string | number; renderDetailLabel?: (column: DataMeta) => ReactNode }) {
-  const destination = (link: { rank: number; name: string; source_column?: string }, content: ReactNode) => renderTaxonLink ? renderTaxonLink(link, content) : <Link to={taxonPath(link)}>{content}</Link>;
+export function TaxonPageView({ taxon, details, children, renderTaxonLink, maxWidth = 800, renderDetailLabel }: { taxon: Taxon; details: { meta: DataMeta[]; row: Map<string, string> } | null; children: ReactNode; renderTaxonLink?: (link: { rank: number; name: string; id?: string; source_column?: string }, content: ReactNode) => ReactNode; maxWidth?: string | number; renderDetailLabel?: (column: DataMeta) => ReactNode }) {
+  const destination = (link: { rank: number; name: string; id?: string; source_column?: string }, content: ReactNode) => renderTaxonLink ? renderTaxonLink(link, content) : <Link to={taxonPath(link)}>{content}</Link>;
   return <main className="taxon-page" style={{ position: "relative", padding: 24, maxWidth, margin: "0 auto" }}>
     <p style={{ color: "var(--color-muted)", margin: "0 0 4px" }}>Classification rank {taxon.rank}</p>
     <h1>{taxon.title}</h1>
@@ -26,16 +26,36 @@ export function TaxonPageView({ taxon, details, children, renderTaxonLink, maxWi
 }
 
 export default function TaxonPage() {
-  const { rank: rawRank } = useParams<{ rank: string }>();
+  const { rank: rawRank, id } = useParams<{ rank: string; id: string }>();
   const [params] = useSearchParams();
-  const rank = Number(rawRank);
-  const name = params.get("name")?.trim() ?? "";
-  const valid = Number.isInteger(rank) && name !== "";
+  const legacyRank = Number(rawRank);
+  const legacyName = params.get("name")?.trim() ?? "";
+  const [source, setSource] = useState<SourceEntityRecord | null>(null);
+  const [sourceLoaded, setSourceLoaded] = useState(!id);
+  const speciesColumn = source?.columns.find(column => /clas\[0\]/.test(column.type));
+  const rank = id ? 0 : legacyRank;
+  const name = id && speciesColumn ? String(source?.item[speciesColumn.column] ?? "").trim() : legacyName;
+  // An ID route has its identity before its source-row detail request finishes.
+  // Do not make taxonomy loading depend on that second request: transient source
+  // catalog failures used to leave every /species/:id page looking nonexistent.
+  const valid = taxonRouteIsValid(id, rank, name);
   const [taxon, setTaxon] = useState<Taxon | null>(null);
   const [loadingTaxon, setLoadingTaxon] = useState(valid);
   const [missing, setMissing] = useState(false);
   const [details, setDetails] = useState<{ meta: DataMeta[]; row: Map<string, string> } | null>(null);
-  const state = useEditablePage(valid ? taxonPageName(rank, name) : null);
+  const state = useEditablePage(id ? `species:${id}` : valid ? taxonPageName(rank, name) : null, "", id && taxon?.name ? taxonPageName(0, taxon.name) : null);
+
+  useEffect(() => {
+    if (!id) return;
+    const controller = new AbortController();
+    setSource(null);
+    setSourceLoaded(false);
+    void api.get<SourceEntityRecord>(`/catalog/species/${encodeURIComponent(id)}`, { signal: controller.signal })
+      .then(response => setSource(response.data))
+      .catch(() => setSource(null))
+      .finally(() => { if (!controller.signal.aborted) setSourceLoaded(true); });
+    return () => controller.abort();
+  }, [id]);
 
   useEffect(() => {
     if (!valid) return;
@@ -44,13 +64,16 @@ export default function TaxonPage() {
     setMissing(false);
     // Taxonomy entries are cacheable only for the active dataset. Fetch its
     // identity afresh so another admin's activation cannot reuse an old key.
-    void api.get<MetadataResponse>("/metadata", { params: { taxon_cache_key: Date.now() } }).then(({ data }) => cachedTaxon(rank, name, data.timestamp)).then(response => {
+    const request = id
+      ? api.get<Taxon>(`/taxa/${rank}`, { params: { id } })
+      : api.get<MetadataResponse>("/metadata", { params: { taxon_cache_key: Date.now() } }).then(({ data }) => cachedTaxon(rank, name, data.timestamp));
+    void request.then(response => {
       if (current) setTaxon(response.data);
     }).catch(error => {
       if (current) setMissing(error?.response?.status === 404);
     }).finally(() => { if (current) setLoadingTaxon(false); });
     return () => { current = false; };
-  }, [valid, rank, name]);
+  }, [valid, rank, name, id]);
 
   useEffect(() => {
     setDetails(null);
@@ -62,14 +85,15 @@ export default function TaxonPage() {
     void api.get<MetadataResponse>("/metadata", { signal: controller.signal, params: { entity_page: Date.now() } }).then(async ({ data }) => {
       const joined = await fetchEntityPageDetails(data, "species", taxon.query_column!, name, controller.signal, async (params, signal) => (await api.get<SearchResponse>("/search", { params: { ...params, entity_page: data.timestamp }, signal })).data);
       if (joined || controller.signal.aborted) return joined;
-      const source = await api.get<SourceEntityRecord>("/catalog/species/record", { params: { column: taxon.query_column, value: name }, signal: controller.signal });
-      return sourceEntityPageDetails(source.data, "species");
+      if (source) return sourceEntityPageDetails(source, "species");
+      const record = await api.get<SourceEntityRecord>("/catalog/species/record", { params: { column: taxon.query_column, value: name }, signal: controller.signal });
+      return sourceEntityPageDetails(record.data, "species");
     }).then(value => { if (current) setDetails(value); }).catch(() => { if (current) setDetails(null); });
     return () => { current = false; controller.abort(); };
-  }, [rank, name, taxon?.query_column]);
+  }, [rank, name, taxon?.query_column, source]);
 
   if (!valid || missing) return <><FullNavigation /><main style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}><p className="empty-state">Taxon page not found.</p></main></>;
-  if (loadingTaxon || state.loading) return <><FullNavigation /><main style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}>Loading…</main></>;
+  if (loadingTaxon || state.loading || (id && !sourceLoaded)) return <><FullNavigation /><main style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}>Loading…</main></>;
   if (!taxon) return null;
 
   return <><FullNavigation />

@@ -23,6 +23,7 @@ type CatalogColumn struct {
 type CatalogPage struct {
 	Kind           string           `json:"kind"`
 	PageSize       int              `json:"page_size"`
+	PrimaryColumn  string           `json:"primary_column"`
 	PreviousCursor string           `json:"previous_cursor,omitempty"`
 	NextCursor     string           `json:"next_cursor,omitempty"`
 	Columns        []CatalogColumn  `json:"columns"`
@@ -41,9 +42,10 @@ type CatalogCount struct {
 // CatalogRecord is one preserved source row used as a public entity-page
 // fallback when that chemical or species is not present in the joined table.
 type CatalogRecord struct {
-	Kind    string          `json:"kind"`
-	Columns []CatalogColumn `json:"columns"`
-	Item    map[string]any  `json:"item"`
+	Kind          string          `json:"kind"`
+	PrimaryColumn string          `json:"primary_column"`
+	Columns       []CatalogColumn `json:"columns"`
+	Item          map[string]any  `json:"item"`
 }
 
 type sourceCatalog struct {
@@ -127,6 +129,26 @@ func (s *Store) GetCatalogRecord(ctx context.Context, kind, column, value string
 	return s.pgSourceCatalogRecord(ctx, table, kind, column, value)
 }
 
+// GetCatalogRecordByID resolves the immutable source-table primary key.  Public
+// entity URLs use this rather than a mutable display name or SMILES value.
+func (s *Store) GetCatalogRecordByID(ctx context.Context, kind, id string) (*CatalogRecord, error) {
+	if s == nil || s.db == nil {
+		return nil, ErrCatalogUnavailable
+	}
+	if kind != "chemicals" && kind != "species" {
+		return nil, &response.UserError{E: fmt.Errorf("catalog record kind must be chemicals or species")}
+	}
+	table, err := s.pgGetActiveTable(nil)
+	if err != nil {
+		return nil, err
+	}
+	catalog, err := s.sourceCatalog(ctx, table, kind)
+	if err != nil {
+		return nil, err
+	}
+	return s.pgSourceCatalogRecord(ctx, table, kind, catalog.primary, id)
+}
+
 func (s *Store) pgSourceCatalog(ctx context.Context, table *Table, kind, after, before string, pageSize int) (*CatalogPage, error) {
 	catalog, err := s.sourceCatalog(ctx, table, kind)
 	if err != nil {
@@ -161,6 +183,7 @@ func (s *Store) pgSourceCatalog(ctx context.Context, table *Table, kind, after, 
 		return nil, err
 	}
 	page := catalogPage(kind, pageSize, after, before, catalog.primary, items)
+	page.PrimaryColumn = catalog.primary
 	page.Columns = catalog.columns
 	return page, nil
 }
@@ -193,7 +216,7 @@ func (s *Store) pgSourceCatalogRecord(ctx context.Context, table *Table, kind, c
 	if err = json.Unmarshal([]byte(raw), &item); err != nil {
 		return nil, fmt.Errorf("decode source row: %w", err)
 	}
-	return &CatalogRecord{Kind: kind, Columns: catalog.columns, Item: item}, nil
+	return &CatalogRecord{Kind: kind, PrimaryColumn: catalog.primary, Columns: catalog.columns, Item: item}, nil
 }
 
 func (s *Store) sourceCatalog(ctx context.Context, table *Table, kind string) (*sourceCatalog, error) {
@@ -266,6 +289,7 @@ func (s *Store) pgPublicationCatalog(ctx context.Context, after, before string, 
 		return nil, err
 	}
 	page := catalogPage("publications", pageSize, after, before, "article_id", items)
+	page.PrimaryColumn = "article_id"
 	page.Columns = []CatalogColumn{{Column: "article_id", Name: "Reference"}, {Column: "bibtex_text", Name: "Publication", Type: "bibtex"}}
 	return page, nil
 }

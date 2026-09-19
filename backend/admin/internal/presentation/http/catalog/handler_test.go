@@ -58,3 +58,20 @@ func TestListReportsLegacySourceCatalogUnavailable(t *testing.T) {
 	defer response.Body.Close()
 	require.Equal(t, fiber.StatusConflict, response.StatusCode)
 }
+
+func TestGetByIDRejectsNonEntityCatalogsAndUsesTheIDPath(t *testing.T) {
+	container, err := app.New(app.Options{EnvType: "TEST"})
+	require.NoError(t, err)
+	application := fiber.New()
+	application.Get("/catalog/:kind/:id", NewHandler(container).Get)
+	for _, path := range []string{"/catalog/publications/reference-1", "/catalog/unknown/record-1"} {
+		response, requestErr := application.Test(httptest.NewRequest(fiber.MethodGet, path, nil))
+		require.NoError(t, requestErr)
+		require.Equal(t, fiber.StatusBadRequest, response.StatusCode, path)
+		require.NoError(t, response.Body.Close())
+	}
+	response, requestErr := application.Test(httptest.NewRequest(fiber.MethodGet, "/catalog/chemicals/source-42", nil))
+	require.NoError(t, requestErr)
+	defer response.Body.Close()
+	require.Equal(t, fiber.StatusConflict, response.StatusCode)
+}

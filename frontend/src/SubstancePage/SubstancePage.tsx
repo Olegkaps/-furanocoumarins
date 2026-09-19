@@ -34,6 +34,12 @@ function smilesCanvasId(smiles: string): string {
   return `smiles_${Math.abs(hash).toString(36)}`;
 }
 
+function sourceSmiles(source: SourceEntityRecord | null): string | null {
+  const column = source?.columns.find(item => /(?:^|\s)SMILES(?:\s|$)/.test(item.type));
+  if (!column) return null;
+  return String(source!.item[column.column] ?? "").trim() || null;
+}
+
 export function ChemicalPageView({ smiles, details, children, maxWidth = "800px", renderDetailLabel }: { smiles: string; details: { meta: DataMeta[]; row: Map<string, string> } | null; children: ReactNode; maxWidth?: string | number; renderDetailLabel?: (column: DataMeta) => ReactNode }) {
   return <div style={{ padding: "24px", maxWidth, margin: "0 auto" }}>
     <div key={smiles} style={{ marginBottom: "24px" }}><canvas id={smilesCanvasId(smiles)} className="smiles" data-smiles={smiles} /></div>
@@ -44,12 +50,27 @@ export function ChemicalPageView({ smiles, details, children, maxWidth = "800px"
 }
 
 export default function SubstancePage() {
-  const { smiles: smilesEncoded } = useParams<{ smiles: string }>();
+  const { smiles: smilesEncoded, id } = useParams<{ smiles: string; id: string }>();
   const [searchParams] = useSearchParams();
-  const smiles = resolveSmiles(smilesEncoded, searchParams);
+  const legacySmiles = resolveSmiles(smilesEncoded, searchParams);
+  const [source, setSource] = useState<SourceEntityRecord | null>(null);
+  const [sourceLoaded, setSourceLoaded] = useState(!id);
+  const smiles = id ? sourceSmiles(source) : legacySmiles;
 
-  const state = useEditablePage(smiles);
+  const state = useEditablePage(id ? `chemical:${id}` : smiles, "", id ? smiles : null);
   const [details, setDetails] = useState<{ meta: DataMeta[]; row: Map<string, string> } | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    const controller = new AbortController();
+    setSource(null);
+    setSourceLoaded(false);
+    void api.get<SourceEntityRecord>(`/catalog/chemicals/${encodeURIComponent(id)}`, { signal: controller.signal })
+      .then(response => setSource(response.data))
+      .catch(() => setSource(null))
+      .finally(() => { if (!controller.signal.aborted) setSourceLoaded(true); });
+    return () => controller.abort();
+  }, [id]);
 
   useEffect(() => {
     setDetails(null);
@@ -64,12 +85,14 @@ export default function SubstancePage() {
       if (!smilesColumn) return null;
       const joined = await fetchEntityPageDetails(data, "chemical", smilesColumn, smiles, controller.signal, async (params, signal) => (await api.get<SearchResponse>("/search", { params: { ...params, entity_page: data.timestamp }, signal })).data);
       if (joined || controller.signal.aborted) return joined;
-      const source = await api.get<SourceEntityRecord>("/catalog/chemicals/record", { params: { column: smilesColumn, value: smiles }, signal: controller.signal });
-      return sourceEntityPageDetails(source.data, "chemical");
+      if (source) return sourceEntityPageDetails(source, "chemical");
+      const record = await api.get<SourceEntityRecord>("/catalog/chemicals/record", { params: { column: smilesColumn, value: smiles }, signal: controller.signal });
+      return sourceEntityPageDetails(record.data, "chemical");
     }).then(value => { if (current) setDetails(value); }).catch(() => { if (current) setDetails(null); });
     return () => { current = false; controller.abort(); };
-  }, [smiles]);
+  }, [smiles, source]);
 
+  if (id && !sourceLoaded) return <><FullNavigation /><div style={{ padding: "24px", maxWidth: "800px", margin: "0 auto" }}>Loading…</div></>;
   if (smiles === null || smiles === "") {
     return (
       <>

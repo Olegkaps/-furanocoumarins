@@ -1,28 +1,36 @@
-import { useState, useRef } from "react";
-import { Copy } from "@gravity-ui/icons";
+import { useEffect, useRef, useState } from "react";
+import { Copy, Xmark } from "@gravity-ui/icons";
 import config from "../../config";
 import "./TruncatedText.css";
 
 export function TruncatedText({
   text,
   maxLength = 50,
+  controlOnly = false,
 }: {
   text: string;
   maxLength?: number;
+  /** Use beside another interactive element (for example, a metadata link). */
+  controlOnly?: boolean;
 }) {
-  const [isTooltipVisible, setIsTooltipVisible] = useState(false);
-  const textRef = useRef<HTMLDivElement>(null);
-
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const isTruncated = text.length > maxLength;
-  const displayText = isTruncated ? `${text.slice(0, maxLength)}...` : text;
 
-  const handleMouseEnter = () => {
-    if (isTruncated) setIsTooltipVisible(true);
-  };
-
-  const handleMouseLeave = () => {
-    setIsTooltipVisible(false);
-  };
+  useEffect(() => {
+    if (!open) return;
+    const trigger = triggerRef.current;
+    dialogRef.current?.focus();
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", dismiss);
+    return () => {
+      window.removeEventListener("keydown", dismiss);
+      trigger?.focus();
+    };
+  }, [open]);
 
   const copyToClipboard = async () => {
     try {
@@ -50,36 +58,15 @@ export function TruncatedText({
     document.body.removeChild(textArea);
   }
 
-  return (
-    <div
-      className="truncated-text-container"
-      ref={textRef}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      <span
-        className="truncated-text"
-        style={{ fontSize: config["FONT_SIZE"] }}
-      >
-        {displayText}
-      </span>
-      {isTruncated && isTooltipVisible && (
-        <div className="tooltip">
-          <div className="tooltip-content">
-            <span>{text}</span>
-            <button
-              className="copy-button"
-              onClick={(e) => {
-                e.stopPropagation();
-                copyToClipboard();
-              }}
-              title="Copy"
-            >
-              <Copy height={"25px"} width={"25px"} />
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  if (!isTruncated && !controlOnly) return <span className="truncated-text" style={{ fontSize: config["FONT_SIZE"] }}>{text}</span>;
+  return <>
+    <button ref={triggerRef} type="button" className="truncated-text truncated-text--button" style={{ fontSize: config["FONT_SIZE"] }} onClick={() => setOpen(true)} aria-label="Show full value">{controlOnly ? "Full value" : `${text.slice(0, maxLength)}…`}</button>
+    {open && <div className="value-dialog-backdrop" role="presentation" onMouseDown={() => setOpen(false)}>
+      <section ref={dialogRef} tabIndex={-1} className="value-dialog" role="dialog" aria-modal="true" aria-label="Full cell value" onMouseDown={event => event.stopPropagation()}>
+        <header><strong>Full value</strong><button type="button" className="btn" onClick={() => setOpen(false)} aria-label="Close full value"><Xmark width={16} height={16} /></button></header>
+        <pre>{text}</pre>
+        <footer><button type="button" className="btn" onClick={() => { void copyToClipboard(); }}><Copy width={16} height={16} /> Copy</button></footer>
+      </section>
+    </div>}
+  </>;
 }
