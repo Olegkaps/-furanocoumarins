@@ -6,6 +6,8 @@ import type { QueryColumn, QuerySuggestion } from "./queryCompletion";
 import "./QueryInput.css";
 import { parseStructureOptions } from "./StructureOptions";
 import { MoleculePreview } from "./MoleculePreview";
+import { insertDelimiter, reconcileDelimiterPairs, registerAutoQuotePair, removePairedDelimiter, replaceSuggestionWithDelimiter, typeAutoClosingQuote } from "./queryDelimiters";
+import type { DelimiterPair } from "./queryDelimiters";
 
 
 
@@ -17,6 +19,8 @@ export function QueryInput({ value, onChange, onKeyDown, onFocus, onBlur, onSele
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const pendingCaret = useRef<number | null>(null);
+  const pendingValue = useRef<string | null>(null);
+  const delimiterPairs = useRef<DelimiterPair[]>([]);
   const [columns, setColumns] = useState<QueryColumn[]>([]);
   const [caret, setCaret] = useState(value.length);
   const [focused, setFocused] = useState(false);
@@ -51,21 +55,30 @@ export function QueryInput({ value, onChange, onKeyDown, onFocus, onBlur, onSele
   }, [requestKey, baseRequestKey, focused, dismissed, context.column?.smiles]);
 
   useLayoutEffect(() => {
+    if (pendingValue.current === value) pendingValue.current = null;
+    else delimiterPairs.current = [];
     if (pendingCaret.current === null) return;
     input.current?.setSelectionRange(pendingCaret.current, pendingCaret.current);
     pendingCaret.current = null;
   }, [value]);
+
+  const emitChange = (nextValue: string) => {
+    pendingValue.current = nextValue;
+    onChange(nextValue);
+  };
 
   useEffect(() => {
     if (selected >= 0) document.getElementById(`${id}-${selected}`)?.scrollIntoView?.({ block: "nearest" });
   }, [id, selected]);
 
   const choose = (suggestion: QuerySuggestion) => {
-    const next = applyQuerySuggestion(value, context, suggestion);
+    const delimiter = suggestion.insert === "(" ? replaceSuggestionWithDelimiter(value, context.start, context.end, "(", delimiterPairs.current) : null;
+    const next = delimiter ?? applyQuerySuggestion(value, context, suggestion);
+    delimiterPairs.current = delimiter?.pairs ?? registerAutoQuotePair(next.value, next.caret, reconcileDelimiterPairs(value, next.value, delimiterPairs.current));
     pendingCaret.current = next.caret;
     setCaret(next.caret);
     setActive(-1);
-    onChange(next.value);
+    emitChange(next.value);
     input.current?.focus();
   };
 
@@ -75,8 +88,10 @@ export function QueryInput({ value, onChange, onKeyDown, onFocus, onBlur, onSele
       aria-controls={open ? id : undefined} aria-activedescendant={selected >= 0 ? `${id}-${selected}` : undefined}
       aria-describedby={[props["aria-describedby"], showValueHint ? `${id}-hint` : undefined].filter(Boolean).join(" ") || undefined}
       onChange={(event) => {
-        setCaret(event.currentTarget.selectionStart ?? event.currentTarget.value.length);
-        setDismissed(false); setActive(-1); onChange(event.currentTarget.value);
+        const nextValue = event.currentTarget.value;
+        delimiterPairs.current = reconcileDelimiterPairs(value, nextValue, delimiterPairs.current);
+        setCaret(event.currentTarget.selectionStart ?? nextValue.length);
+        setDismissed(false); setActive(-1); emitChange(nextValue);
       }}
       onSelect={(event) => {
         const next = event.currentTarget.selectionStart ?? value.length;
@@ -88,6 +103,46 @@ export function QueryInput({ value, onChange, onKeyDown, onFocus, onBlur, onSele
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing) return;
         if (event.key === "Escape") { setDismissed(true); setActive(-1); if (open) event.preventDefault(); return; }
+        const start = event.currentTarget.selectionStart ?? value.length;
+        const end = event.currentTarget.selectionEnd ?? start;
+        if (event.key === "'" && start === end) {
+          const quote = typeAutoClosingQuote(value, start, delimiterPairs.current);
+          if (quote) {
+            event.preventDefault();
+            delimiterPairs.current = quote.pairs;
+            pendingCaret.current = quote.caret;
+            setCaret(quote.caret);
+            if (quote.value !== value) emitChange(quote.value);
+            return;
+          }
+        }
+        if ((event.key === "(" || event.key === "'") && !event.altKey && !event.ctrlKey && !event.metaKey) {
+          const inserted = insertDelimiter(value, start, end, event.key, delimiterPairs.current);
+          event.preventDefault();
+          delimiterPairs.current = inserted.pairs;
+          pendingCaret.current = inserted.caret;
+          setCaret(inserted.caret); setDismissed(false); setActive(-1); emitChange(inserted.value);
+          return;
+        }
+        if (event.key === ")" && start === end) {
+          const pair = delimiterPairs.current.find(({ close, delimiter }) => close === start && (delimiter === "(" ? ")" : "'") === event.key);
+          if (pair) {
+            event.preventDefault();
+            pendingCaret.current = start + 1;
+            setCaret(start + 1);
+            return;
+          }
+        }
+        if ((event.key === "Backspace" || event.key === "Delete") && start === end) {
+          const removed = removePairedDelimiter(value, start, event.key, delimiterPairs.current);
+          if (removed) {
+            event.preventDefault();
+            delimiterPairs.current = removed.pairs;
+            pendingCaret.current = removed.caret;
+            setCaret(removed.caret); setDismissed(false); setActive(-1); emitChange(removed.value);
+            return;
+          }
+        }
         const action = completionKey(event.key, selected, open ? suggestions.length : 0);
         if (action.handled) {
           event.preventDefault(); event.stopPropagation();

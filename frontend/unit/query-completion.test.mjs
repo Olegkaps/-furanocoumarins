@@ -15,6 +15,7 @@ after(() => server.close());
 const { queryColumns, queryContext, querySuggestions, applyQuerySuggestion, queryValueRequestKey, scheduleQueryValues, completionKey } =
   await server.ssrLoadModule("/src/SearchApp/queryCompletion.ts");
 const { QueryInput } = await server.ssrLoadModule("/src/SearchApp/QueryInput.tsx");
+const { insertDelimiter, registerAutoQuotePair, removePairedDelimiter, reconcileDelimiterPairs, replaceSuggestionWithDelimiter, typeAutoClosingQuote } = await server.ssrLoadModule("/src/SearchApp/queryDelimiters.ts");
 const columns = queryColumns([
   { column: "names", name: "Trivial name(s)", type: "search table_2 chemical" },
   { column: "familia", name: "Family", type: "clas[7] specie" },
@@ -30,6 +31,76 @@ test("all registered identifiers are offered, irrespective of guided search and 
   assert.deepEqual(labels("fam"), ["familia"]);
   assert.deepEqual(queryColumns([null, {}, { column: "bad;name", type: "search" }, { column: "_private", type: "search" }]), []);
   assert.deepEqual(queryColumns(null), []);
+});
+
+test("typed query delimiters pair, wrap selections, and remove only tracked counterparts", () => {
+  let pairs = [];
+  let edit = insertDelimiter("", 0, 0, "(", pairs);
+  assert.deepEqual(edit.value, "()");
+  assert.equal(edit.caret, 1);
+  pairs = edit.pairs;
+  assert.equal(removePairedDelimiter(edit.value, 1, "Backspace", pairs).value, "");
+  edit = insertDelimiter("names", 0, 5, "'", []);
+  assert.equal(edit.value, "'names'");
+  assert.equal(edit.caret, 1);
+  const manual = removePairedDelimiter("()", 1, "Backspace", []);
+  assert.equal(manual, null);
+});
+
+test("selecting the opening-parenthesis completion creates a tracked closing delimiter", () => {
+  const query = "";
+  const ctx = context(query);
+  const suggestion = querySuggestions(ctx, columns).find(({ insert }) => insert === "(");
+  assert.ok(suggestion);
+  const edit = replaceSuggestionWithDelimiter(query, ctx.start, ctx.end, suggestion.insert, []);
+  assert.deepEqual(edit, { value: "() ", caret: 1, pairs: [{ open: 0, close: 1, delimiter: "(" }] });
+  assert.equal(removePairedDelimiter(edit.value, edit.caret, "Backspace", edit.pairs).value, " ");
+});
+
+test("selecting opening-parenthesis completion inside its typed automatic pair keeps one pair", () => {
+  const typed = insertDelimiter("", 0, 0, "(", []);
+  const ctx = context(typed.value, typed.caret);
+  const suggestion = querySuggestions(ctx, columns).find(({ insert }) => insert === "(");
+  assert.ok(suggestion);
+  const edit = replaceSuggestionWithDelimiter(typed.value, ctx.start, ctx.end, suggestion.insert, typed.pairs);
+  assert.deepEqual(edit, { value: "() ", caret: 1, pairs: [{ open: 0, close: 1, delimiter: "(" }] });
+  assert.equal(removePairedDelimiter(edit.value, edit.caret, "Backspace", edit.pairs).value, " ");
+});
+
+test("quotes inside literals insert a complete apostrophe escape and pair positions survive ordinary typing", () => {
+  let edit = insertDelimiter("", 0, 0, "'", []);
+  let pairs = reconcileDelimiterPairs(edit.value, "'O'", edit.pairs);
+  edit = typeAutoClosingQuote("'O'", 2, pairs);
+  assert.equal(edit.value, "'O'''");
+  assert.equal(edit.caret, 4);
+  pairs = reconcileDelimiterPairs(edit.value, "'O''Brien'", edit.pairs);
+  assert.deepEqual(pairs, [{ open: 0, close: 9, delimiter: "'" }, { open: 2, close: 3, delimiter: "'" }]);
+  assert.equal(removePairedDelimiter("'O''Brien'", 3, "Backspace", pairs).value, "'OBrien'");
+});
+
+test("new delimiters rebase existing pairs before, inside, and around a selection", () => {
+  const pair = [{ open: 0, close: 1, delimiter: "(" }];
+  let edit = insertDelimiter("()", 0, 0, "(", pair);
+  assert.deepEqual(edit, { value: "()()", caret: 1, pairs: [{ open: 2, close: 3, delimiter: "(" }, { open: 0, close: 1, delimiter: "(" }] });
+  edit = insertDelimiter("()", 1, 1, "(", pair);
+  assert.deepEqual(edit, { value: "(())", caret: 2, pairs: [{ open: 0, close: 3, delimiter: "(" }, { open: 1, close: 2, delimiter: "(" }] });
+  edit = insertDelimiter("()", 0, 2, "'", pair);
+  assert.deepEqual(edit, { value: "'()'", caret: 1, pairs: [{ open: 1, close: 2, delimiter: "(" }, { open: 0, close: 3, delimiter: "'" }] });
+});
+
+test("replacement query text clears stale automatic delimiter pairs", () => {
+  const stale = reconcileDelimiterPairs("()", "names = 'x'", [{ open: 0, close: 1, delimiter: "(" }]);
+  assert.deepEqual(stale, []);
+  assert.equal(removePairedDelimiter("names = 'x'", 1, "Delete", stale), null);
+});
+
+test("operator suggestions register their generated quote pair for either deletion key", () => {
+  const query = "names ";
+  const result = applyQuerySuggestion(query, context(query), { insert: "=" });
+  const pairs = registerAutoQuotePair(result.value, result.caret, []);
+  assert.deepEqual(pairs, [{ open: result.caret - 1, close: result.caret, delimiter: "'" }]);
+  assert.equal(removePairedDelimiter(result.value, result.caret, "Backspace", pairs).value, "names =  ");
+  assert.equal(removePairedDelimiter(result.value, result.caret - 1, "Delete", pairs).value, "names =  ");
 });
 
 test("operators match physical text/set semantics", () => {
