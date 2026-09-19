@@ -6,7 +6,7 @@ import { useEditablePage } from "../features/editable-page/useEditablePage";
 import { api } from "../shared/api";
 import { cachedTaxon } from "../shared/apiCache";
 import { EntityDetailTable } from "../SearchApp/EntityDetailTable";
-import { fetchEntityPageDetails, type MetadataResponse, type SearchResponse } from "../SearchApp/entityPageDetails";
+import { fetchEntityPageDetails, sourceEntityPageDetails, type MetadataResponse, type SearchResponse, type SourceEntityRecord } from "../SearchApp/entityPageDetails";
 import DataMeta from "../SearchApp/DataMeta";
 import { type Taxon, taxonChildLabel, taxonPageName, taxonPath } from "./taxonPage";
 import "./TaxonomyPage.css";
@@ -59,9 +59,12 @@ export default function TaxonPage() {
     const controller = new AbortController();
     // Do not reuse metadata or projections from the table that was active
     // before this page was opened; page fields are dataset-versioned.
-    void api.get<MetadataResponse>("/metadata", { signal: controller.signal, params: { entity_page: Date.now() } }).then(({ data }) =>
-      fetchEntityPageDetails(data, "species", taxon.query_column!, name, controller.signal, async (params, signal) => (await api.get<SearchResponse>("/search", { params: { ...params, entity_page: data.timestamp }, signal })).data)
-    ).then(value => { if (current) setDetails(value); }).catch(() => { if (current) setDetails(null); });
+    void api.get<MetadataResponse>("/metadata", { signal: controller.signal, params: { entity_page: Date.now() } }).then(async ({ data }) => {
+      const joined = await fetchEntityPageDetails(data, "species", taxon.query_column!, name, controller.signal, async (params, signal) => (await api.get<SearchResponse>("/search", { params: { ...params, entity_page: data.timestamp }, signal })).data);
+      if (joined || controller.signal.aborted) return joined;
+      const source = await api.get<SourceEntityRecord>("/catalog/species/record", { params: { column: taxon.query_column, value: name }, signal: controller.signal });
+      return sourceEntityPageDetails(source.data, "species");
+    }).then(value => { if (current) setDetails(value); }).catch(() => { if (current) setDetails(null); });
     return () => { current = false; controller.abort(); };
   }, [rank, name, taxon?.query_column]);
 

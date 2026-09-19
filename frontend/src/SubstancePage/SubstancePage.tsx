@@ -5,7 +5,7 @@ import { useEditablePage } from "../features/editable-page/useEditablePage";
 import { EditablePageContent } from "../features/editable-page/EditablePageContent";
 import { api } from "../shared/api";
 import { EntityDetailTable } from "../SearchApp/EntityDetailTable";
-import { fetchEntityPageDetails, type MetadataResponse, type SearchResponse } from "../SearchApp/entityPageDetails";
+import { fetchEntityPageDetails, sourceEntityPageDetails, type MetadataResponse, type SearchResponse, type SourceEntityRecord } from "../SearchApp/entityPageDetails";
 import DataMeta from "../SearchApp/DataMeta";
 
 function resolveSmiles(
@@ -61,7 +61,11 @@ export default function SubstancePage() {
     // browser cache left behind by a previous table activation.
     void api.get<MetadataResponse>("/metadata", { signal: controller.signal, params: { entity_page: Date.now() } }).then(async ({ data }) => {
       const smilesColumn = data.metadata.find(column => /(?:^|\s)SMILES(?:\s|$)/.test(column.type))?.column;
-      return smilesColumn ? fetchEntityPageDetails(data, "chemical", smilesColumn, smiles, controller.signal, async (params, signal) => (await api.get<SearchResponse>("/search", { params: { ...params, entity_page: data.timestamp }, signal })).data) : null;
+      if (!smilesColumn) return null;
+      const joined = await fetchEntityPageDetails(data, "chemical", smilesColumn, smiles, controller.signal, async (params, signal) => (await api.get<SearchResponse>("/search", { params: { ...params, entity_page: data.timestamp }, signal })).data);
+      if (joined || controller.signal.aborted) return joined;
+      const source = await api.get<SourceEntityRecord>("/catalog/chemicals/record", { params: { column: smilesColumn, value: smiles }, signal: controller.signal });
+      return sourceEntityPageDetails(source.data, "chemical");
     }).then(value => { if (current) setDetails(value); }).catch(() => { if (current) setDetails(null); });
     return () => { current = false; controller.abort(); };
   }, [smiles]);

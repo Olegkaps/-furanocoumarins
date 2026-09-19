@@ -21,6 +21,7 @@ import CachePage from "./SearchApp/CachePage";
 import { CacheSchemaBanner } from "./shared/CacheSchemaBanner";
 import { restoreCookieSession } from "./shared/api";
 import { PublicConfigProvider } from "./shared/PublicConfigProvider";
+import CatalogPage from "./Catalog/CatalogPage";
 
 
 function App() {
@@ -47,6 +48,7 @@ function App() {
               <Route path="/about/:subpageID" element={<AboutPage />}/>
               <Route path="/history" element={<HistoryPage />}/>
               <Route path="/cache" element={<CachePage />}/>
+              <Route path="/catalog" element={<CatalogPage />}/>
               <Route path="/page" element={<SubstancePage />}/>
               {/* Legacy path form; redirects via SubstancePage query parsing */}
               <Route path="/page/:smiles" element={<SubstancePage />}/>

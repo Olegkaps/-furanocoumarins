@@ -8,7 +8,7 @@ const entityPageFieldLimit = 7;
 
 type SpeciesFallback = { target: string; sources: string[] };
 
-function detailMeta(item: Metadata): DataMeta {
+export function detailMeta(item: Metadata): DataMeta {
   const type = item.type;
   const link = getMetadataTypeModifier(type, "link");
   const classification = getMetadataTypeModifier(type, "clas");
@@ -24,6 +24,10 @@ function detailMeta(item: Metadata): DataMeta {
 
 export function entityPageColumns(metadata: Metadata[], kind: "chemical" | "species"): DataMeta[] {
   const columns = metadata.map(detailMeta).filter(column => kind === "chemical" ? column.show_on_chemical_page : column.show_on_species_page);
+  return sortEntityColumns(kind, columns);
+}
+
+function sortEntityColumns(kind: "chemical" | "species", columns: DataMeta[]): DataMeta[] {
   if (kind !== "species") return columns;
   return columns.sort((left, right) => {
     const leftRank = left.classification_level;
@@ -33,6 +37,26 @@ export function entityPageColumns(metadata: Metadata[], kind: "chemical" | "spec
     if (leftRank === null && rightRank !== null) return 1;
     return 0;
   });
+}
+
+export type SourceEntityRecord = { kind: "chemicals" | "species"; columns: Metadata[]; item: Record<string, unknown> };
+
+// Catalog-only records have no joined observation. Show configured page fields
+// plus the source identity/search fields so the page remains useful even when
+// a legacy definition did not mark its title or identifier for that page.
+export function sourceEntityPageDetails(record: SourceEntityRecord, kind: "chemical" | "species"): { meta: DataMeta[]; row: Map<string, string> } | null {
+  const meta = sortEntityColumns(kind, record.columns
+    .filter(column => !hasMetadataTypeToken(column.type, "invisible"))
+    .filter(column => {
+      const pageField = kind === "chemical" ? hasMetadataTypeToken(column.type, "chemical_page") : hasMetadataTypeToken(column.type, "species_page");
+      return pageField || hasMetadataTypeToken(column.type, "primary") || hasMetadataTypeToken(column.type, "search");
+    })
+    .map(detailMeta));
+  const row = new Map(Object.entries(record.item).map(([name, value]) => [name, Array.isArray(value) ? value.join(", ") : String(value ?? "")]));
+  return meta.some(column => {
+    const value = row.get(column.name) ?? "";
+    return value.trim() !== "" && value.replaceAll(" ", "") !== "NoValue";
+  }) ? { meta, row } : null;
 }
 
 function isDefaultClassification(item: Metadata): boolean {

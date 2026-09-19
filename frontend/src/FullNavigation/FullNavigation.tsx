@@ -10,6 +10,7 @@ import {
   Picture,
   Gear,
   Magnifier,
+  Archive,
 } from "@gravity-ui/icons";
 import { isTokenExists } from "../shared/api";
 import { useAboutSubpages } from "../About/useAboutSubpages";
@@ -56,7 +57,7 @@ function NavIcon({
 
 export interface FullNavigationProps {
   /** Mark this page’s icon as selected and non-clickable */
-  pageName?: "home" | "about" | "history" | "cache" | "admin" | "metadata" | "publication-reader" | "images";
+  pageName?: "home" | "about" | "history" | "cache" | "catalog" | "admin" | "metadata" | "publication-reader" | "images";
 }
 
 export default function FullNavigation({ pageName }: FullNavigationProps) {
@@ -88,6 +89,9 @@ export default function FullNavigation({ pageName }: FullNavigationProps) {
             {aboutPages.map((page) => <Link key={page.id} to={`/about/${page.id}`}><AboutIcon icon={page.icon} size={18} /><span>{page.name}</span></Link>)}
           </div>}
         </div>
+        <NavIcon to="/catalog" title="Data catalog" current={pageName === "catalog"}>
+          <Archive width={28} height={28} />
+        </NavIcon>
         <NavIcon
           to="/history"
           title="Query history"

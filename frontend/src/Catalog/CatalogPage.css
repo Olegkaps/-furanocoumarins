@@ -1,0 +1,30 @@
+.catalog-page { max-width: 1120px; margin: 24px auto; padding: 0 16px; }
+.catalog-page__header h1 { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.catalog-page__header p { margin-top: 0; color: var(--color-muted); }
+.catalog-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; border-bottom: 1px solid var(--color-border); }
+.catalog-tabs a { padding: 10px 14px; border-bottom: 3px solid transparent; color: var(--color-muted); font-weight: 700; text-decoration: none; }
+.catalog-tabs a:hover, .catalog-tabs a.is-active { color: var(--color-accent); border-color: var(--color-accent); }
+.catalog-summary { margin-bottom: 12px; color: var(--color-muted); font-size: .9rem; }
+.catalog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 14px; }
+.catalog-card { min-width: 0; padding: 16px; border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); box-shadow: var(--shadow); }
+.catalog-card h2 { margin: 0 0 10px; font-family: var(--font-serif); font-size: 1.12rem; overflow-wrap: anywhere; }
+.catalog-card h2 a { color: var(--color-accent); }
+.catalog-card__chemical { display: flex; align-items: center; gap: 12px; min-height: 108px; }
+.catalog-card__main { min-width: 0; flex: 1; }
+.catalog-card__structure { display: block; flex: 0 0 142px; border-radius: 6px; }
+.catalog-card__structure:hover { background: var(--color-surface-alt); }
+.catalog-card__structure .molecule-preview { width: 142px; min-height: 92px; }
+.catalog-card__structure .molecule-preview svg { width: 142px; height: 92px; }
+.catalog-card__note, .catalog-card__publication-meta { color: var(--color-muted); font-size: .86rem; }
+.catalog-card dl { display: grid; gap: 8px; margin: 0; }
+.catalog-card dl div { display: grid; grid-template-columns: minmax(90px, .7fr) minmax(0, 1.3fr); gap: 10px; padding-top: 7px; border-top: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent); }
+.catalog-card dt { color: var(--color-muted); font-size: .8rem; font-weight: 700; }
+.catalog-card dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.catalog-card__id { display: inline-block; padding: 3px 7px; border-radius: 4px; background: var(--color-surface-alt); color: var(--color-muted); font-family: monospace; font-size: .78rem; }
+.catalog-pagination { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 24px 0; }
+.catalog-pagination .btn:disabled { opacity: .45; cursor: not-allowed; }
+.catalog-status { margin: 24px 0; }
+.catalog-status.is-error { color: var(--color-danger); }
+.catalog-status.is-error p { margin-bottom: 0; }
+@media (max-width: 560px) { .catalog-card dl div { grid-template-columns: 1fr; gap: 3px; } }
+@media (max-width: 420px) { .catalog-card__chemical { align-items: flex-start; } .catalog-card__structure { flex-basis: 112px; } .catalog-card__structure .molecule-preview, .catalog-card__structure .molecule-preview svg { width: 112px; height: 80px; } }

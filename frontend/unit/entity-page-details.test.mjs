@@ -10,7 +10,7 @@ const server = await createServer({
   server: { middlewareMode: true, ws: false, watch: null }, optimizeDeps: { noDiscovery: true, include: [] }, appType: "custom",
 });
 after(() => server.close());
-const { entityPageColumns, entityPageProjectionChunks, fetchEntityPageDetails, mergeEntityPageRows, rowFromEntitySearch } = await server.ssrLoadModule("/src/SearchApp/entityPageDetails.ts");
+const { entityPageColumns, entityPageProjectionChunks, fetchEntityPageDetails, mergeEntityPageRows, rowFromEntitySearch, sourceEntityPageDetails } = await server.ssrLoadModule("/src/SearchApp/entityPageDetails.ts");
 const { EntityDetailTable, classificationRowsForSource } = await server.ssrLoadModule("/src/SearchApp/EntityDetailTable.tsx");
 
 test("entity page projections reject missing and ambiguous records", () => {
@@ -26,6 +26,21 @@ test("entity page projections reject missing and ambiguous records", () => {
     { name: "one", cas: "12-34-5" },
     { name: "one", cas: "99-99-9" },
   ] }, "name"), null);
+});
+
+test("catalog-only records retain their source identity and searchable fields", () => {
+  const detail = sourceEntityPageDetails({
+    kind: "chemicals",
+    columns: [
+      { column: "smiles", name: "SMILES", description: "", type: "SMILES chemical_page chemical" },
+      { column: "id", name: "ID", description: "", type: "primary search chemical" },
+      { column: "names", name: "Names", description: "", type: "search chemical" },
+      { column: "hidden", name: "Hidden", description: "", type: "invisible chemical" },
+    ],
+    item: { smiles: "CCO", id: "42", names: "Source-only compound", hidden: "no" },
+  }, "chemical");
+  assert.deepEqual(detail?.meta.map(column => column.name), ["smiles", "id", "names"]);
+  assert.equal(detail?.row.get("names"), "Source-only compound");
 });
 
 test("entity page detail projections stay within the search column limit and merge only one identity", () => {

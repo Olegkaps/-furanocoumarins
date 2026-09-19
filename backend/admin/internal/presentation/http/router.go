@@ -15,6 +15,7 @@ import (
 	"admin/internal/app"
 	authmasterhandler "admin/internal/presentation/http/authmaster"
 	bibtexhandler "admin/internal/presentation/http/bibtex"
+	cataloghandler "admin/internal/presentation/http/catalog"
 	confighandler "admin/internal/presentation/http/config"
 	createhandler "admin/internal/presentation/http/create"
 	imageshandler "admin/internal/presentation/http/images"
@@ -57,6 +58,7 @@ func NewApp(container *app.Container) *fiber.App {
 	search := searchhandler.NewHandler(container)
 	tables := tableshandler.NewHandler(container)
 	bibtex := bibtexhandler.NewHandler(container)
+	catalog := cataloghandler.NewHandler(container)
 	pages := pageshandler.NewHandler(container)
 	images := imageshandler.NewHandler(container)
 	create := createhandler.NewHandler(container)
@@ -68,6 +70,9 @@ func NewApp(container *app.Container) *fiber.App {
 	app.Get("/autocomplete/:column", search.Autocomplete)
 	app.Get("/search", search.SearchMainApp)
 	app.Get("/article/:id", bibtex.GetArticle)
+	app.Get("/catalog/:kind/record", catalog.Record)
+	app.Get("/catalog/:kind/count", catalog.Count)
+	app.Get("/catalog/:kind", catalog.List)
 	app.Get("/pages/:name", pages.GetPage)
 	app.Get("/taxa/:rank", pages.GetTaxon)
 	app.Get("/about/pages", pages.GetAboutPages)
