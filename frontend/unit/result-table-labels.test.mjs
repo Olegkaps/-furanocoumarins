@@ -131,6 +131,33 @@ test("results side lists display configured names instead of entity ids", () => 
   assert.doesNotMatch(html, /5-O-Methyl isogosferol</);
 });
 
+test("configured hidden count keys deduplicate whole nonblank counterpart values without changing entity selection", () => {
+  const countMetadata = [
+    { column: "chemical_id", name: "Chemical ID", type: "table_chemical keycolumn", description: "" },
+    { column: "chemical_name", name: "Chemical", type: "table_chemical list_name", description: "" },
+    { column: "species_id", name: "Species ID", type: "table_specie keycolumn", description: "" },
+    { column: "species", name: "Species", type: "table_specie clas[0]", description: "" },
+    { column: "accepted_name", name: "Accepted name", type: "invisible", description: "", entity_count_key: "species" },
+    { column: "chemical_family", name: "Chemical family", type: "invisible", description: "", entity_count_key: "chemical" },
+    { column: "referenceid", name: "Reference", type: "table_0 ref[]", description: "" },
+  ];
+  const countData = [
+    { chemical_id: "c1", chemical_name: "One", chemical_family: "A,B", species_id: "s1", species: "one", accepted_name: "A,B", referenceid: "r1" },
+    { chemical_id: "c1", chemical_name: "One", chemical_family: "A,B", species_id: "s2", species: "two", accepted_name: "A,B", referenceid: "r2" },
+    { chemical_id: "c2", chemical_name: "Two", chemical_family: "", species_id: "s3", species: "three", accepted_name: "No  Value", referenceid: "r3" },
+  ];
+  const html = renderToStaticMarkup(createElement(MemoryRouter, {}, createElement(ResultTable, {
+    metadata: countMetadata, data: countData,
+  })));
+
+  assert.match(html, />One</);
+  assert.match(html, />Two</);
+  assert.match(html, /species: 1/);
+  assert.match(html, /species: 0/);
+  assert.doesNotMatch(html, /species: 2/);
+  assert.match(html, /Species \(3\)/, "selection continues to use the primary entity identity");
+});
+
 test("a selected species with a source keycolumn links to its canonical ID page", () => {
   const html = renderToStaticMarkup(createElement(MemoryRouter, {}, createElement(ResultTable, {
     metadata,

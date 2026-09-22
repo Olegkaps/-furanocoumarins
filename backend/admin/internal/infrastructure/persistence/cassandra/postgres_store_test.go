@@ -3,13 +3,49 @@ package cassandra
 import (
 	"context"
 	"database/sql"
+	"regexp"
 	"testing"
+	"time"
 
+	domainsearch "admin/internal/domain/search"
 	"admin/internal/presentation/http/response"
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestEntityCountColumnsUseDatasetPinnedMetadata(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	version := int64(7)
+	document := `{"schema_version":2,"importable":true,"sheets":[{"name":"main","source_sheets":["Observations"],"columns":[{"name":"species_id","data_type":"text","external_sheet":"classification"},{"name":"chemical_id","data_type":"text","external_sheet":"structures"}]},{"name":"classification","source_sheets":["Species"],"columns":[{"name":"species_id","data_type":"text","primary_key":true},{"name":"species_name","data_type":"text"}],"count_column":"species_name"},{"name":"structures","source_sheets":["Structures"],"columns":[{"name":"chemical_id","data_type":"text","primary_key":true},{"name":"canonical_name","data_type":"text"}],"count_column":"canonical_name"}]}`
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT document FROM chemdb.metadata_versions WHERE version=$1`)).
+		WithArgs(version).
+		WillReturnRows(sqlmock.NewRows([]string{"document"}).AddRow(document))
+
+	keys, err := NewPostgresStore(db).EntityCountColumns(context.Background(), &Table{MetadataVersion: &version})
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{"species": "species_name", "chemical": "canonical_name"}, keys)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSearchReaderRejectsActivationBetweenMetadataAndRows(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	old := domainsearch.TableVersion{Timestamp: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Version: "v1", TableData: "chemdb.old"}
+	newer := old
+	newer.Timestamp = newer.Timestamp.Add(time.Second)
+	newer.Version, newer.TableData = "v2", "chemdb.new"
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT created_at,name,version,table_meta,table_data,table_species,is_ok,is_active,metadata_version FROM chemdb.tables WHERE is_active AND is_ok`)).
+		WillReturnRows(sqlmock.NewRows([]string{"created_at", "name", "version", "table_meta", "table_data", "table_species", "is_ok", "is_active", "metadata_version"}).
+			AddRow(newer.Timestamp, "new", newer.Version, "chemdb.meta_new", newer.TableData, "chemdb.species_new", true, true, nil))
+
+	_, err = NewSearchReader(NewPostgresStore(db)).FetchSearchData(nil, old, "name = 'old'", "name")
+	require.ErrorContains(t, err, "active dataset changed")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
 
 func TestWithImageLibraryLockCommitsAfterMutation(t *testing.T) {
 	db, mock, err := sqlmock.New()

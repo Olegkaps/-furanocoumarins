@@ -39,6 +39,32 @@ func TestDocumentRejectsInvalidContracts(t *testing.T) {
 		t.Run(name, func(t *testing.T) { d := validDocument(); mutate(&d); require.Error(t, d.Validate()) })
 	}
 }
+
+func TestEntityCountColumnsUseConfiguredTextColumnOrPrimaryKey(t *testing.T) {
+	d := validDocument()
+	d.Sheets = append(d.Sheets, Sheet{Name: "structures", SourceSheets: []string{"Structures"}, Columns: []Column{{Name: "chemical_id", DataType: "text", PrimaryKey: true}, {Name: "canonical_name", DataType: "text"}}})
+	require.NoError(t, d.Validate())
+	require.Equal(t, map[string]string{"species": "speciesid", "chemical": "chemical_id"}, d.EntityCountColumns())
+
+	d.Sheets[1].CountColumn = "speciesid"
+	d.Sheets[2].CountColumn = "canonical_name"
+	require.NoError(t, d.Validate())
+	require.Equal(t, map[string]string{"species": "speciesid", "chemical": "canonical_name"}, d.EntityCountColumns())
+}
+
+func TestEntityCountColumnRejectsNonlocalSetAndUnsupportedGroup(t *testing.T) {
+	for name, mutate := range map[string]func(*Document){
+		"set":         func(d *Document) { d.Sheets[1].CountColumn = "tags" },
+		"unknown":     func(d *Document) { d.Sheets[1].CountColumn = "missing" },
+		"other group": func(d *Document) { d.Sheets[0].CountColumn = "speciesid" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			d := validDocument()
+			mutate(&d)
+			require.Error(t, d.Validate())
+		})
+	}
+}
 func TestDocumentRoundTripLegacyModifiers(t *testing.T) {
 	for _, legacy := range []string{"", "search table_2 chemical", "primary invisible", "set[alpha beta] search", "set[<>]", "ref[] link[/reference/%s]", "clas[3][powo] table_specie", "external[classification] default[speciesid]", "text keycolumn", "table_chemical list_name", "chemical chemical_page", "specie species_page"} {
 		c, err := ColumnFromLegacy([]string{"main", "value", legacy, "description", "Label"})

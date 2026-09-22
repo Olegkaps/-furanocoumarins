@@ -142,6 +142,15 @@ search, observation results, entity panels, and classification. Preview values
 are explicitly synthetic; previews must not publish, import, navigate to sample
 links, or query active data as if it belonged to an unpublished definition.
 
+Species (`classification`) and chemicals (`structures`) may set one group-level
+`count_column` naming a local text column; omission defaults to the group's
+primary key. Use the pinned dataset definition, not the latest unpublished or
+unimported metadata, for runtime counts. Entity-count modes count distinct
+non-empty selected values; observation and article counts remain unchanged.
+Count columns do not replace selection IDs, page-link identities, or grouping
+keys, and hidden count columns must remain available for counting without being
+displayed automatically.
+
 Startup and scientific-data migration backfill historical dataset definitions
 idempotently without rewriting scientific rows. Source catalogs can recover
 original declarations and worksheet names, but not the order of multiple names

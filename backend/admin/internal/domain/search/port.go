@@ -8,10 +8,11 @@ import (
 
 // ColumnMeta describes a table column exposed to clients.
 type ColumnMeta struct {
-	Column      string `json:"column" example:"species"`
-	Name        string `json:"name" example:"Species"`
-	Type        string `json:"type" example:"text search"`
-	Description string `json:"description" example:"Plant species name"`
+	Column         string `json:"column" example:"species"`
+	Name           string `json:"name" example:"Species"`
+	Type           string `json:"type" example:"text search"`
+	Description    string `json:"description" example:"Plant species name"`
+	EntityCountKey string `json:"entity_count_key,omitempty" example:"species"`
 }
 
 // TableVersion identifies the currently active table for cache keys.
@@ -25,6 +26,7 @@ type TableVersion struct {
 type MetadataResponse struct {
 	Metadata       []ColumnMeta `json:"metadata"`
 	TableTimestamp time.Time    `json:"timestamp"`
+	TableVersion   TableVersion `json:"-"`
 }
 
 // SearchResponse is the result of /search.

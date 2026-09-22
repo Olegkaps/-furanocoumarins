@@ -41,13 +41,17 @@ func (s *Service) Search(c *fiber.Ctx, query string) (*domainsearch.SearchRespon
 	}
 
 	selectedColumns := VisibleColumns(meta.Metadata)
+	selectedColumns = appendEntityCountColumns(selectedColumns, meta.Metadata)
 	if len(selectedColumns) == 0 {
 		return nil, fmt.Errorf("no visible columns found in table metadata")
 	}
 
-	version, err := s.reader.ActiveTableVersion(c)
-	if err != nil {
-		return nil, err
+	version := meta.TableVersion
+	if version.TableData == "" {
+		version, err = s.reader.ActiveTableVersion(c)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	data, err := s.reader.FetchSearchData(c, version, query, strings.Join(selectedColumns, ", "))
@@ -60,4 +64,18 @@ func (s *Service) Search(c *fiber.Ctx, query string) (*domainsearch.SearchRespon
 		Data:           data,
 		TableTimestamp: meta.TableTimestamp,
 	}, nil
+}
+
+func appendEntityCountColumns(selected []string, metadata []domainsearch.ColumnMeta) []string {
+	present := make(map[string]bool, len(selected))
+	for _, column := range selected {
+		present[column] = true
+	}
+	for _, column := range metadata {
+		if column.EntityCountKey != "" && !present[column.Column] {
+			selected = append(selected, column.Column)
+			present[column.Column] = true
+		}
+	}
+	return selected
 }

@@ -3,6 +3,20 @@ import assert from "node:assert/strict";
 import { buildMetadataPreview, classificationRows, copyCommonColumn, previewQuery, previewValue } from "../src/Admin/metadataPreviewModel.mjs";
 
 const field = (name, options = {}) => ({ name, data_type: "text", ...options });
+test("entity count columns default to primary keys and preserve explicit draft choices", () => {
+  const doc = document();
+  assert.deepEqual(buildMetadataPreview(doc).countColumns, { species: "species_id", chemical: "chem_id" });
+  doc.sheets[1].count_column = "species";
+  doc.sheets[2].count_column = "smiles";
+  assert.deepEqual(buildMetadataPreview(doc).countColumns, { species: "species", chemical: "smiles" });
+  doc.sheets[1].count_column = "missing";
+  assert.match(buildMetadataPreview(doc).errors.join(" "), /count column must name a text column/);
+  doc.sheets[1].count_column = "species";
+  doc.sheets[1].columns.find(c => c.name === "species").data_type = "set";
+  assert.match(buildMetadataPreview(doc).errors.join(" "), /count column must name a text column/);
+  doc.sheets[0].count_column = "species_id";
+  assert.match(buildMetadataPreview(doc).errors.join(" "), /only available for species and chemicals/);
+});
 function document() {
   return { schema_version: 1, importable: true, sheets: [
     { name: "main", columns: [field("species_id", { external_sheet: "classification" }), field("note", { show_in_results: true }), field("chem_id", { external_sheet: "structures" })] },

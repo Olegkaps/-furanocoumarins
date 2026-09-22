@@ -33,7 +33,7 @@ function errorMessage(error: unknown): string {
 function parseDraft(raw: string): Document {
   const doc = JSON.parse(raw);
   if (!doc || ![1, 2].includes(doc.schema_version) || typeof doc.importable !== "boolean" || !Array.isArray(doc.sheets) || !doc.sheets.every((s: Sheet) =>
-    s && typeof s.name === "string" && Array.isArray(s.source_sheets) && s.source_sheets.every(v => typeof v === "string") &&
+    s && typeof s.name === "string" && (s.count_column === undefined || typeof s.count_column === "string") && Array.isArray(s.source_sheets) && s.source_sheets.every(v => typeof v === "string") &&
     Array.isArray(s.columns) && s.columns.every(c => c && typeof c.name === "string" && ["text", "set"].includes(c.data_type) &&
       (["label", "description", "external_sheet", "default_column", "domain", "link_template"] as const).every(key => c[key] === undefined || typeof c[key] === "string") &&
       (["primary_key", "search", "show_in_results", "show_on_chemical_page", "show_on_species_page", "reference", "smiles", "list_name", "hidden"] as const).every(key => c[key] === undefined || typeof c[key] === "boolean") &&
@@ -262,6 +262,10 @@ export default function MetadataEditor() {
             <option value="" disabled={sheet.name !== "main"}>{sheet.name === "main" ? "Generated row key (no workbook key)" : "Select one primary key"}</option>
             {sheet.columns.map((c, i) => <option key={i} value={i} disabled={c.data_type !== "text" || !c.name}>{c.name || "Unnamed column"}</option>)}
           </select></label>
+          {["classification", "structures"].includes(sheet.name) && <label>Count {sheet.name === "classification" ? "species" : "chemicals"} by<select value={sheet.count_column || ""} onChange={e => updateSheet(si, { ...sheet, count_column: e.target.value || undefined })}>
+            <option value="">Primary key (default{sheet.columns.find(c => c.primary_key)?.name ? `: ${sheet.columns.find(c => c.primary_key)?.name}` : ""})</option>
+            {sheet.columns.filter(c => c.name && c.data_type === "text").map(c => <option key={c.name} value={c.name}>{c.label ? `${c.label} (${c.name})` : c.name}</option>)}
+          </select><small>Count distinct non-empty values in tree and results entity-count modes. Page links and record identities stay unchanged.</small></label>}
         </div>
         <SheetNames names={sheet.source_sheets} onChange={names => updateSheet(si, { ...sheet, source_sheets: names })} />
         <p>One specification applies to every worksheet above. Use <code>structures</code> for chemicals, <code>classification</code> for species, and <code>publications</code> for future publication data.</p>

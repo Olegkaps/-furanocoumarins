@@ -8,13 +8,14 @@ export type MetadataColumn = {
   classification?: { level: number; tag?: string }; link_template?: string;
   set_choices?: string[]; legacy_flags?: string[];
 };
-export type MetadataSheet = { name: string; source_sheets: string[]; columns: MetadataColumn[] };
+export type MetadataSheet = { name: string; source_sheets: string[]; columns: MetadataColumn[]; count_column?: string };
 export type MetadataDocument = { schema_version: number; importable: boolean; sheets: MetadataSheet[]; legacy_metadata?: string[][] };
 export type PreviewColumn = MetadataColumn & { sheet: string };
 export type MetadataPreviewModel = {
   columns: PreviewColumn[]; search: PreviewColumn[]; results: PreviewColumn[];
   chemicals: PreviewColumn[]; species: PreviewColumn[]; chemicalPage: PreviewColumn[]; speciesPage: PreviewColumn[]; structures: PreviewColumn[];
   classification: PreviewColumn[]; sourceOnly: string[]; errors: string[]; warnings: string[];
+  countColumns: { species?: string; chemical?: string };
 };
 export function buildMetadataPreview(document?: MetadataDocument): MetadataPreviewModel;
 export function classificationRows(columns: PreviewColumn[]): { level: number; columns: PreviewColumn[]; lanes: { tag: string; columns: PreviewColumn[] }[] }[];

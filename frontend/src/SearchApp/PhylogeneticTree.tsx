@@ -34,6 +34,11 @@ class Specie {
 
 const PATH_SEP = "›";
 
+function isConfiguredCountValue(value: unknown): boolean {
+  const normalized = String(value).replaceAll(" ", "");
+  return normalized !== "" && normalized !== "NoValue";
+}
+
 type TreeViewCtx = {
   collapsedIds: Set<string>;
   toggleCollapsed: (
@@ -927,11 +932,12 @@ const leafCountsCache = new WeakMap<object, Map<string, UniquesByClades>>();
 export function buildUniquesByClades(
   rows: Array<{ [index: string]: string }> | undefined,
   species_meta: Array<string>,
-  smilesColumns: Array<string>,
+  chemicalColumns: Array<string>,
   refColumns: Array<string>,
+  skipBlankChemicalValues = false,
 ): UniquesByClades {
   // Responses are immutable snapshots; retain alternate taxonomies while rows live.
-  const cacheKey = JSON.stringify([species_meta, smilesColumns, refColumns]);
+  const cacheKey = JSON.stringify([species_meta, chemicalColumns, refColumns, skipBlankChemicalValues]);
   const cached = rows && leafCountsCache.get(rows)?.get(cacheKey);
   if (cached) return cached;
   const uniquesByClades: UniquesByClades = Object.create(null);
@@ -951,8 +957,9 @@ export function buildUniquesByClades(
     }
     const u = uniquesByClades[joined_clades];
     u.total += 1;
-    if (smilesColumns[0] && row[smilesColumns[0]] != null) {
-      u.smiles.add(row[smilesColumns[0]]);
+    const chemicalValue = chemicalColumns[0] ? row[chemicalColumns[0]] : null;
+    if (chemicalValue != null && (!skipBlankChemicalValues || isConfiguredCountValue(chemicalValue))) {
+      u.smiles.add(chemicalValue);
     }
     if (refColumns[0] && row[refColumns[0]] != null) {
       u.refs.add(row[refColumns[0]]);
@@ -1565,11 +1572,17 @@ function PhilogeneticTreeOrNull({
       name: name || species_meta[index + 1] || `Level ${index + 1}`,
     }));
 
-    const smilesColumns = (
+    const configuredChemicalColumn = (response["metadata"] ?? []).find(
+      (m: { [index: string]: unknown }) => m["entity_count_key"] === "chemical",
+    )?.["column"];
+    const smilesColumns = typeof configuredChemicalColumn === "string" && configuredChemicalColumn !== ""
+      ? [configuredChemicalColumn]
+      : (
       (response["metadata"] ?? []) as Array<{ [index: string]: string }>
     )
       .filter((m) => hasMetadataTypeToken(String(m["type"]), "SMILES"))
       .map((m) => m["column"]);
+    const skipBlankChemicalValues = Boolean(configuredChemicalColumn);
     const refColumns = (
       (response["metadata"] ?? []) as Array<{ [index: string]: string }>
     )
@@ -1581,6 +1594,7 @@ function PhilogeneticTreeOrNull({
       species_meta,
       smilesColumns,
       refColumns,
+      skipBlankChemicalValues,
     );
 
     const seriesForTree =
@@ -1592,6 +1606,7 @@ function PhilogeneticTreeOrNull({
               species_meta,
               smilesColumns,
               refColumns,
+              skipBlankChemicalValues,
             ),
           }))
         : [];

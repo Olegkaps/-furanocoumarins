@@ -29,6 +29,7 @@ type Sheet struct {
 	Name         string   `json:"name"`
 	SourceSheets []string `json:"source_sheets"`
 	Columns      []Column `json:"columns"`
+	CountColumn  string   `json:"count_column,omitempty"`
 }
 type Classification struct {
 	Level int    `json:"level"`
@@ -192,12 +193,14 @@ func (d Document) Validate() error {
 			return fmt.Errorf("at most 2048 columns are supported")
 		}
 		cols := map[string]bool{}
+		columnsByName := map[string]Column{}
 		keys := 0
 		for _, c := range s.Columns {
 			if !safeIdentifier(c.Name) || strings.EqualFold(c.Name, "uuid") || cols[strings.ToLower(c.Name)] {
 				return fmt.Errorf("invalid, reserved, or duplicate column %s.%s", s.Name, c.Name)
 			}
 			cols[strings.ToLower(c.Name)] = true
+			columnsByName[c.Name] = c
 			if c.DataType != "text" && c.DataType != "set" {
 				return fmt.Errorf("column %s: data_type must be text or set", c.Name)
 			}
@@ -274,6 +277,15 @@ func (d Document) Validate() error {
 		}
 		if keys > 1 || (s.Name != "main" && keys != 1) {
 			return fmt.Errorf("sheet %s requires exactly one primary key (main may be keyless)", s.Name)
+		}
+		if s.CountColumn != "" {
+			if s.Name != "classification" && s.Name != "structures" {
+				return fmt.Errorf("count_column is only available for classification and structures sheets")
+			}
+			countColumn, ok := columnsByName[s.CountColumn]
+			if !ok || countColumn.DataType != "text" {
+				return fmt.Errorf("count_column %s.%s must name a local text column", s.Name, s.CountColumn)
+			}
 		}
 		for _, c := range s.Columns {
 			if c.DefaultColumn != "" && (!cols[strings.ToLower(c.DefaultColumn)] || c.DefaultColumn == c.Name) {
@@ -397,6 +409,37 @@ func (d Document) Validate() error {
 		}
 	}
 	return nil
+}
+
+// EntityCountColumns returns the configured distinct-value identity for the
+// public species and chemical entity groups. Historical definitions omit the
+// setting, in which case their existing primary keys remain the identity.
+func (d Document) EntityCountColumns() map[string]string {
+	keys := map[string]string{}
+	for _, sheet := range d.Sheets {
+		kind := ""
+		switch sheet.Name {
+		case "classification":
+			kind = "species"
+		case "structures":
+			kind = "chemical"
+		default:
+			continue
+		}
+		key := sheet.CountColumn
+		if key == "" {
+			for _, column := range sheet.Columns {
+				if column.PrimaryKey {
+					key = column.Name
+					break
+				}
+			}
+		}
+		if key != "" {
+			keys[kind] = key
+		}
+	}
+	return keys
 }
 
 func inferredDomain(sheet, external string) string {

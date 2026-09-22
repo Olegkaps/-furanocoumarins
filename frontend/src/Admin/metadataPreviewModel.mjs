@@ -23,7 +23,7 @@ export function entityPageDefaults(document) {
 }
 
 export function buildMetadataPreview(document) {
-  const model = { columns: [], search: [], results: [], chemicals: [], species: [], chemicalPage: [], speciesPage: [], structures: [], classification: [], sourceOnly: [], errors: [], warnings: [] };
+  const model = { columns: [], search: [], results: [], chemicals: [], species: [], chemicalPage: [], speciesPage: [], structures: [], classification: [], sourceOnly: [], errors: [], warnings: [], countColumns: {} };
   if (!document || ![1, 2].includes(document.schema_version) || !document.importable || !Array.isArray(document.sheets)) {
     model.errors.push("Complete a valid, importable JSON definition to see previews.");
     return model;
@@ -35,6 +35,12 @@ export function buildMetadataPreview(document) {
       return model;
     }
     sheets.set(sheet.name, sheet);
+    if (["classification", "structures"].includes(sheet.name)) {
+      const name = sheet.count_column || sheet.columns.find(column => column.primary_key)?.name;
+      const column = sheet.columns.find(column => column.name === name);
+      if (name && (!column || column.data_type !== "text")) model.errors.push(`${sheet.name}: count column must name a text column in this group.`);
+      else if (name) model.countColumns[sheet.name === "classification" ? "species" : "chemical"] = name;
+    } else if (sheet.count_column) model.errors.push(`${sheet.name}: count column is only available for species and chemicals.`);
   }
   const reachable = new Set(), visiting = new Set();
   const visit = name => {

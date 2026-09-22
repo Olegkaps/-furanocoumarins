@@ -13,15 +13,19 @@ import (
 )
 
 type stubReader struct {
-	version     domainsearch.TableVersion
-	metadata    *domainsearch.MetadataResponse
-	searchData  []map[string]any
-	metadataErr error
-	versionErr  error
-	searchErr   error
+	version       domainsearch.TableVersion
+	metadata      *domainsearch.MetadataResponse
+	searchData    []map[string]any
+	metadataErr   error
+	versionErr    error
+	searchErr     error
+	selectClause  string
+	passedVersion domainsearch.TableVersion
+	versionCalls  int
 }
 
 func (s *stubReader) ActiveTableVersion(_ *fiber.Ctx) (domainsearch.TableVersion, error) {
+	s.versionCalls++
 	return s.version, s.versionErr
 }
 
@@ -31,9 +35,11 @@ func (s *stubReader) FetchMetadata(_ *fiber.Ctx) (*domainsearch.MetadataResponse
 
 func (s *stubReader) FetchSearchData(
 	_ *fiber.Ctx,
-	_ domainsearch.TableVersion,
-	_, _ string,
+	version domainsearch.TableVersion,
+	_ string, selectClause string,
 ) ([]map[string]any, error) {
+	s.passedVersion = version
+	s.selectClause = selectClause
 	return s.searchData, s.searchErr
 }
 
@@ -142,4 +148,37 @@ func TestServiceSearchRejectsMetadataWithoutVisibleColumns(t *testing.T) {
 	}}
 	_, err := appsearch.NewService(reader, nil).Search(nil, "secret = 'alice'")
 	require.EqualError(t, err, "no visible columns found in table metadata")
+}
+
+func TestServiceSearchIncludesHiddenEntityCountKey(t *testing.T) {
+	reader := &stubReader{
+		version: domainsearch.TableVersion{TableData: "chemdb.data"},
+		metadata: &domainsearch.MetadataResponse{Metadata: []domainsearch.ColumnMeta{
+			{Column: "species", Type: "text search"},
+			{Column: "chemical_id", Type: "invisible text", EntityCountKey: "chemical"},
+		}},
+		searchData: []map[string]any{{"species": "Angelica", "chemical_id": "c-1"}},
+	}
+
+	result, err := appsearch.NewService(reader, nil).Search(nil, "species = 'Angelica'")
+	require.NoError(t, err)
+	assert.Equal(t, "species, chemical_id", reader.selectClause)
+	assert.Equal(t, "chemical", result.Metadata[1].EntityCountKey)
+}
+
+func TestServiceSearchUsesMetadataDatasetVersion(t *testing.T) {
+	oldVersion := domainsearch.TableVersion{Timestamp: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Version: "v1", TableData: "chemdb.old"}
+	reader := &stubReader{
+		version: domainsearch.TableVersion{Timestamp: oldVersion.Timestamp.Add(time.Second), Version: "v2", TableData: "chemdb.new"},
+		metadata: &domainsearch.MetadataResponse{
+			Metadata:     []domainsearch.ColumnMeta{{Column: "name", Type: "text search"}},
+			TableVersion: oldVersion,
+		},
+		searchData: []map[string]any{{"name": "old dataset row"}},
+	}
+
+	_, err := appsearch.NewService(reader, nil).Search(nil, "name = 'old dataset row'")
+	require.NoError(t, err)
+	assert.Equal(t, oldVersion, reader.passedVersion)
+	assert.Zero(t, reader.versionCalls)
 }

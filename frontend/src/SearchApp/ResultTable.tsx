@@ -57,6 +57,11 @@ function uniqueArticleCountInRows(
   return merged.size;
 }
 
+function isConfiguredCountValue(value: string): boolean {
+  const normalized = value.replaceAll(" ", "");
+  return normalized !== "" && normalized !== "NoValue";
+}
+
 type SelectOption = {
   value: string;
   label: string;
@@ -109,7 +114,8 @@ function buildOptions(
       if (label) agg.label = label;
     }
     agg.total += dr.total_length;
-    agg.counterparts.add(kind === "specie" ? dr.chemical_val : dr.specie_val);
+    const counterpart = kind === "specie" ? dr.chemical_count_val : dr.specie_count_val;
+    if (isConfiguredCountValue(counterpart)) agg.counterparts.add(counterpart);
     if (mode === "articles") {
       dr.value_rows.forEach((row) =>
         collectUniqueTokensFromRow(row, refColumns, agg.articles),
@@ -240,6 +246,8 @@ const groupedRowsCache = new WeakMap<object, {
   meta: DataMeta[];
   chemKey: string;
   specieKey: string;
+  chemicalCountKey: string;
+  speciesCountKey: string;
   rows: DataRows[];
 }>();
 
@@ -248,10 +256,13 @@ export function rowsFromResponseData(
   meta: DataMeta[],
   chemKey: string,
   specieKey: string,
+  chemicalCountKey = chemKey,
+  speciesCountKey = specieKey,
 ): DataRows[] {
   // Search snapshots and their grouped rows are immutable after construction.
   const cached = groupedRowsCache.get(dataItems);
-  if (cached?.meta === meta && cached.chemKey === chemKey && cached.specieKey === specieKey) {
+  if (cached?.meta === meta && cached.chemKey === chemKey && cached.specieKey === specieKey &&
+    cached.chemicalCountKey === chemicalCountKey && cached.speciesCountKey === speciesCountKey) {
     return cached.rows;
   }
   const map = new Map<string, DataRows>();
@@ -266,12 +277,16 @@ export function rowsFromResponseData(
       const rawItem = data_item[m.name];
       const item = rawItem != null ? String(rawItem) : "";
       // SMILES is often typed without `table_`, so is_chemical is false — still attach to chem.
-      if (m.is_chemical || m.type === "smiles" || ((m.is_primary || m.is_key_column) && m.entity_kind === "chemical")) {
+      // A configured count key can be hidden, so retain it without making it part
+      // of the existing entity grouping or navigation identity.
+      const isChemicalEntityColumn = m.is_chemical || m.type === "smiles" || ((m.is_primary || m.is_key_column) && m.entity_kind === "chemical");
+      const isSpeciesEntityColumn = m.is_specie || ((m.is_primary || m.is_key_column) && m.entity_kind === "specie");
+      if (isChemicalEntityColumn || m.name === chemicalCountKey) {
         chem_row.set(m.name, item);
-        chemicalIdentity.push([m.name, rawItem]);
-      } else if (m.is_specie || ((m.is_primary || m.is_key_column) && m.entity_kind === "specie")) {
+        if (isChemicalEntityColumn) chemicalIdentity.push([m.name, rawItem]);
+      } else if (isSpeciesEntityColumn || m.name === speciesCountKey) {
         specie_row.set(m.name, item);
-        speciesIdentity.push([m.name, rawItem]);
+        if (isSpeciesEntityColumn) speciesIdentity.push([m.name, rawItem]);
       }
       else value_row.set(m.name, item);
     });
@@ -279,13 +294,13 @@ export function rowsFromResponseData(
     if (!map.has(key)) {
       map.set(
         key,
-        new DataRows(specie_row, specieKey, chem_row, chemKey, []),
+        new DataRows(specie_row, specieKey, speciesCountKey, chem_row, chemKey, chemicalCountKey, []),
       );
     }
     map.get(key)?.add_row(value_row);
   });
   const rows = [...map.values()];
-  groupedRowsCache.set(dataItems, { meta, chemKey, specieKey, rows });
+  groupedRowsCache.set(dataItems, { meta, chemKey, specieKey, chemicalCountKey, speciesCountKey, rows });
   return rows;
 }
 
@@ -1371,6 +1386,8 @@ function ResultTableWrapper({
   meta,
   chemKey,
   specieKey,
+  chemicalCountKey,
+  speciesCountKey,
   compareSeries = [],
   colorsByQuery = {},
   primaryQuery = "",
@@ -1380,6 +1397,8 @@ function ResultTableWrapper({
   meta: Array<DataMeta>;
   chemKey: string;
   specieKey: string;
+  chemicalCountKey: string;
+  speciesCountKey: string;
   compareSeries?: CompareSeries[];
   colorsByQuery?: Record<string, string>;
   primaryQuery?: string;
@@ -1416,10 +1435,12 @@ function ResultTableWrapper({
                     meta,
                     chemKey,
                     specieKey,
+                    chemicalCountKey,
+                    speciesCountKey,
                   ),
           }))
         : [],
-    [chemKey, compareSeries, meta, rows, specieKey],
+    [chemicalCountKey, chemKey, compareSeries, meta, rows, specieKey, speciesCountKey],
   );
   const resolvedSeries = resolveCompareRowSets(rows, seriesRowSets);
 
@@ -1544,6 +1565,8 @@ function ResultTableOrNull({
     const data_meta: Array<DataMeta> = [];
     let chem_key_column = "";
     let specie_key_column = "";
+    let chemical_count_key = "";
+    let species_count_key = "";
 
     const metadata = [...response["metadata"]].sort(
       (
@@ -1588,6 +1611,8 @@ function ResultTableOrNull({
         if (entityKind === "chemical") chem_key_column = data_name;
         if (entityKind === "specie") specie_key_column = data_name;
       }
+      if (meta_item["entity_count_key"] === "chemical") chemical_count_key = data_name;
+      if (meta_item["entity_count_key"] === "species") species_count_key = data_name;
 
       let group_type = "";
       if (entityKind === "chemical") {
@@ -1622,10 +1647,23 @@ function ResultTableOrNull({
       );
     });
 
-    return { meta: data_meta, chemKey: chem_key_column, specieKey: specie_key_column };
+    return {
+      meta: data_meta,
+      chemKey: chem_key_column,
+      specieKey: specie_key_column,
+      chemicalCountKey: chemical_count_key || chem_key_column,
+      speciesCountKey: species_count_key || specie_key_column,
+    };
   }, [response.metadata]);
   const rows = useMemo(() => model
-    ? rowsFromResponseData(response.data, model.meta, model.chemKey, model.specieKey)
+    ? rowsFromResponseData(
+      response.data,
+      model.meta,
+      model.chemKey,
+      model.specieKey,
+      model.chemicalCountKey,
+      model.speciesCountKey,
+    )
     : [], [response.data, model]);
 
   if (!model) return <div></div>;
@@ -1636,6 +1674,8 @@ function ResultTableOrNull({
       meta={model.meta}
       chemKey={model.chemKey}
       specieKey={model.specieKey}
+      chemicalCountKey={model.chemicalCountKey}
+      speciesCountKey={model.speciesCountKey}
       compareSeries={compareSeries}
       colorsByQuery={colorsByQuery}
       primaryQuery={primaryQuery}

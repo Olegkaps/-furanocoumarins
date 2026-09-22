@@ -122,3 +122,26 @@ test("rendered comparison preserves per-series colors and unique counts across r
   assert.match(render(recolored), /color:#fedcba/);
   assert.doesNotMatch(render(recolored), /color:#123456/);
 });
+
+test("configured chemical count key uses whole nonblank values instead of SMILES", () => {
+  const configuredMetadata = [
+    { column: "family", name: "family", type: "clas[1]" },
+    { column: "species", name: "species", type: "clas[0]" },
+    { column: "smiles", name: "smiles", type: "SMILES" },
+    { column: "chemical_family", name: "Chemical family", type: "invisible", entity_count_key: "chemical" },
+  ];
+  const configuredRows = [
+    { family: "F", species: "one", smiles: "C", chemical_family: "A,B" },
+    { family: "F", species: "two", smiles: "CC", chemical_family: "A,B" },
+    { family: "F", species: "three", smiles: "CCC", chemical_family: " " },
+    { family: "F", species: "four", smiles: "CCCC", chemical_family: "No Value" },
+  ];
+  const html = renderToStaticMarkup(createElement(
+    MemoryRouter,
+    { initialEntries: ["/tree?query=x&count=chemicals&to=0"] },
+    createElement(Tree, { response: { metadata: configuredMetadata, data: configuredRows } }),
+  ));
+
+  assert.match(html, /title="1 chemicals">1</);
+  assert.doesNotMatch(html, /title="4 chemicals">4</);
+});
