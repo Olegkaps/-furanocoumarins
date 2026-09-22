@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"testing"
+	"time"
 
 	"admin/internal/pkg/metadata"
 	"github.com/DATA-DOG/go-sqlmock"
@@ -65,6 +66,19 @@ func TestTaxonomySourceIDDisambiguatesMatchingEpithets(t *testing.T) {
 	require.Equal(t, "species-heracleum", taxon.ID)
 }
 
+func TestTaxonomyMarksAmbiguousLegacySpeciesName(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	document := []byte(`{"sheets":[{"name":"classification","columns":[{"name":"species","classification":{"level":0}},{"name":"genus","classification":{"level":1}}]}]}`)
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT t.created_at,t.table_species,t.table_data,m.document FROM chemdb.tables t JOIN chemdb.metadata_versions m ON m.version=t.metadata_version WHERE t.is_active AND t.is_ok`)).WillReturnRows(sqlmock.NewRows([]string{"created_at", "table_species", "table_data", "document"}).AddRow(time.Now(), "chemdb.species_fixture", "chemdb.data_fixture", document))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT "species","genus" FROM "chemdb"."species_fixture"`)).WillReturnRows(sqlmock.NewRows([]string{"species", "genus"}).AddRow("communis", "Angelica").AddRow("communis", "Heracleum"))
+	taxon, err := NewPostgresStore(db).Taxonomy(context.Background(), 0, "communis", "")
+	require.NoError(t, err)
+	require.True(t, taxon.AmbiguousName)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestTaxonomyIDUsesPrimaryKeyPredicate(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -76,7 +90,7 @@ func TestTaxonomyIDUsesPrimaryKeyPredicate(t *testing.T) {
 	}}}})
 	require.NoError(t, err)
 	physical := SourceTableName("chemdb.data_fixture", "classification")
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT t.table_species,t.table_data,m.document FROM chemdb.tables t JOIN chemdb.metadata_versions m ON m.version=t.metadata_version WHERE t.is_active AND t.is_ok`)).WillReturnRows(sqlmock.NewRows([]string{"table_species", "table_data", "document"}).AddRow("chemdb.species_fixture", "chemdb.data_fixture", document))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT t.created_at,t.table_species,t.table_data,m.document FROM chemdb.tables t JOIN chemdb.metadata_versions m ON m.version=t.metadata_version WHERE t.is_active AND t.is_ok`)).WillReturnRows(sqlmock.NewRows([]string{"created_at", "table_species", "table_data", "document"}).AddRow(time.Now(), "chemdb.species_fixture", "chemdb.data_fixture", document))
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT to_regclass($1) IS NOT NULL`)).WithArgs(`"chemdb"."data_fixture_sources"`).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT physical_table,entity_kind,primary_column,columns_json FROM "chemdb"."data_fixture_sources" WHERE virtual_name=$1`)).WithArgs("classification").WillReturnRows(sqlmock.NewRows([]string{"physical_table", "entity_kind", "primary_column", "columns_json"}).AddRow(physical, "species", "source_id", `[["classification","source_id","primary","",""],["classification","species","clas[0]","",""],["classification","genus","clas[1]","",""]]`))
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT "species","genus","source_id" FROM ` + mustPGTable(t, physical) + ` WHERE "source_id"=$1`)).WithArgs("species-heracleum").WillReturnRows(sqlmock.NewRows([]string{"species", "genus", "source_id"}).AddRow("communis", "Heracleum", "species-heracleum"))
@@ -96,7 +110,7 @@ func TestTaxonomyNameRouteDoesNotRequireSourcePrimaryKeyColumn(t *testing.T) {
 		{Name: "species_id", DataType: "text", PrimaryKey: true},
 	}}}})
 	require.NoError(t, err)
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT t.table_species,t.table_data,m.document FROM chemdb.tables t JOIN chemdb.metadata_versions m ON m.version=t.metadata_version WHERE t.is_active AND t.is_ok`)).WillReturnRows(sqlmock.NewRows([]string{"table_species", "table_data", "document"}).AddRow("chemdb.species_fixture", "chemdb.data_fixture", document))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT t.created_at,t.table_species,t.table_data,m.document FROM chemdb.tables t JOIN chemdb.metadata_versions m ON m.version=t.metadata_version WHERE t.is_active AND t.is_ok`)).WillReturnRows(sqlmock.NewRows([]string{"created_at", "table_species", "table_data", "document"}).AddRow(time.Now(), "chemdb.species_fixture", "chemdb.data_fixture", document))
 	// Legacy taxonomy tables may predate source catalogs and have no primary
 	// source-ID column. Name pages must remain usable for those datasets.
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT "species","genus" FROM "chemdb"."species_fixture"`)).WillReturnRows(sqlmock.NewRows([]string{"species", "genus"}).AddRow("communis", "Heracleum"))

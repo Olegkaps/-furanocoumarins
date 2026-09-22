@@ -9,6 +9,7 @@ import {
 } from "@gravity-ui/icons";
 import config from "../config";
 import { clearApiCache } from "../shared/apiCache";
+import TaxonIdMapping from "./TaxonIdMapping";
 import "./Admin.css";
 
 class Table {
@@ -296,6 +297,7 @@ const AdminPage: React.FC = () => {
           <Link to="/admin/metadata" className="btn">Import metadata</Link>
           <Link to="/admin/publication-reader" className="btn">Publication reader</Link>
           <Link to="/admin/images" className="btn">Image library</Link>
+          <TaxonIdMapping />
           <button
             type="button"
             className="btn"

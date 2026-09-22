@@ -1,0 +1,23 @@
+.omics-preview { clear: both; margin: 2rem 0; padding: 1rem; border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface-alt); }
+.omics-preview__heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.omics-preview h2, .omics-preview h3, .omics-preview p { margin-top: 0; }
+.omics-preview fieldset { display: inline-flex; flex-wrap: wrap; gap: .4rem .8rem; margin: .3rem .6rem .6rem 0; border: 0; padding: 0; }
+.omics-preview legend { font-weight: 700; }
+.omics-preview label { display: inline-flex; gap: .3rem; align-items: center; }
+.omics-preview__scope, .omics-preview small { color: var(--color-muted); font-size: .85rem; }
+.omics-preview__notice { padding: .65rem; border-left: 3px solid var(--color-accent); background: var(--color-surface); }
+.omics-preview__counts { display: flex; flex-wrap: wrap; gap: .3rem 1rem; padding-left: 1.2rem; }
+.omics-preview__records { display: flex; flex-wrap: wrap; gap: .75rem; }
+.omics-record-list { position: relative; flex: 0 1 20rem; min-width: 0; max-width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); }
+.omics-record-list[open] { z-index: 3; }
+.omics-record-list summary { display: flex; align-items: center; gap: .65rem; padding: .8rem 1rem; cursor: pointer; font-weight: 700; list-style: none; }
+.omics-record-list summary::-webkit-details-marker { display: none; }
+.omics-record-list summary::before { content: "›"; font-size: 1.25rem; }
+.omics-record-list[open] summary::before { transform: rotate(90deg); }
+.omics-record-list summary small { margin-left: auto; border-radius: 1rem; padding: .15rem .55rem; background: var(--color-surface-alt); }
+.omics-record-list__menu { position: absolute; top: 100%; left: 0; width: 100%; max-height: min(60vh, 32rem); overflow-y: auto; margin-top: .25rem; padding: .35rem; box-sizing: border-box; border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface); box-shadow: 0 .4rem 1rem rgb(0 0 0 / 12%); }
+.omics-record-list__menu ul { margin: 0; padding: 0; list-style: none; }
+.omics-record-list__menu p { padding: .55rem .65rem; margin: 0; }
+.omics-record-list__menu a { display: block; padding: .55rem .65rem; border-radius: var(--radius); overflow-wrap: anywhere; color: inherit; font-weight: 600; }
+.omics-record-list__menu a:hover, .omics-record-list__menu a:focus-visible { background: var(--color-surface-alt); }
+.omics-record-list__menu small { display: block; margin-top: .2rem; font-weight: 400; }

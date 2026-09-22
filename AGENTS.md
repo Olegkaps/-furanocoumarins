@@ -356,3 +356,40 @@ carbon predicates for heteroatom relaxation; do not introduce a second query
 language for this existing SMILES notation. Heteroatom relaxation
 must not add an aliphatic-only constraint that removes existing aromatic hits.
 An eight-membered query is not a benzene query and must retain its topology.
+
+## External sequence availability
+
+External taxon IDs use a separate, globally versioned lookup keyed by exact full
+scientific name and local classification rank, independent of scientific dataset
+imports. The Metadata editor maps XLSX/CSV name, rank, and provider-ID headers;
+admin-only uploads atomically activate immutable versions. Public external-ID
+lookups resolve species source IDs to full names and reject ambiguous legacy
+epithet routes. Blank IDs remain unmapped, never guessed. Stored provider IDs
+take precedence over live name resolution; a missing mapping for one provider
+must not block counts from mapped providers. IDs establish identity, not record
+availability; the live-count and 300-record preview rules still apply.
+
+Species and higher-taxon pages use `TaxonPage/OmicsPreview` to query external
+omics providers directly from the browser, without application credentials.
+Taxonomy-based sources resolve exact scientific names to external taxonomy IDs;
+never interpret an IPNI/POWO source-row ID as an NCBI TaxId. Ambiguous matches
+require a selection. Exact organism-label sources must not depend on ENA lookup.
+Higher-rank searches use provider taxonomy descendants where supported, which
+may differ from the local classification; unsupported group scopes are unknown,
+not zero. Keep the scope and source-specific record units visible.
+
+Count selected provider records before loading previews. A total above 300 or
+an unavailable count suppresses previews, not source links. Counts across NCBI
+and ENA may overlap and are not a count of unique biological datasets.
+Provider-specific valid empty responses are zero; network and schema failures
+are unknown. Keep bounded requests, cancellation and stale-result protection.
+
+`/taxa/:rank/availability` reads saved count snapshots publicly; writes require
+`RequireAdmin`. Snapshots are browser-observed, not curated assertions, and
+receive a server timestamp. They belong to the active scientific dataset with
+cascading deletion; a dataset change rejects stale writes. Saved counts never
+authorize a live preview. Keep live requests out of metadata-editor previews.
+The legacy `external_taxid` wire/storage field also accepts explicit
+`organism:<scientific name>` identities for exact organism-label searches; never
+display these as taxonomy IDs. Do not save failed, approximate or unsupported
+counts. An organelle nucleotide record is not necessarily a complete genome.

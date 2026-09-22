@@ -14,7 +14,7 @@ import {
 import { InfoTip } from "../shared/ui/InfoTip";
 import { QueryCompareBar, type CompareSeries } from "./QueryCompareBar";
 import { hasMetadataTypeToken } from "../shared/metadataType";
-import { selectTreeTaxonomy } from "./treeTaxonomy";
+import { normalizeTreeClade, selectTreeTaxonomy } from "./treeTaxonomy";
 import { usePublicConfig } from "../shared/publicConfig";
 import {
   appendCladeClause,
@@ -75,7 +75,7 @@ function treeSpacingForSeries(seriesCount: number): TreeSpacing {
 }
 
 function isBlankClade(name: string): boolean {
-  return name.replaceAll(" ", "") === "";
+  return normalizeTreeClade(name) === "";
 }
 
 class PhilogeneticTreeNode {
@@ -174,7 +174,7 @@ class PhilogeneticTreeNode {
       (meta_ind === 1 && total_bros === 1);
     const showCount =
       !wouldHideCount ||
-      (this.after_empty_rank && this.clade_name.replaceAll(" ", "") !== "");
+      (this.after_empty_rank && !isBlankClade(this.clade_name));
 
     const fullTitle = displayName
       ? displayName.replace(/\u00A0/g, " ")
@@ -659,7 +659,7 @@ function CountButton({
     !plain &&
     clade_key !== "__root__" &&
     clade_key !== "" &&
-    clade_val.replaceAll(" ", "") !== "";
+    !isBlankClade(clade_val);
 
   const visibleSeries = (seriesCounts ?? []).filter((s) => s.n > 0);
   const multi = (seriesCounts?.length ?? 0) > 1;
@@ -939,7 +939,7 @@ export function buildUniquesByClades(
     const clades: Array<string> = [];
     species_meta.forEach((clade_name: string, ind: number) => {
       if (ind === 0) return;
-      clades.push(row[clade_name] ?? "");
+      clades.push(normalizeTreeClade(row[clade_name]));
     });
     const joined_clades = clades.join("@");
     if (!(joined_clades in uniquesByClades)) {

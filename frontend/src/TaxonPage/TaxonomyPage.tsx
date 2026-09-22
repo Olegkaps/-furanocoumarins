@@ -10,6 +10,7 @@ import { fetchEntityPageDetails, sourceEntityPageDetails, type MetadataResponse,
 import DataMeta from "../SearchApp/DataMeta";
 import { type Taxon, taxonChildLabel, taxonPageName, taxonPath, taxonRouteIsValid } from "./taxonPage";
 import "./TaxonomyPage.css";
+import OmicsAvailability from "./OmicsAvailability";
 
 export function TaxonPageView({ taxon, details, children, renderTaxonLink, maxWidth = 800, renderDetailLabel }: { taxon: Taxon; details: { meta: DataMeta[]; row: Map<string, string> } | null; children: ReactNode; renderTaxonLink?: (link: { rank: number; name: string; id?: string; source_column?: string }, content: ReactNode) => ReactNode; maxWidth?: string | number; renderDetailLabel?: (column: DataMeta) => ReactNode }) {
   const destination = (link: { rank: number; name: string; id?: string; source_column?: string }, content: ReactNode) => renderTaxonLink ? renderTaxonLink(link, content) : <Link to={taxonPath(link)}>{content}</Link>;
@@ -99,6 +100,7 @@ export default function TaxonPage() {
   return <><FullNavigation />
     <TaxonPageView taxon={taxon} details={details} maxWidth={state.editMode ? 1400 : 800} renderTaxonLink={(link, label) => <Link to={taxonPath(link)}>{label}</Link>}>
       <EditablePageContent {...state} />
+      <OmicsAvailability key={`${id ?? ""}:${rank}:${taxon.name}`} taxon={{ ...taxon, id: id ?? taxon.id }} />
     </TaxonPageView>
   </>;
 }

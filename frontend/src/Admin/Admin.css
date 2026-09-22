@@ -203,6 +203,17 @@
   margin-top: 16px;
 }
 
+.taxon-id-mapping-schema,
+.taxon-id-mapping-status,
+.taxon-id-mapping-notice {
+  overflow-wrap: anywhere;
+}
+
+.taxon-id-mapping-notice {
+  padding: .75rem;
+  border-left: 3px solid var(--color-accent);
+}
+
 .btn-danger {
   background: color-mix(in srgb, var(--color-danger) 8%, white);
   border-color: var(--color-danger);

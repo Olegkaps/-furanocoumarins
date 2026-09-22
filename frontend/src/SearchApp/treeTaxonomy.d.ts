@@ -7,3 +7,6 @@ export function canShowPhylogeneticTree(
   compareSeries?: Array<{ response: { data?: Array<Record<string, unknown>> } }>,
   tag?: string,
 ): boolean;
+
+/** Canonicalize blank taxonomy cells and the API's NoValue marker to one unnamed node. */
+export function normalizeTreeClade(value: unknown): string;

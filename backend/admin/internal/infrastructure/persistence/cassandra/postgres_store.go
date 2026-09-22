@@ -79,7 +79,36 @@ CREATE OR REPLACE FUNCTION chemdb.invalidate_autocomplete() RETURNS trigger LANG
 CREATE OR REPLACE TRIGGER bibtex_autocomplete_changed AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON chemdb.bibtex FOR EACH STATEMENT EXECUTE FUNCTION chemdb.invalidate_autocomplete();
 CREATE TABLE IF NOT EXISTS chemdb.pages (name text PRIMARY KEY, url text NOT NULL);
 CREATE TABLE IF NOT EXISTS chemdb.metadata_versions (version bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, document jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), created_by text NOT NULL, provenance text NOT NULL, published boolean NOT NULL DEFAULT false);
-ALTER TABLE chemdb.tables ADD COLUMN IF NOT EXISTS metadata_version bigint REFERENCES chemdb.metadata_versions(version);`)
+ALTER TABLE chemdb.tables ADD COLUMN IF NOT EXISTS metadata_version bigint REFERENCES chemdb.metadata_versions(version);
+CREATE TABLE IF NOT EXISTS chemdb.taxon_availability_snapshots (
+ dataset timestamptz NOT NULL REFERENCES chemdb.tables(created_at) ON DELETE CASCADE,
+ rank integer NOT NULL,
+ taxon_key text NOT NULL,
+ source text NOT NULL,
+ snapshot_type text NOT NULL,
+ external_taxid text NOT NULL,
+ count bigint NOT NULL CHECK (count >= 0),
+ checked_at timestamptz NOT NULL,
+ PRIMARY KEY (dataset,rank,taxon_key,source,snapshot_type,external_taxid)
+);
+CREATE TABLE IF NOT EXISTS chemdb.taxon_id_mapping_versions (
+ version bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+ config jsonb NOT NULL,
+ row_count integer NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ created_by text NOT NULL
+);
+CREATE TABLE IF NOT EXISTS chemdb.taxon_id_mapping_rows (
+ version bigint NOT NULL REFERENCES chemdb.taxon_id_mapping_versions(version),
+ rank integer NOT NULL,
+ name text NOT NULL,
+ ids jsonb NOT NULL,
+ PRIMARY KEY(version,rank,name)
+);
+CREATE TABLE IF NOT EXISTS chemdb.taxon_id_mapping_current (
+ id boolean PRIMARY KEY DEFAULT true CHECK(id),
+ version bigint NOT NULL REFERENCES chemdb.taxon_id_mapping_versions(version)
+);`)
 	if err != nil {
 		return err
 	}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"admin/internal/pkg/metadata"
 )
@@ -22,10 +23,17 @@ type TaxonLink struct {
 
 type Taxon struct {
 	TaxonLink
-	Title       string      `json:"title"`
-	QueryColumn string      `json:"query_column,omitempty"`
-	Parent      *TaxonLink  `json:"parent,omitempty"`
-	Children    []TaxonLink `json:"children"`
+	// DatasetVersion identifies the immutable dataset that supplied this local
+	// taxon. It is deliberately not part of the public taxonomy response; the
+	// availability endpoint exposes it as its optimistic-concurrency token.
+	DatasetVersion time.Time `json:"-"`
+	// AmbiguousName prevents consumers that require a unique scientific name
+	// from silently selecting the first legacy species epithet.
+	AmbiguousName bool        `json:"-"`
+	Title         string      `json:"title"`
+	QueryColumn   string      `json:"query_column,omitempty"`
+	Parent        *TaxonLink  `json:"parent,omitempty"`
+	Children      []TaxonLink `json:"children"`
 }
 
 type taxonomyColumn struct {
@@ -45,8 +53,9 @@ func (s *Store) Taxonomy(ctx context.Context, rank int, name, id string) (*Taxon
 		return nil, fmt.Errorf("taxon name or source ID is required")
 	}
 	var tableName, tableData string
+	var datasetVersion time.Time
 	var raw json.RawMessage
-	err := s.db.QueryRowContext(ctx, `SELECT t.table_species,t.table_data,m.document FROM chemdb.tables t JOIN chemdb.metadata_versions m ON m.version=t.metadata_version WHERE t.is_active AND t.is_ok`).Scan(&tableName, &tableData, &raw)
+	err := s.db.QueryRowContext(ctx, `SELECT t.created_at,t.table_species,t.table_data,m.document FROM chemdb.tables t JOIN chemdb.metadata_versions m ON m.version=t.metadata_version WHERE t.is_active AND t.is_ok`).Scan(&datasetVersion, &tableName, &tableData, &raw)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("no active table found")
 	}
@@ -129,8 +138,8 @@ func (s *Store) Taxonomy(ctx context.Context, rank int, name, id string) (*Taxon
 		for i, cell := range cells {
 			row[i] = strings.TrimSpace(cell.String)
 		}
-		if taxonomyMatches(row, requested, name, id, len(columns)) {
-			if name == "" {
+		if taxonomyMatches(row, requested, name, id, len(columns)) && taxonomyRequestedNameMatches(row, columns, requested, name, id) {
+			if name == "" || (id == "" && columns[requested].rank == 0 && strings.Contains(name, " ")) {
 				name = row[requested]
 			}
 			values = append(values, row)
@@ -142,14 +151,38 @@ func (s *Store) Taxonomy(ctx context.Context, rank int, name, id string) (*Taxon
 	if len(values) == 0 {
 		return nil, nil
 	}
-	return buildTaxon(columns, requested, name, values), nil
+	taxon := buildTaxon(columns, requested, name, values)
+	taxon.DatasetVersion = datasetVersion
+	if id == "" && columns[requested].rank == 0 {
+		titles := map[string]bool{}
+		for _, row := range values {
+			titles[taxonomyFullName(row, columns, requested)] = true
+		}
+		taxon.AmbiguousName = len(titles) > 1
+	}
+	return taxon, nil
 }
 
 func taxonomyMatches(row []string, requested int, name, id string, classificationColumns int) bool {
 	if id != "" {
 		return len(row) > classificationColumns && row[classificationColumns] == id
 	}
-	return row[requested] == name
+	return row[requested] == name || strings.Contains(name, " ")
+}
+
+func taxonomyRequestedNameMatches(row []string, columns []taxonomyColumn, requested int, name, id string) bool {
+	if id != "" || columns[requested].rank != 0 || !strings.Contains(name, " ") {
+		return true
+	}
+	return taxonomyFullName(row, columns, requested) == name
+}
+
+func taxonomyFullName(row []string, columns []taxonomyColumn, requested int) string {
+	name := row[requested]
+	if genus := firstRankValue(columns, [][]string{row}, 1); genus != "" {
+		return genus + " " + name
+	}
+	return name
 }
 
 func taxonomyColumns(document metadata.Document) []taxonomyColumn {

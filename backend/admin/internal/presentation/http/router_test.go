@@ -9,12 +9,15 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 
 	"admin/internal/app"
 	infraauth "admin/internal/infrastructure/authmaster"
+	"admin/internal/infrastructure/persistence/cassandra"
 	presentation "admin/internal/presentation/http"
 )
 
@@ -58,6 +61,63 @@ func TestNewAppConfigIsPublic(t *testing.T) {
 	require.NotEmpty(t, body["classification_autocomplete_hint"])
 }
 
+func TestTaxonAvailabilityIsPublicAndDatasetScoped(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	dataset := time.Date(2026, 9, 19, 8, 0, 0, 0, time.UTC)
+	document := []byte(`{"sheets":[{"name":"classification","columns":[{"name":"species","classification":{"level":0}},{"name":"genus","classification":{"level":1}}]}]}`)
+	mock.ExpectQuery(`SELECT t\.created_at,t\.table_species,t\.table_data,m\.document`).WillReturnRows(sqlmock.NewRows([]string{"created_at", "table_species", "table_data", "document"}).AddRow(dataset, "chemdb.species_fixture", "chemdb.data_fixture", document))
+	mock.ExpectQuery(`SELECT "species","genus" FROM "chemdb"\."species_fixture"`).WillReturnRows(sqlmock.NewRows([]string{"species", "genus"}).AddRow("communis", "Heracleum"))
+	mock.ExpectQuery(`SELECT source,snapshot_type,external_taxid,count,checked_at`).WithArgs(dataset, 0, "rank:0:name:communis").WillReturnRows(sqlmock.NewRows([]string{"source", "snapshot_type", "external_taxid", "count", "checked_at"}).AddRow("ncbi", "genome", "9606", 2, dataset))
+	container, err := app.New(app.Options{EnvType: "TEST", CassandraStore: cassandra.NewPostgresStore(db)})
+	require.NoError(t, err)
+	resp, err := presentation.NewApp(container).Test(httptest.NewRequest(fiber.MethodGet, "/taxa/0/availability?name=communis", nil))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, fiber.StatusOK, resp.StatusCode)
+	var body struct {
+		DatasetVersion time.Time `json:"dataset_version"`
+		Snapshots      []struct {
+			Source     string `json:"source"`
+			Provenance string `json:"provenance"`
+		} `json:"snapshots"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	require.Equal(t, dataset, body.DatasetVersion)
+	require.Equal(t, []struct {
+		Source     string `json:"source"`
+		Provenance string `json:"provenance"`
+	}{{Source: "ncbi", Provenance: "browser_observed"}}, body.Snapshots)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestTaxonExternalIDsResolveFullSpeciesNameWithoutAuthentication(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	document := []byte(`{"sheets":[{"name":"classification","columns":[{"name":"species","classification":{"level":0}},{"name":"genus","classification":{"level":1}}]}]}`)
+	mock.ExpectQuery(`SELECT t\.created_at,t\.table_species,t\.table_data,m\.document`).WillReturnRows(sqlmock.NewRows([]string{"created_at", "table_species", "table_data", "document"}).AddRow(time.Now(), "chemdb.species_fixture", "chemdb.data_fixture", document))
+	mock.ExpectQuery(`SELECT "species","genus" FROM "chemdb"\."species_fixture"`).WillReturnRows(sqlmock.NewRows([]string{"species", "genus"}).AddRow("communis", "Heracleum"))
+	mock.ExpectQuery(`SELECT c\.version,r\.ids FROM chemdb\.taxon_id_mapping_current`).WithArgs(0, "Heracleum communis").WillReturnRows(sqlmock.NewRows([]string{"version", "ids"}).AddRow(4, []byte(`{"ncbi":"3747"}`)))
+	container, err := app.New(app.Options{EnvType: "TEST", CassandraStore: cassandra.NewPostgresStore(db)})
+	require.NoError(t, err)
+	resp, err := presentation.NewApp(container).Test(httptest.NewRequest(fiber.MethodGet, "/taxa/0/external-ids?name=Heracleum%20communis", nil))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, fiber.StatusOK, resp.StatusCode)
+	var body struct {
+		Version        int64             `json:"version"`
+		ScientificName string            `json:"scientific_name"`
+		IDs            map[string]string `json:"ids"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	require.Equal(t, int64(4), body.Version)
+	require.Equal(t, "Heracleum communis", body.ScientificName)
+	require.Equal(t, map[string]string{"ncbi": "3747"}, body.IDs)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestEveryDomainMutationDeniesAuthenticatedNonAdmin(t *testing.T) {
 	container, err := app.New(app.Options{EnvType: "TEST", AuthMaster: &routeAuth{admin: false}})
 	require.NoError(t, err)
@@ -69,6 +129,8 @@ func TestEveryDomainMutationDeniesAuthenticatedNonAdmin(t *testing.T) {
 		{fiber.MethodPost, "/metadata-versions/validate"},
 		{fiber.MethodDelete, "/table/not-a-time"}, {fiber.MethodDelete, "/tables"},
 		{fiber.MethodPut, "/bibtex"}, {fiber.MethodPut, "/pages/about"}, {fiber.MethodPut, "/admin/about/pages"},
+		{fiber.MethodPut, "/taxa/0/availability"},
+		{fiber.MethodGet, "/admin/taxon-id-mapping"}, {fiber.MethodPost, "/admin/taxon-id-mapping"},
 		{fiber.MethodGet, "/admin/images"}, {fiber.MethodPost, "/admin/images"}, {fiber.MethodPut, "/admin/images/not-an-id"}, {fiber.MethodDelete, "/admin/images/not-an-id"},
 	} {
 		req := httptest.NewRequest(target.method, target.path, nil)

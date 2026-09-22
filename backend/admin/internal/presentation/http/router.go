@@ -76,6 +76,8 @@ func NewApp(container *app.Container) *fiber.App {
 	app.Get("/catalog/:kind/:id", catalog.Get)
 	app.Get("/pages/:name", pages.GetPage)
 	app.Get("/taxa/:rank", pages.GetTaxon)
+	app.Get("/taxa/:rank/availability", pages.GetTaxonAvailability)
+	app.Get("/taxa/:rank/external-ids", pages.GetTaxonExternalIDs)
 	app.Get("/about/pages", pages.GetAboutPages)
 
 	app.Get("/ping", response.Resp200)
@@ -112,6 +114,9 @@ func NewApp(container *app.Container) *fiber.App {
 
 	app.Post("/get-tables-list", authmasterhandler.RequireUser(container), tables.GetTablesList)
 	admin := authmasterhandler.RequireAdmin(container)
+	app.Put("/taxa/:rank/availability", admin, pages.PutTaxonAvailability)
+	app.Get("/admin/taxon-id-mapping", admin, pages.GetTaxonIDMapping)
+	app.Post("/admin/taxon-id-mapping", admin, pages.PostTaxonIDMapping)
 	publication := publicationhandler.New(settings.C.AliceAPIEnabled, settings.C.AliceAPIKey, settings.C.AliceModelURI)
 	app.Get("/admin/publication-reader/status", admin, publication.Status)
 	app.Post("/admin/publication-reader/document", admin, publication.Document)

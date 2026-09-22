@@ -15,7 +15,8 @@
         /auth/* \
         /admin/publication-reader/status \
         /admin/publication-reader/document \
-        /admin/publication-reader/analyze \
+		/admin/publication-reader/analyze \
+		/admin/taxon-id-mapping \
 		/admin/about/pages \
 		/admin/images \
 		/admin/images/* \

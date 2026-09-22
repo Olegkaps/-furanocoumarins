@@ -18,6 +18,16 @@ test("tree availability counts distinct paths across visible responses and selec
   assert.equal(canShowPhylogeneticTree({}), false);
   assert.equal(canShowPhylogeneticTree({ metadata: [], data: [{ a: 1 }, { a: 2 }] }), false);
   assert.equal(canShowPhylogeneticTree({ metadata, data: [{}, { species: "" }] }), false);
+  assert.equal(
+    canShowPhylogeneticTree({ metadata, data: [{ species: "\t " }, { species: "\u00a0" }] }),
+    false,
+    "whitespace-only ranks are the same unnamed clade",
+  );
+  assert.equal(
+    canShowPhylogeneticTree({ metadata, data: [{ species: "NoValue" }, { species: " " }] }),
+    false,
+    "the API missing-value marker is the same unnamed clade",
+  );
 });
 
 test("tree ranks run broadest to narrowest independently of metadata token order", () => {

@@ -47,3 +47,21 @@ test("tree taxonomy tooltip uses deployed public config", () => {
   assert.match(html, /Configured taxonomy documentation/);
   assert.doesNotMatch(html, /Pimenov/);
 });
+
+test("tree merges whitespace-only unnamed parent ranks without merging named taxa", () => {
+  const response = { metadata: [
+    { column: "family", name: "Family", type: "clas[3]" },
+    { column: "superclade", name: "Superclade", type: "clas[2]" },
+    { column: "tribe", name: "Tribe", type: "clas[1]" },
+    { column: "genus", name: "Genus", type: "clas[0]" },
+  ], data: [
+    { family: "Apiaceae", superclade: " ", tribe: "Ferulinae", genus: "Ferula" },
+    { family: "Apiaceae", superclade: "NoValue", tribe: "Ferulinae", genus: "Johrenia" },
+    { family: "Apiaceae", superclade: "Different clade", tribe: "Ferulinae", genus: "Prangos" },
+  ] };
+  const html = renderToStaticMarkup(createElement(MemoryRouter, {
+    initialEntries: ["/tree?from=0&to=3"],
+  }, createElement(Tree, { response })));
+  assert.equal((html.match(/>Ferulinae<\/p>/g) ?? []).length, 2);
+  assert.match(html, /title="Tribe">Ferulinae<\/p>[\s\S]*title="2 records">2</);
+});

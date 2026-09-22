@@ -1,5 +1,11 @@
 import { getMetadataTypeModifier } from "../shared/metadataType.mjs";
 
+/** Empty taxonomy ranks are one unnamed node, regardless of their API marker. */
+export function normalizeTreeClade(value) {
+  const text = value == null ? "" : String(value);
+  return text.trim() === "" || text.trim() === "NoValue" ? "" : text;
+}
+
 /** Match the renderer's taxonomy-path union, stopping once a tree is possible. */
 export function canShowPhylogeneticTree(response, compareSeries = [], tag = "original") {
   const { columns } = selectTreeTaxonomy(response.metadata ?? [], tag);
@@ -9,7 +15,7 @@ export function canShowPhylogeneticTree(response, compareSeries = [], tag = "ori
   let firstPath;
   for (const current of responses) {
     for (const row of current.data ?? []) {
-      const path = columns.map(column => row[column.column] ?? "").join("@");
+      const path = columns.map(column => normalizeTreeClade(row[column.column])).join("@");
       if (firstPath === undefined) firstPath = path;
       else if (path !== firstPath) return true;
     }
