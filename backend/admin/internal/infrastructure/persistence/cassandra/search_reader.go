@@ -148,9 +148,10 @@ func toDomainColumnMeta(columns []*ColumnMeta, countKeys map[string]string) []do
 			Type:        col.Type,
 			Description: col.Description,
 		}
-		if col.Column == countKeys["species"] {
+		switch col.Column {
+		case countKeys["species"]:
 			out[i].EntityCountKey = "species"
-		} else if col.Column == countKeys["chemical"] {
+		case countKeys["chemical"]:
 			out[i].EntityCountKey = "chemical"
 		}
 	}

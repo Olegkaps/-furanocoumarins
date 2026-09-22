@@ -58,7 +58,7 @@ func (s *Store) SaveTaxonIDMapping(ctx context.Context, base int64, config Taxon
 	if err != nil {
 		return TaxonIDMappingVersion{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, taxonIDMappingLock); err != nil {
 		return TaxonIDMappingVersion{}, err
 	}

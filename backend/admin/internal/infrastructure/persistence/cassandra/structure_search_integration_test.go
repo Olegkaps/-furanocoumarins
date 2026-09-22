@@ -98,7 +98,11 @@ func TestAutocompletePostgresStructureFullResults(t *testing.T) {
 	require.Equal(t, originalRevision, afterFailure)
 	require.NoError(t, store.BuildStructureIndex(ctx))
 	reader := NewSearchReader(restarted)
-	version := domainsearch.TableVersion{Timestamp: stamp, Version: table.Version, TableData: table.TableData}
+	staleVersion := domainsearch.TableVersion{Timestamp: stamp, Version: table.Version, TableData: table.TableData}
+	_, err = reader.FetchSearchData(nil, staleVersion, "smiles SUBSTRUCTURE 'C'", "id")
+	require.ErrorContains(t, err, "active dataset changed")
+	version, err := reader.ActiveTableVersion(nil)
+	require.NoError(t, err)
 	for _, tc := range []struct {
 		query string
 		count int
@@ -123,7 +127,7 @@ func TestAutocompletePostgresStructureFullResults(t *testing.T) {
 	wrong := version
 	wrong.TableData = "chemdb.not_active"
 	_, err = reader.FetchSearchData(nil, wrong, "smiles SUBSTRUCTURE 'C'", "id")
-	require.ErrorIs(t, err, chemistry.ErrBusy)
+	require.ErrorContains(t, err, "active dataset changed")
 	// Exercise stronger features through persistent arrays, including asymmetric
 	// relaxations: explicit oxygen/double bonds stay required in relaxed modes.
 	featureValues := []string{"CO", "CN", "CCO", "C=C", "CC", "C=O", "C1=CC(=O)OC2=CC3=C(C=CO3)C=C21", "C1=CC2=C(C=CO2)C3=C1C=CC(=O)O3"}
@@ -134,6 +138,8 @@ func TestAutocompletePostgresStructureFullResults(t *testing.T) {
 	_, err = db.Exec("UPDATE chemdb.tables SET version=version||'-features' WHERE created_at=$1", stamp)
 	require.NoError(t, err)
 	require.NoError(t, store.BuildStructureIndex(ctx))
+	version, err = reader.ActiveTableVersion(nil)
+	require.NoError(t, err)
 	allValues := append([]string{}, featureValues...)
 	allValues = append(allValues, "O")
 	for n := 1; n <= 140; n++ {
@@ -176,7 +182,12 @@ func TestAutocompletePostgresStructureFullResults(t *testing.T) {
 	// Empty datasets still validate a SMILES pattern instead of silently accepting it.
 	_, err = db.Exec("DELETE FROM " + mustPGTable(t, table.TableData))
 	require.NoError(t, err)
+	staleVersion = version
 	_, err = db.Exec(`UPDATE chemdb.tables SET version=version||'-changed' WHERE is_active`)
+	require.NoError(t, err)
+	_, err = reader.FetchSearchData(nil, staleVersion, "smiles SUBSTRUCTURE 'C'", "id")
+	require.ErrorContains(t, err, "active dataset changed")
+	version, err = reader.ActiveTableVersion(nil)
 	require.NoError(t, err)
 	_, err = reader.FetchSearchData(nil, version, "smiles SUBSTRUCTURE 'C1bad'", "id")
 	require.ErrorIs(t, err, chemistry.ErrInvalidSMILES)
