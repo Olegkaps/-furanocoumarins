@@ -2,7 +2,10 @@
 
 package chemistry
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type Index struct{}
 
@@ -19,6 +22,9 @@ type WorkerIndex = Index
 func NewWorkerIndex(_ context.Context, _ []string) (*WorkerIndex, error) { return nil, ErrUnavailable }
 
 func Fingerprints(context.Context, []string) ([]Fingerprint, error) { return nil, ErrUnavailable }
+func FingerprintsWithTimeout(context.Context, []string, time.Duration) ([]Fingerprint, error) {
+	return nil, ErrUnavailable
+}
 func QueryFingerprint(context.Context, string, Options) (Fingerprint, error) {
 	return Fingerprint{}, ErrUnavailable
 }

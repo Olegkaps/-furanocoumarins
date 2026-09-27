@@ -55,6 +55,16 @@ No secret value is passed in an environment variable or command line. Docker
 stores generated values directly from temporary mode-private files, which are
 removed when initialization exits.
 
+Structure-index rebuilds use a 30-second native fingerprint budget per batch
+of up to 128 molecular values. Set `FURANO_STRUCTURE_BATCH_TIMEOUT` in the
+backend environment (the Swarm `go_auth_env` secret) to a positive Go duration,
+such as `60s`, when CPU limits require a longer batch budget. Invalid settings
+fail the rebuild explicitly. The overall background build remains limited to
+30 minutes, and interactive structure requests retain their three-second
+native-worker deadline. Failed builds roll back their complete generation and
+retry on a later structure request; logs include the failing batch and whether
+the overall build deadline also expired.
+
 ## First production deployment
 
 After cloning the repository, run this block from its root. These commands do

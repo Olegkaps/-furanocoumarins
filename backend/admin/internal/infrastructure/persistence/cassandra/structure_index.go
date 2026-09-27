@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"admin/internal/autocomplete"
@@ -87,6 +88,10 @@ func (s *Store) structureVersion(ctx context.Context) (string, string, string, e
 // BuildStructureIndex atomically publishes a complete persistent generation.
 // Failed/interrupted builds roll back; replicas serialize builds with a DB lock.
 func (s *Store) BuildStructureIndex(ctx context.Context) error {
+	batchTimeout, err := structureIndexTimeout("FURANO_STRUCTURE_BATCH_TIMEOUT", 30*time.Second)
+	if err != nil {
+		return err
+	}
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return err
@@ -129,6 +134,7 @@ func (s *Store) BuildStructureIndex(ctx context.Context) error {
 		return err
 	}
 	for _, column := range columns {
+		processed := 0
 		col, e := pgColumn(column.Column)
 		if e != nil {
 			return e
@@ -159,10 +165,11 @@ func (s *Store) BuildStructureIndex(ctx context.Context) error {
 			if len(values) == 0 {
 				break
 			}
-			features, e := chemistry.Fingerprints(ctx, values)
+			features, e := chemistry.FingerprintsWithTimeout(ctx, values, batchTimeout)
 			if e != nil {
-				return e
+				return fmt.Errorf("fingerprint dataset %s column %s batch at %d (%d values, timeout %s, build context %v): %w", dataset, column.Column, processed, len(values), batchTimeout, ctx.Err(), e)
 			}
+			processed += len(values)
 			copyStmt, e := tx.PrepareContext(ctx, pq.CopyInSchema("chemdb", "structure_candidates", "dataset", "column_name", "smiles", "atom_count", "bond_count", "screenable", "fp0", "fp1", "fp2", "fp3"))
 			if e != nil {
 				return e
@@ -198,6 +205,17 @@ func nonNilFeatures(features []int32) []int32 {
 	return features
 }
 
+func structureIndexTimeout(name string, fallback time.Duration) (time.Duration, error) {
+	if raw := os.Getenv(name); raw != "" {
+		duration, err := time.ParseDuration(raw)
+		if err != nil || duration <= 0 {
+			return 0, fmt.Errorf("%s must be a positive duration", name)
+		}
+		return duration, nil
+	}
+	return fallback, nil
+}
+
 func (s *Store) ensureStructureIndex(ctx context.Context, dataset, revision string) error {
 	var ready bool
 	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM chemdb.structure_index_versions WHERE dataset=$1 AND revision=$2)`, dataset, revision+":"+structureFeatureVersion).Scan(&ready)
@@ -210,10 +228,11 @@ func (s *Store) ensureStructureIndex(ctx context.Context, dataset, revision stri
 	if s.structureBuild.TryLock() {
 		go func() {
 			defer s.structureBuild.Unlock()
+			started := time.Now()
 			buildCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
 			if err := s.BuildStructureIndex(buildCtx); err != nil && !errors.Is(err, chemistry.ErrBusy) {
-				log.Printf("structure index build failed: %v", err)
+				log.Printf("structure index build failed after %s (total timeout 30m): %v", time.Since(started), err)
 			}
 		}()
 	}

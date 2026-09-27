@@ -113,16 +113,16 @@ func (i *WorkerIndex) Search(ctx context.Context, query string, opts Options, li
 		return nil, ErrClosed
 	}
 	request := workerRequest{Index: i.id, Query: query, Options: opts, Limit: limit}
-	reply, err := runWorker(ctx, request, i.values)
+	reply, err := runWorker(ctx, request, i.values, workerTimeout)
 	if err != nil {
 		return nil, err
 	}
 	return reply.Matches, nil
 }
 
-func runWorker(ctx context.Context, request workerRequest, values []string) (workerReply, error) {
+func runWorker(ctx context.Context, request workerRequest, values []string, timeout time.Duration) (workerReply, error) {
 	// The process timeout also covers index loading, pipe writes and response reads.
-	ctx, cancel := context.WithTimeout(ctx, workerTimeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	var w *processWorker
 	select {
@@ -241,6 +241,12 @@ func init() {
 // Fingerprints parses a bounded batch in a killable native worker. Invalid source
 // strings yield Valid=false, preserving positional correspondence with values.
 func Fingerprints(ctx context.Context, values []string) ([]Fingerprint, error) {
+	return FingerprintsWithTimeout(ctx, values, workerTimeout)
+}
+
+// FingerprintsWithTimeout gives background index batches their own process
+// budget while retaining cancellation, worker replacement and bounded batches.
+func FingerprintsWithTimeout(ctx context.Context, values []string, timeout time.Duration) ([]Fingerprint, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -257,7 +263,7 @@ func Fingerprints(ctx context.Context, values []string) ([]Fingerprint, error) {
 	if len(values) == 0 {
 		return []Fingerprint{}, nil
 	}
-	reply, err := runWorker(ctx, workerRequest{Fingerprints: true, Values: bounded}, nil)
+	reply, err := runWorker(ctx, workerRequest{Fingerprints: true, Values: bounded}, nil, timeout)
 	if err != nil {
 		return nil, err
 	}

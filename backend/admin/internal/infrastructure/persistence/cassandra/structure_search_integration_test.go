@@ -49,7 +49,13 @@ func TestAutocompletePostgresStructureFullResults(t *testing.T) {
 	require.NoError(t, store.pgCreateAndBatchInsert(table.TableSpecies, []string{"name TEXT"}, []string{"name"}, nil))
 	require.NoError(t, store.pgSetTableOk(table))
 	require.NoError(t, store.pgActivateTable(stamp))
-	require.NoError(t, store.BuildStructureIndex(ctx))
+	// A newly activated dataset builds on demand without restarting the store.
+	dataset, _, revision, err := store.structureVersion(ctx)
+	require.NoError(t, err)
+	require.ErrorIs(t, store.ensureStructureIndex(ctx, dataset, revision), chemistry.ErrBusy)
+	require.Eventually(t, func() bool {
+		return store.ensureStructureIndex(ctx, dataset, revision) == nil
+	}, 20*time.Second, 20*time.Millisecond)
 	var originalRevision string
 	var originalID int64
 	require.NoError(t, db.QueryRow("SELECT revision FROM chemdb.structure_index_versions WHERE dataset=$1", table.TableData).Scan(&originalRevision))
@@ -65,6 +71,17 @@ func TestAutocompletePostgresStructureFullResults(t *testing.T) {
 	// A failed replacement leaves the previous complete generation intact.
 	_, err = db.Exec("UPDATE chemdb.tables SET version=version||'-replacement' WHERE created_at=$1", stamp)
 	require.NoError(t, err)
+	// Batch deadlines abort atomically even while the overall build context is
+	// healthy; increasing the configured budget permits the ordinary retry.
+	t.Setenv("FURANO_STRUCTURE_BATCH_TIMEOUT", "1ns")
+	buildErr := store.BuildStructureIndex(ctx)
+	require.ErrorIs(t, buildErr, context.DeadlineExceeded)
+	require.ErrorContains(t, buildErr, "column smiles batch at 0")
+	require.ErrorContains(t, buildErr, "timeout 1ns, build context <nil>")
+	var timeoutRevision string
+	require.NoError(t, db.QueryRow("SELECT revision FROM chemdb.structure_index_versions WHERE dataset=$1", table.TableData).Scan(&timeoutRevision))
+	require.Equal(t, originalRevision, timeoutRevision)
+	t.Setenv("FURANO_STRUCTURE_BATCH_TIMEOUT", "30s")
 	_, err = db.Exec(`CREATE OR REPLACE FUNCTION chemdb.reject_structure_test() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'forced build failure'; END $$; CREATE TRIGGER reject_structure_test BEFORE INSERT ON chemdb.structure_candidates FOR EACH ROW EXECUTE FUNCTION chemdb.reject_structure_test()`)
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -191,8 +208,43 @@ func TestAutocompletePostgresStructureFullResults(t *testing.T) {
 	require.NoError(t, err)
 	_, err = reader.FetchSearchData(nil, version, "smiles SUBSTRUCTURE 'C1bad'", "id")
 	require.ErrorIs(t, err, chemistry.ErrInvalidSMILES)
-	require.NoError(t, store.BuildStructureIndex(ctx))
+	// A changed generation also recovers through the ordinary cold-search path
+	// in the original process, including after earlier failed replacements.
+	dataset, _, revision, err = store.structureVersion(ctx)
+	require.NoError(t, err)
+	require.ErrorIs(t, store.ensureStructureIndex(ctx, dataset, revision), chemistry.ErrBusy)
+	require.Eventually(t, func() bool {
+		return store.ensureStructureIndex(ctx, dataset, revision) == nil
+	}, 20*time.Second, 20*time.Millisecond)
 	rows, err := reader.FetchSearchData(nil, version, "smiles SUBSTRUCTURE 'C'", "id")
 	require.NoError(t, err)
 	require.Empty(t, rows)
+
+	// Reimport publishes a different physical dataset. The existing reader must
+	// resolve its new generation and return only the replacement's observations.
+	replacement := *table
+	replacement.Timestamp = stamp.Add(time.Second)
+	replacement.TableData += "_replacement"
+	t.Cleanup(func() {
+		_, cleanupErr := db.Exec(`DELETE FROM chemdb.tables WHERE created_at=$1`, replacement.Timestamp)
+		require.NoError(t, cleanupErr)
+		_, cleanupErr = db.Exec("DROP TABLE IF EXISTS " + mustPGTable(t, replacement.TableData))
+		require.NoError(t, cleanupErr)
+	})
+	reserved, err = store.pgReserveTable(&replacement)
+	require.NoError(t, err)
+	require.True(t, reserved)
+	require.NoError(t, store.pgCreateAndBatchInsert(replacement.TableData, []string{"id TEXT", "smiles TEXT", "species TEXT", "structures SET<TEXT>"}, []string{"id"}, [][]any{{"replacement", "CO", "new", []string{"CO"}}}))
+	require.NoError(t, store.pgSetTableOk(&replacement))
+	require.NoError(t, store.pgActivateTable(replacement.Timestamp))
+	version, err = reader.ActiveTableVersion(nil)
+	require.NoError(t, err)
+	_, err = reader.FetchSearchData(nil, version, "smiles SUBSTRUCTURE 'CO'", "id")
+	require.ErrorIs(t, err, chemistry.ErrBusy)
+	require.Eventually(t, func() bool {
+		rows, err = reader.FetchSearchData(nil, version, "smiles SUBSTRUCTURE 'CO'", "id")
+		return err == nil
+	}, 20*time.Second, 20*time.Millisecond)
+	require.Len(t, rows, 1)
+	require.Equal(t, "replacement", rows[0]["id"])
 }
