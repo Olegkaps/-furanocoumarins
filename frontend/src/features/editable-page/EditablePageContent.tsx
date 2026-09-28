@@ -18,7 +18,7 @@ type EditablePageContentProps = {
 
 export function ReadOnlyPageContent({ content, error }: Pick<EditablePageContentProps, "content" | "error">) {
   if (error) return <p style={{ color: "var(--color-danger)" }}>{error}</p>;
-  if (content === "") return <p style={{ color: "var(--color-muted)" }}>Page content has not been added yet.</p>;
+  if (content === "") return null;
   return <div className="about-markdown" style={{ lineHeight: 1.6 }}><ReactMarkdown>{content}</ReactMarkdown></div>;
 }
 

@@ -9,7 +9,7 @@ function errorMessage(error: unknown) {
   const response = (error as { response?: { status?: number; data?: { error?: unknown } } })?.response;
   const message = response?.data?.error;
   if (typeof message === "string" && message.trim()) return message;
-  if (response?.status === 404) return "The image library is not available on this server yet. Deploy or restart the backend, then try again.";
+  if (response?.status === 404 || response?.status === 405) return "The image library is not available on this server yet. Deploy or restart the backend, then try again.";
   if (response?.status && response.status >= 500) return "Image storage is unavailable. Check the backend's S3 configuration and storage connection, then try again.";
   return "Could not update the image library. Please retry.";
 }
@@ -22,8 +22,8 @@ export default function ImageLibrary() {
   const input = useRef<HTMLInputElement>(null);
   const headers = useCallback(() => ({ Authorization: `Bearer ${getToken()}` }), []);
   const load = useCallback(async () => {
-    try { const { data } = await api.get<Image[]>(endpoint, { headers: headers() }); setImages(Array.isArray(data) ? data : []); setNotice(""); }
-    catch (error) { setNotice(errorMessage(error)); }
+    try { const { data } = await api.get<Image[]>(`${endpoint}/list`, { headers: headers() }); setImages(Array.isArray(data) ? data : []); setNotice(""); return true; }
+    catch (error) { setNotice(errorMessage(error)); return false; }
   }, [headers]);
   useEffect(() => { void load(); }, [load]);
 
@@ -36,13 +36,13 @@ export default function ImageLibrary() {
     setBusy(true); setNotice(id ? "Replacing image…" : "Uploading image…");
     try {
       await (id ? api.put(`${endpoint}/${encodeURIComponent(id)}`, form, { headers: headers() }) : api.post(endpoint, form, { headers: headers() }));
-      await load(); setNotice(id ? "Image replaced. Existing Markdown links keep working." : "Image uploaded. Copy its link for Markdown.");
+      if (await load()) setNotice(id ? "Image replaced. Existing Markdown links keep working." : "Image uploaded. Copy its link for Markdown.");
     } catch (error) { setNotice(errorMessage(error)); }
     finally { setBusy(false); }
   };
   const remove = async (image: Image) => {
     setBusy(true); setNotice("Deleting image…");
-    try { await api.delete(`${endpoint}/${encodeURIComponent(image.id)}`, { headers: headers() }); await load(); setPendingDeletion(null); setNotice("Image deleted."); }
+    try { await api.delete(`${endpoint}/${encodeURIComponent(image.id)}`, { headers: headers() }); setPendingDeletion(null); if (await load()) setNotice("Image deleted."); }
     catch (error) { setNotice(errorMessage(error)); }
     finally { setBusy(false); }
   };

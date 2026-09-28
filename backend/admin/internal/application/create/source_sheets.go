@@ -13,6 +13,7 @@ import (
 // including unreferenced entities. Original workbook declarations are retained
 // separately from the enriched metadata consumed by the search UI.
 func saveSourceSheets(imp cassandra.TableImporter, table *cassandra.Table, sheets map[string]*VirtualSheet, metadata map[string][]string) error {
+	indexer, indexedNames := imp.(interface{ CreateCatalogNameIndexes(string) error })
 	names := make([]string, 0, len(sheets))
 	for name := range sheets {
 		names = append(names, name)
@@ -46,12 +47,16 @@ func saveSourceSheets(imp cassandra.TableImporter, table *cassandra.Table, sheet
 		if err != nil {
 			return fmt.Errorf("source metadata %q: %w", name, err)
 		}
-		catalog = append(catalog, []any{name, physical, kind, sourcePrimaryColumn(sheet), sheet.RealSheetNames, string(columns), "workbook_postprocessed_unjoined"})
+		order := ""
+		if indexedNames && (kind == "species" || kind == "chemicals") {
+			order = "name_v1"
+		}
+		catalog = append(catalog, []any{name, physical, kind, sourcePrimaryColumn(sheet), sheet.RealSheetNames, string(columns), "workbook_postprocessed_unjoined", order})
 	}
 	// Write the complete catalog first so cleanup can discover every intended
 	// table even when a later write fails. Readiness remains the final mutation.
 	if err := imp.CreateAndBatchInsert(cassandra.SourceCatalogName(table.TableData), []string{
-		"virtual_name TEXT", "physical_table TEXT", "entity_kind TEXT", "primary_column TEXT", "source_sheet_names SET<TEXT>", "columns_json TEXT", "provenance TEXT",
+		"virtual_name TEXT", "physical_table TEXT", "entity_kind TEXT", "primary_column TEXT", "source_sheet_names SET<TEXT>", "columns_json TEXT", "provenance TEXT", "name_order TEXT",
 	}, []string{"virtual_name"}, catalog); err != nil {
 		return err
 	}
@@ -80,6 +85,9 @@ func saveSourceSheets(imp cassandra.TableImporter, table *cassandra.Table, sheet
 		if err := imp.CreateAndBatchInsert(cassandra.SourceTableName(table.TableData, name), columns, []string{sourcePrimaryColumn(sheet)}, rows); err != nil {
 			return fmt.Errorf("save source sheet %q: %w", name, err)
 		}
+	}
+	if indexedNames {
+		return indexer.CreateCatalogNameIndexes(cassandra.SourceCatalogName(table.TableData))
 	}
 	return nil
 }

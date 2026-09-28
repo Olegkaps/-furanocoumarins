@@ -185,6 +185,19 @@ type assertSourceError struct{}
 
 func (assertSourceError) Error() string { return "source write failed" }
 
+type failedCatalogIndexer struct{ sourceCapture }
+
+func (*failedCatalogIndexer) CreateCatalogNameIndexes(string) error { return assertSourceError{} }
+
+func TestCatalogIndexFailureNeverPublishesReady(t *testing.T) {
+	f := sourceWorkbook(t)
+	defer f.Close()
+	imp := &failedCatalogIndexer{}
+	_, err := appcreate.ImportTable(&mockStore{imp: imp}, f, "meta", "broken-index", logging.Nop{})
+	require.ErrorContains(t, err, "source write failed")
+	require.Zero(t, imp.setOkCalls)
+}
+
 func TestSourcePrimarySetRejectedBeforeReservation(t *testing.T) {
 	f := sourceWorkbook(t)
 	defer f.Close()

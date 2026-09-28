@@ -49,9 +49,10 @@ type CatalogRecord struct {
 }
 
 type sourceCatalog struct {
-	physical string
-	primary  string
-	columns  []CatalogColumn
+	physical  string
+	primary   string
+	columns   []CatalogColumn
+	nameOrder bool
 }
 
 func (s *Store) GetCatalogPage(ctx context.Context, kind, after, before string, pageSize int) (*CatalogPage, error) {
@@ -162,7 +163,16 @@ func (s *Store) pgSourceCatalog(ctx context.Context, table *Table, kind, after, 
 	if err != nil {
 		return nil, err
 	}
-	rows, err := catalogRows(ctx, s.db, physicalTable, orderColumn, after, before, pageSize)
+	var rows *sql.Rows
+	if catalog.nameOrder {
+		expression, expressionErr := catalogNameExpression(kind, catalog.primary, catalog.columns)
+		if expressionErr != nil {
+			return nil, expressionErr
+		}
+		rows, err = catalogNameRows(ctx, s.db, physicalTable, orderColumn, expression, after, before, pageSize)
+	} else {
+		rows, err = catalogRows(ctx, s.db, physicalTable, orderColumn, after, before, pageSize)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -170,12 +180,21 @@ func (s *Store) pgSourceCatalog(ctx context.Context, table *Table, kind, after, 
 	items := make([]map[string]any, 0, pageSize)
 	for rows.Next() {
 		var raw string
-		if err = rows.Scan(&raw); err != nil {
+		var name string
+		if catalog.nameOrder {
+			err = rows.Scan(&raw, &name)
+		} else {
+			err = rows.Scan(&raw)
+		}
+		if err != nil {
 			return nil, err
 		}
 		item := map[string]any{}
 		if err = json.Unmarshal([]byte(raw), &item); err != nil {
 			return nil, fmt.Errorf("decode source row: %w", err)
+		}
+		if catalog.nameOrder {
+			item[catalogSortField] = name
 		}
 		items = append(items, item)
 	}
@@ -185,6 +204,9 @@ func (s *Store) pgSourceCatalog(ctx context.Context, table *Table, kind, after, 
 	page := catalogPage(kind, pageSize, after, before, catalog.primary, items)
 	page.PrimaryColumn = catalog.primary
 	page.Columns = catalog.columns
+	for _, item := range page.Items {
+		delete(item, catalogSortField)
+	}
 	return page, nil
 }
 
@@ -233,9 +255,9 @@ func (s *Store) sourceCatalog(ctx context.Context, table *Table, kind string) (*
 		return nil, ErrCatalogUnavailable
 	}
 	virtual := map[string]string{"chemicals": "structures", "species": "classification"}[kind]
-	var physical, entityKind, primary, columnsJSON string
-	err = s.db.QueryRowContext(ctx, `SELECT physical_table,entity_kind,primary_column,columns_json FROM `+catalogTable+` WHERE virtual_name=$1`, virtual).
-		Scan(&physical, &entityKind, &primary, &columnsJSON)
+	var physical, entityKind, primary, columnsJSON, nameOrder string
+	err = s.db.QueryRowContext(ctx, `SELECT physical_table,entity_kind,primary_column,columns_json,COALESCE(to_jsonb(source_catalog)->>'name_order','') FROM `+catalogTable+` source_catalog WHERE virtual_name=$1`, virtual).
+		Scan(&physical, &entityKind, &primary, &columnsJSON, &nameOrder)
 	if err == sql.ErrNoRows {
 		return nil, ErrCatalogUnavailable
 	}
@@ -255,7 +277,7 @@ func (s *Store) sourceCatalog(ctx context.Context, table *Table, kind string) (*
 	if !containsCatalogColumn(columns, primary) {
 		return nil, fmt.Errorf("source catalog primary column %q is unavailable", primary)
 	}
-	return &sourceCatalog{physical: physical, primary: primary, columns: columns}, nil
+	return &sourceCatalog{physical: physical, primary: primary, columns: columns, nameOrder: nameOrder == "name_v1"}, nil
 }
 
 func containsCatalogColumn(columns []CatalogColumn, name string) bool {
@@ -335,6 +357,10 @@ func catalogPage(kind string, pageSize int, after, before, primary string, items
 
 func catalogCursor(item map[string]any, primary string) string {
 	value, _ := item[primary].(string)
+	if name, ok := item[catalogSortField].(string); ok {
+		raw, _ := json.Marshal([]string{name, value})
+		value = "\x00" + string(raw)
+	}
 	return base64.RawURLEncoding.EncodeToString([]byte(value))
 }
 

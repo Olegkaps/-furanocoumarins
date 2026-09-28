@@ -20,10 +20,10 @@ func TestSourceCatalogSeeksUnjoinedRowsByPrimaryKey(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT to_regclass($1) IS NOT NULL`)).
 		WithArgs(`"chemdb"."data_fixture_sources"`).
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT physical_table,entity_kind,primary_column,columns_json FROM "chemdb"."data_fixture_sources" WHERE virtual_name=$1`)).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT physical_table,entity_kind,primary_column,columns_json,COALESCE(to_jsonb(source_catalog)->>'name_order','') FROM "chemdb"."data_fixture_sources" source_catalog WHERE virtual_name=$1`)).
 		WithArgs("structures").
-		WillReturnRows(sqlmock.NewRows([]string{"physical_table", "entity_kind", "primary_column", "columns_json"}).
-			AddRow(physical, "chemicals", "chemical_id", `[["structures","chemical_id","primary","Identifier","ID"],["structures","name","text","","Chemical"]]`))
+		WillReturnRows(sqlmock.NewRows([]string{"physical_table", "entity_kind", "primary_column", "columns_json", "name_order"}).
+			AddRow(physical, "chemicals", "chemical_id", `[["structures","chemical_id","primary","Identifier","ID"],["structures","name","text","","Chemical"]]`, ""))
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT row_to_json(source_row)::text FROM (SELECT * FROM `+mustPGTable(t, physical)+` WHERE "chemical_id" > $1 ORDER BY "chemical_id" LIMIT $2) source_row`)).
 		WithArgs("unjoined-1", 2).
 		WillReturnRows(sqlmock.NewRows([]string{"row"}).
@@ -62,10 +62,10 @@ func TestSourceCatalogSeeksBackwardByPrimaryKey(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT to_regclass($1) IS NOT NULL`)).
 		WithArgs(`"chemdb"."data_fixture_sources"`).
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT physical_table,entity_kind,primary_column,columns_json FROM "chemdb"."data_fixture_sources" WHERE virtual_name=$1`)).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT physical_table,entity_kind,primary_column,columns_json,COALESCE(to_jsonb(source_catalog)->>'name_order','') FROM "chemdb"."data_fixture_sources" source_catalog WHERE virtual_name=$1`)).
 		WithArgs("structures").
-		WillReturnRows(sqlmock.NewRows([]string{"physical_table", "entity_kind", "primary_column", "columns_json"}).
-			AddRow(physical, "chemicals", "chemical_id", `[["structures","chemical_id","primary","Identifier","ID"]]`))
+		WillReturnRows(sqlmock.NewRows([]string{"physical_table", "entity_kind", "primary_column", "columns_json", "name_order"}).
+			AddRow(physical, "chemicals", "chemical_id", `[["structures","chemical_id","primary","Identifier","ID"]]`, ""))
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT row_to_json(source_row)::text FROM (SELECT * FROM `+mustPGTable(t, physical)+` WHERE "chemical_id" < $1 ORDER BY "chemical_id" DESC LIMIT $2) source_row ORDER BY "chemical_id" ASC`)).
 		WithArgs("chemical-5", 3).
 		WillReturnRows(sqlmock.NewRows([]string{"row"}).
@@ -139,10 +139,10 @@ func TestSourceCatalogRecordUsesOnlyDeclaredColumns(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT to_regclass($1) IS NOT NULL`)).
 		WithArgs(`"chemdb"."data_fixture_sources"`).
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT physical_table,entity_kind,primary_column,columns_json FROM "chemdb"."data_fixture_sources" WHERE virtual_name=$1`)).
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT physical_table,entity_kind,primary_column,columns_json,COALESCE(to_jsonb(source_catalog)->>'name_order','') FROM "chemdb"."data_fixture_sources" source_catalog WHERE virtual_name=$1`)).
 		WithArgs("structures").
-		WillReturnRows(sqlmock.NewRows([]string{"physical_table", "entity_kind", "primary_column", "columns_json"}).
-			AddRow(physical, "chemicals", "chemical_id", `[["structures","chemical_id","primary","Identifier","ID"],["structures","smiles","SMILES chemical_page","","SMILES"]]`))
+		WillReturnRows(sqlmock.NewRows([]string{"physical_table", "entity_kind", "primary_column", "columns_json", "name_order"}).
+			AddRow(physical, "chemicals", "chemical_id", `[["structures","chemical_id","primary","Identifier","ID"],["structures","smiles","SMILES chemical_page","","SMILES"]]`, ""))
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT row_to_json(source_row)::text FROM (SELECT * FROM ` + mustPGTable(t, physical) + ` WHERE "smiles"=$1 LIMIT 1) source_row`)).
 		WithArgs("CCO").
 		WillReturnRows(sqlmock.NewRows([]string{"row"}).AddRow(`{"chemical_id":"unjoined-2","smiles":"CCO"}`))
@@ -163,7 +163,7 @@ func TestSourceCatalogRecordUsesDeclaredPrimaryID(t *testing.T) {
 	physical := SourceTableName(table.TableData, "structures")
 
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT to_regclass($1) IS NOT NULL`)).WithArgs(`"chemdb"."data_fixture_sources"`).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
-	mock.ExpectQuery(regexp.QuoteMeta(`SELECT physical_table,entity_kind,primary_column,columns_json FROM "chemdb"."data_fixture_sources" WHERE virtual_name=$1`)).WithArgs("structures").WillReturnRows(sqlmock.NewRows([]string{"physical_table", "entity_kind", "primary_column", "columns_json"}).AddRow(physical, "chemicals", "chemical_id", `[["structures","chemical_id","primary","Identifier","ID"],["structures","smiles","SMILES","","SMILES"]]`))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT physical_table,entity_kind,primary_column,columns_json,COALESCE(to_jsonb(source_catalog)->>'name_order','') FROM "chemdb"."data_fixture_sources" source_catalog WHERE virtual_name=$1`)).WithArgs("structures").WillReturnRows(sqlmock.NewRows([]string{"physical_table", "entity_kind", "primary_column", "columns_json", "name_order"}).AddRow(physical, "chemicals", "chemical_id", `[["structures","chemical_id","primary","Identifier","ID"],["structures","smiles","SMILES","","SMILES"]]`, ""))
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT row_to_json(source_row)::text FROM (SELECT * FROM ` + mustPGTable(t, physical) + ` WHERE "chemical_id"=$1 LIMIT 1) source_row`)).WithArgs("chemical-42").WillReturnRows(sqlmock.NewRows([]string{"row"}).AddRow(`{"chemical_id":"chemical-42","smiles":"CCO"}`))
 
 	record, err := store.pgSourceCatalogRecord(context.Background(), table, "chemicals", "chemical_id", "chemical-42")

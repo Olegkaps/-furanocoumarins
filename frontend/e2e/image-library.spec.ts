@@ -9,10 +9,10 @@ test("admins can upload, copy, replace, and delete a shared image", async ({ pag
   await page.addInitScript(value => { localStorage.setItem("auth-token", value); localStorage.setItem("auth-refresh-token", "mock-refresh-token"); }, token);
   await page.route("**/admin/images", async route => {
     if (route.request().resourceType() === "document") return route.continue();
-    if (route.request().method() === "GET") return route.fulfill({ contentType: "application/json", body: JSON.stringify(images) });
     images = [{ ...image, name: "first.png" }]; return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(images[0]) });
   });
   await page.route("**/admin/images/*", async route => {
+    if (route.request().method() === "GET" && route.request().url().endsWith("/list")) return route.fulfill({ contentType: "application/json", body: JSON.stringify(images) });
     if (route.request().method() === "PUT") { images = [{ ...image, name: "changed.png" }]; return route.fulfill({ contentType: "application/json", body: JSON.stringify(images[0]) }); }
     if (route.request().method() === "DELETE") { deleteRequests += 1; images = []; return route.fulfill({ status: 204 }); }
     return route.fallback();
@@ -39,14 +39,31 @@ test("admins can upload, copy, replace, and delete a shared image", async ({ pag
   await expect(page.getByText("changed.png", { exact: true })).toHaveCount(0);
 });
 
-test("explains when the deployed backend does not have the image endpoint", async ({ page }) => {
+for (const status of [404, 405]) test(`explains when the deployed backend does not have the image endpoint (${status})`, async ({ page }) => {
   const token = "eyJhbGciOiJub25lIn0.eyJleHAiOjQxMDI0NDQ4MDB9.signature";
   await page.addInitScript(value => { localStorage.setItem("auth-token", value); localStorage.setItem("auth-refresh-token", "mock-refresh-token"); }, token);
-  await page.route("**/admin/images", route => {
-    if (route.request().resourceType() === "document") return route.continue();
-    return route.fulfill({ status: 404, contentType: "text/plain", body: "Cannot GET /admin/images" });
+  await page.route("**/admin/images/list", route => {
+    return route.fulfill({ status, contentType: "text/plain", body: "Cannot GET /admin/images/list" });
   });
 
   await page.goto("/admin/images");
   await expect(page.getByRole("status")).toContainText("Deploy or restart the backend");
+});
+
+test("keeps a failed refresh visible after a successful upload", async ({ page }) => {
+  const token = "eyJhbGciOiJub25lIn0.eyJleHAiOjQxMDI0NDQ4MDB9.signature";
+  let uploaded = false;
+  await page.addInitScript(value => { localStorage.setItem("auth-token", value); localStorage.setItem("auth-refresh-token", "mock-refresh-token"); }, token);
+  await page.route("**/admin/images/list", route => route.fulfill(uploaded
+    ? { status: 503, contentType: "application/json", body: JSON.stringify({ error: "Image storage temporarily unavailable" }) }
+    : { contentType: "application/json", body: "[]" }));
+  await page.route("**/admin/images", route => {
+    if (route.request().resourceType() === "document") return route.continue();
+    uploaded = true;
+    return route.fulfill({ status: 201, contentType: "application/json", body: "{}" });
+  });
+  await page.goto("/admin/images");
+  await page.locator(".image-library__heading input[type=file]").setInputFiles({ name: "first.png", mimeType: "image/png", buffer: Buffer.from("image") });
+  await expect(page.getByRole("status")).toHaveText("Image storage temporarily unavailable");
+  await expect(page.getByRole("button", { name: "Upload image" })).toBeEnabled();
 });

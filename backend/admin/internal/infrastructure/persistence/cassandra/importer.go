@@ -60,3 +60,7 @@ func (i *postgresImporter) GetArticleIds() (map[string]string, error) { return i
 func (i *postgresImporter) CreateSASIIndex(n, c string) error {
 	return i.store.pgCreateSearchIndex(n, c)
 }
+
+func (i *postgresImporter) CreateCatalogNameIndexes(catalog string) error {
+	return i.store.pgCreateCatalogNameIndexes(catalog)
+}

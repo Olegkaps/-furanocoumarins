@@ -15,7 +15,7 @@
 .catalog-card__structure:hover { background: var(--color-surface-alt); }
 .catalog-card__structure .molecule-preview { width: 142px; min-height: 92px; }
 .catalog-card__structure .molecule-preview svg { width: 142px; height: 92px; }
-.catalog-card__note, .catalog-card__publication-meta { color: var(--color-muted); font-size: .86rem; }
+.catalog-card__note { color: var(--color-muted); font-size: .86rem; }
 .catalog-card dl { display: grid; gap: 8px; margin: 0; }
 .catalog-card dl div { display: grid; grid-template-columns: minmax(90px, .7fr) minmax(0, 1.3fr); gap: 10px; padding-top: 7px; border-top: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent); }
 .catalog-card dt { color: var(--color-muted); font-size: .8rem; font-weight: 700; }

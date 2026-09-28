@@ -3,14 +3,13 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Archive, ChevronLeft, ChevronRight } from "@gravity-ui/icons";
 import FullNavigation from "../FullNavigation/FullNavigation";
 import { api } from "../shared/api";
-import { formatAuthors, parseBibtex } from "../shared/bibtex";
 import { cachedCatalogCountRequest, catalogPageNumber, recordTitle, rememberCatalogPageNumber } from "./catalogModel";
 import { MoleculePreview } from "../SearchApp/MoleculePreview";
 import { chemicalPagePath } from "../shared/substanceUrl";
 import { speciesPagePath } from "../TaxonPage/taxonPage";
 import "./CatalogPage.css";
 
-type CatalogKind = "chemicals" | "species" | "publications";
+type CatalogKind = "chemicals" | "species";
 type CatalogColumn = { column: string; name: string; type: string; description: string };
 type CatalogResponse = {
   kind: CatalogKind;
@@ -33,7 +32,6 @@ const pageSize = 24;
 const kinds: { id: CatalogKind; label: string }[] = [
   { id: "chemicals", label: "Chemicals" },
   { id: "species", label: "Species" },
-  { id: "publications", label: "Publications" },
 ];
 
 const catalogCountRequests = new Map<CatalogKind, Promise<CatalogCount>>();
@@ -58,13 +56,8 @@ function columnValue(columns: CatalogColumn[], item: Record<string, unknown>, ma
   return column ? textValue(item[column.column]) : "";
 }
 
-function chemicalName(columns: CatalogColumn[], item: Record<string, unknown>): string {
-  const names = columnValue(columns, item, (column) => /(?:^|_)(?:chemical_)?names?(?:$|_)/i.test(column.column) || /trivial name/i.test(column.name));
-  return names.split("=").map((name) => name.trim()).find(Boolean) || recordTitle("chemicals", columns, item);
-}
-
-function SourceCard({ kind, columns, primaryColumn, item }: { kind: Exclude<CatalogKind, "publications">; columns: CatalogColumn[]; primaryColumn: string; item: Record<string, unknown> }) {
-  const title = kind === "chemicals" ? chemicalName(columns, item) : recordTitle(kind, columns, item);
+function SourceCard({ kind, columns, primaryColumn, item }: { kind: CatalogKind; columns: CatalogColumn[]; primaryColumn: string; item: Record<string, unknown> }) {
+  const title = recordTitle(kind, columns, item);
   const smiles = columnValue(columns, item, (column) => /(?:^|\s)SMILES(?:\s|$)/i.test(column.type) || column.column.toLowerCase() === "smiles");
   const id = textValue(item[primaryColumn]);
   const destination = id ? kind === "chemicals" ? chemicalPagePath(id) : speciesPagePath(id) : undefined;
@@ -80,19 +73,22 @@ function SourceCard({ kind, columns, primaryColumn, item }: { kind: Exclude<Cata
   </article>;
 }
 
-function PublicationCard({ item }: { item: Record<string, unknown> }) {
-  const id = textValue(item.article_id);
-  const raw = textValue(item.bibtex_text);
-  const publication = parseBibtex(raw);
-  return <article className="catalog-card catalog-card--publication">
-    <h2><Link to={`/reference/${encodeURIComponent(id)}`}>{publication?.title || id}</Link></h2>
-    {publication?.author && <p>{formatAuthors(publication.author)}</p>}
-    <p className="catalog-card__publication-meta">{[publication?.journal || publication?.booktitle, publication?.year].filter(Boolean).join(" · ")}</p>
-    <span className="catalog-card__id">{id}</span>
-  </article>;
+export default function CatalogPage() {
+  const [params] = useSearchParams();
+  if (params.get("kind") === "publications") {
+    return <>
+      <FullNavigation pageName="catalog" />
+      <main className="catalog-page">
+        <h1>Catalog unavailable</h1>
+        <p>The publication catalog is not available.</p>
+        <Link to="/catalog">Browse chemicals and species</Link>
+      </main>
+    </>;
+  }
+  return <SourceCatalogPage />;
 }
 
-export default function CatalogPage() {
+function SourceCatalogPage() {
   const [params, setParams] = useSearchParams();
   const rawKind = params.get("kind");
   const kind: CatalogKind = kinds.some((candidate) => candidate.id === rawKind) ? rawKind as CatalogKind : "chemicals";
@@ -163,9 +159,7 @@ export default function CatalogPage() {
       {data && <>
         <div className="catalog-summary">{summary}</div>
         {data.items.length === 0 ? <p className="empty-state">No records.</p> : <div className="catalog-grid">
-          {data.items.map((item, index) => kind === "publications"
-            ? <PublicationCard key={textValue(item.article_id) || index} item={item} />
-            : <SourceCard key={textValue(item[data.primary_column]) || index} kind={kind} columns={data.columns} primaryColumn={data.primary_column} item={item} />)}
+          {data.items.map((item, index) => <SourceCard key={textValue(item[data.primary_column]) || index} kind={kind} columns={data.columns} primaryColumn={data.primary_column} item={item} />)}
         </div>}
         <nav className="catalog-pagination" aria-label="Catalog pages">
           <button type="button" className="btn" disabled={!data.previous_cursor} onClick={() => navigateCursor("before", data.previous_cursor!)}><ChevronLeft width={16} height={16} /> Previous</button>

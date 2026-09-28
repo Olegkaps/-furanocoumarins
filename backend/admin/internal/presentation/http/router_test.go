@@ -131,7 +131,7 @@ func TestEveryDomainMutationDeniesAuthenticatedNonAdmin(t *testing.T) {
 		{fiber.MethodPut, "/bibtex"}, {fiber.MethodPut, "/pages/about"}, {fiber.MethodPut, "/admin/about/pages"},
 		{fiber.MethodPut, "/taxa/0/availability"},
 		{fiber.MethodGet, "/admin/taxon-id-mapping"}, {fiber.MethodPost, "/admin/taxon-id-mapping"},
-		{fiber.MethodGet, "/admin/images"}, {fiber.MethodPost, "/admin/images"}, {fiber.MethodPut, "/admin/images/not-an-id"}, {fiber.MethodDelete, "/admin/images/not-an-id"},
+		{fiber.MethodGet, "/admin/images"}, {fiber.MethodGet, "/admin/images/list"}, {fiber.MethodPost, "/admin/images"}, {fiber.MethodPut, "/admin/images/not-an-id"}, {fiber.MethodDelete, "/admin/images/not-an-id"},
 	} {
 		req := httptest.NewRequest(target.method, target.path, nil)
 		req.Header.Set("Authorization", "Bearer non-admin")
@@ -147,6 +147,18 @@ func TestMetadataAdministrationRejectsAnonymousRequests(t *testing.T) {
 	application := presentation.NewApp(container)
 	for _, target := range []struct{ method, path string }{{fiber.MethodGet, "/metadata-versions"}, {fiber.MethodGet, "/metadata-versions/latest"}, {fiber.MethodPost, "/metadata-versions"}, {fiber.MethodPost, "/metadata-versions/validate"}} {
 		resp, err := application.Test(httptest.NewRequest(target.method, target.path, nil))
+		require.NoError(t, err)
+		require.Equal(t, fiber.StatusUnauthorized, resp.StatusCode)
+		require.NoError(t, resp.Body.Close())
+	}
+}
+
+func TestImageLibraryListRejectsAnonymousRequests(t *testing.T) {
+	container, err := app.New(app.Options{EnvType: "TEST", AuthMaster: &routeAuth{admin: true}})
+	require.NoError(t, err)
+	application := presentation.NewApp(container)
+	for _, method := range []string{fiber.MethodGet, fiber.MethodHead} {
+		resp, err := application.Test(httptest.NewRequest(method, "/admin/images/list", nil))
 		require.NoError(t, err)
 		require.Equal(t, fiber.StatusUnauthorized, resp.StatusCode)
 		require.NoError(t, resp.Body.Close())

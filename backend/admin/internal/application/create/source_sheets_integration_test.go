@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +33,17 @@ func TestPostgresImportPreservesSourceEntitiesAndCleansUp(t *testing.T) {
 	defer db.Exec("DELETE FROM chemdb.bibtex WHERE article_id=$1", bibID)
 	f := sourceWorkbook(t)
 	defer f.Close()
+	require.NoError(t, f.SetSheetRow("meta", "A15", &[]any{"structures", "names", "text", "", "Name"}))
+	require.NoError(t, f.SetSheetRow("chemicals", "C1", &[]any{"names"}))
+	require.NoError(t, f.SetCellValue("chemicals", "C2", "Zed"))
+	require.NoError(t, f.SetCellValue("chemicals", "C3", " Alpha=Second alias"))
+	require.NoError(t, f.SetSheetRow("chemicals", "A4", &[]any{"chem-zdup", "Alias", "alpha"}))
+	require.NoError(t, f.SetSheetRow("chemicals", "A5", &[]any{"zz-empty", "Alias", "=Ignored"}))
+	require.NoError(t, f.SetCellValue("meta", "C10", "text clas[0]"))
+	require.NoError(t, f.SetSheetRow("meta", "A16", &[]any{"classification", "genus", "text clas[1]", "", "Genus"}))
+	require.NoError(t, f.SetCellValue("species", "C1", "genus"))
+	require.NoError(t, f.SetCellValue("species", "C2", "Zanthoxylum"))
+	require.NoError(t, f.SetCellValue("species", "C3", "Angelica"))
 	// Reimporting the same workbook creates independent version-owned originals.
 	for iteration := 0; iteration < 2; iteration++ {
 		name := "source-integration-" + time.Now().Format("150405.000000000")
@@ -64,10 +76,61 @@ func TestPostgresImportPreservesSourceEntitiesAndCleansUp(t *testing.T) {
 		require.NoError(t, rows.Err())
 		rows.Close()
 		require.Len(t, physical, 4)
+		var previousActive sql.NullTime
+		err = db.QueryRow("SELECT created_at FROM chemdb.tables WHERE is_active").Scan(&previousActive)
+		require.True(t, err == nil || err == sql.ErrNoRows)
+		defer db.Exec("UPDATE chemdb.tables SET is_active=COALESCE(created_at=$1,false)", previousActive)
+		_, err = db.Exec("UPDATE chemdb.tables SET is_active=(created_at=$1)", table.Timestamp)
+		require.NoError(t, err)
+		first, err := store.GetCatalogPage(context.Background(), "chemicals", "", "", 1)
+		require.NoError(t, err)
+		require.Equal(t, "chem-unused", first.Items[0]["chemical_id"])
+		second, err := store.GetCatalogPage(context.Background(), "chemicals", first.NextCursor, "", 1)
+		require.NoError(t, err)
+		require.Equal(t, "chem-zdup", second.Items[0]["chemical_id"])
+		back, err := store.GetCatalogPage(context.Background(), "chemicals", "", second.PreviousCursor, 1)
+		require.NoError(t, err)
+		require.Equal(t, first.Items, back.Items)
+		third, err := store.GetCatalogPage(context.Background(), "chemicals", second.NextCursor, "", 2)
+		require.NoError(t, err)
+		require.Equal(t, "chem-1", third.Items[0]["chemical_id"])
+		require.Equal(t, "zz-empty", third.Items[1]["chemical_id"])
+		require.Empty(t, third.NextCursor)
+		species, err := store.GetCatalogPage(context.Background(), "species", "", "", 1)
+		require.NoError(t, err)
+		require.Equal(t, "sp-unused", species.Items[0]["species_id"])
+		_, err = db.Exec("UPDATE chemdb.tables SET is_active=COALESCE(created_at=$1,false)", previousActive)
+		require.NoError(t, err)
+		var indexDefinition string
+		require.NoError(t, db.QueryRow("SELECT indexdef FROM pg_indexes WHERE schemaname='chemdb' AND tablename=$1 AND indexdef LIKE '%lower(%'", physical["structures"][len("chemdb."):]).Scan(&indexDefinition))
+		require.Contains(t, indexDefinition, "chemical_id")
+		var expression string
+		require.NoError(t, db.QueryRow("SELECT pg_get_indexdef(indexrelid,1,true) FROM pg_index WHERE indrelid=$1::regclass AND pg_get_indexdef(indexrelid) LIKE '%lower(%'", quote(physical["structures"])).Scan(&expression))
+		// The single-column deparser omits the index's collation. Page seeks
+		// explicitly use C for the expression and the bound cursor name.
+		expression = "(" + expression + ") COLLATE \"C\""
+		planTx, err := db.Begin()
+		require.NoError(t, err)
+		_, err = planTx.Exec("SET LOCAL enable_seqscan=off")
+		require.NoError(t, err)
+		planRows, err := planTx.Query("EXPLAIN SELECT * FROM "+quote(physical["structures"])+" WHERE ("+expression+",chemical_id)>($1 COLLATE \"C\",$2) ORDER BY "+expression+",chemical_id LIMIT 2", "alpha", "chem-unused")
+		require.NoError(t, err)
+		var plan []string
+		for planRows.Next() {
+			var line string
+			require.NoError(t, planRows.Scan(&line))
+			plan = append(plan, line)
+		}
+		require.NoError(t, planRows.Err())
+		require.NoError(t, planRows.Close())
+		require.NoError(t, planTx.Rollback())
+		require.Contains(t, strings.Join(plan, "\n"), "Index Scan")
+		require.Contains(t, strings.Join(plan, "\n"), "Index Cond:")
+		require.NotContains(t, strings.Join(plan, "\n"), "Sort")
 		var aliases pq.StringArray
 		require.NoError(t, db.QueryRow("SELECT aliases FROM "+quote(physical["structures"])+" WHERE chemical_id='chem-unused'").Scan(&aliases))
 		require.Equal(t, []string{"Unreferenced"}, []string(aliases))
-		for virtual, count := range map[string]int{"structures": 2, "classification": 2, "publications": 1, "main": 1} {
+		for virtual, count := range map[string]int{"structures": 4, "classification": 2, "publications": 1, "main": 1} {
 			var actual int
 			require.NoError(t, db.QueryRow("SELECT count(*) FROM "+quote(physical[virtual])).Scan(&actual))
 			require.Equal(t, count, actual)

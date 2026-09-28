@@ -4,7 +4,7 @@ export function classificationColumn(columns, rank) {
 }
 
 function textValue(value) {
-  if (Array.isArray(value)) return value.map(String).filter(Boolean).join(", ");
+  if (Array.isArray(value)) return textValue(value[0]);
   if (value == null) return "";
   return String(value).trim();
 }
@@ -15,9 +15,12 @@ export function recordTitle(kind, columns, item) {
     const species = textValue(item[classificationColumn(columns, 0) ?? ""]);
     if (genus || species) return [genus, species].filter(Boolean).join(" ");
   }
-  const preferred = columns.find((column) => /(?:^|\s)primary(?:\s|$)/.test(column.type))
-    ?? columns.find((column) => /^(?:chemical_?name|name|names|title)$/i.test(column.column));
-  return textValue(item[preferred?.column ?? ""]) || "Untitled record";
+  const primary = columns.find((column) => /(?:^|\s)primary(?:\s|$)/.test(column.type));
+  const chemicalNames = kind === "chemicals" ? columns.find((column) => column !== primary
+    && (/(?:^|_)(?:chemical_)?names?(?:$|_)/i.test(column.column) || /trivial name/i.test(column.name))) : undefined;
+  const preferred = chemicalNames ?? columns.find((column) => column !== primary && /^(?:chemical_?name|name|names|title)$/i.test(column.column));
+  const name = textValue(item[preferred?.column ?? ""]);
+  return (kind === "chemicals" ? name.split("=")[0].trim() : name) || textValue(item[primary?.column ?? ""]) || "Untitled record";
 }
 
 function pageStorageKey(kind, direction, cursor) {

@@ -18,7 +18,6 @@
 		/admin/publication-reader/analyze \
 		/admin/taxon-id-mapping \
 		/admin/about/pages \
-		/admin/images \
 		/admin/images/* \
         /get-tables-list \
         /create-table \
@@ -27,6 +26,30 @@
         /table/* \
         /tables \
         /bibtex
+
+    # The image-library page is a SPA route; only uploads use its base path.
+    # Listing, replacement and deletion use explicit child API paths.
+    @image_upload {
+        path /admin/images
+        method POST
+    }
+
+    @image_page {
+        path /admin/images /admin/images/
+        method GET HEAD
+    }
+
+    handle @image_page {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+
+    handle @image_upload {
+        reverse_proxy {$FURANO_BACKEND_ORIGIN:https://176.108.251.108.nip.io} {
+            header_up Host {upstream_hostport}
+        }
+    }
 
     # /search is also a client-side SPA route. Only requests carrying the API
     # query parameter belong to the backend; a browser navigation to /search

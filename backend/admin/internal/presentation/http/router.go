@@ -134,6 +134,7 @@ func NewApp(container *app.Container) *fiber.App {
 	app.Put("/pages/:name", admin, pages.PutPage)
 	app.Put("/admin/about/pages", admin, pages.PutAboutPages)
 	app.Get("/admin/images", admin, images.List)
+	app.Get("/admin/images/list", admin, images.List)
 	app.Post("/admin/images", admin, images.Upload)
 	app.Put("/admin/images/:id", admin, images.Replace)
 	app.Delete("/admin/images/:id", admin, images.Delete)

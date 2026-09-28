@@ -28,6 +28,36 @@ test("species catalog titles use the original genus plus species", () => {
   assert.equal(model.recordTitle("species", columns, { genus_original: "Angelica", species_original: "archangelica", species_powo: "officinalis" }), "Angelica archangelica");
 });
 
+test("chemical titles prefer the declared name over source IDs and retain ID fallbacks", () => {
+  const chemicalColumns = [
+    { column: "cid", name: "CID", type: "text primary", description: "" },
+    { column: "names", name: "Name", type: "text", description: "" },
+  ];
+  assert.equal(model.recordTitle("chemicals", chemicalColumns, { cid: "6789", names: " Xanthotoxin " }), "Xanthotoxin");
+  assert.equal(model.recordTitle("chemicals", chemicalColumns, { cid: "6789", names: " " }), "6789");
+  assert.equal(model.recordTitle("chemicals", chemicalColumns, { cid: "6789", names: ["Xanthotoxin", "Methoxsalen"] }), "Xanthotoxin");
+  assert.equal(model.recordTitle("chemicals", chemicalColumns, { cid: "6789", names: " Xanthotoxin = Methoxsalen " }), "Xanthotoxin");
+  assert.equal(model.recordTitle("chemicals", chemicalColumns, { cid: "6789", names: " = Methoxsalen " }), "6789");
+});
+
+test("chemical titles preserve recognized physical names and trivial-name labels", () => {
+  const primary = { column: "cid", name: "CID", type: "text primary", description: "" };
+  for (const column of [
+    { column: "chemical_names", name: "Chemical names" },
+    { column: "trivial_name", name: "Name" },
+    { column: "trivial_names", name: "Trivial names" },
+    { column: "preferred_label", name: "Trivial name" },
+  ]) {
+    const fields = [primary, { ...column, type: "text", description: "" }];
+    assert.equal(model.recordTitle("chemicals", fields, { cid: "6789", [column.column]: " Xanthotoxin = Methoxsalen " }), "Xanthotoxin");
+  }
+  const fields = [primary,
+    { column: "title", name: "Title", type: "text", description: "" },
+    { column: "trivial_names", name: "Trivial names", type: "text", description: "" },
+  ];
+  assert.equal(model.recordTitle("chemicals", fields, { cid: "6789", title: "Earlier title", trivial_names: "Xanthotoxin" }), "Xanthotoxin");
+});
+
 test("catalog page position is truthful for cursor navigation within a session", () => {
   const values = new Map();
   const storage = {
@@ -57,7 +87,7 @@ test("catalog count requests are shared across Strict Mode effect restarts", asy
   assert.equal(calls, 1);
 });
 
-test("catalog page exposes all three cursor-paginated source collections", () => {
+test("catalog page exposes only chemical and species source collections", () => {
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {}, length: 0, key: () => null };
   globalThis.sessionStorage = { getItem: () => null, setItem() {}, removeItem() {} };
   globalThis.window = { location: { search: "" } };
@@ -65,9 +95,16 @@ test("catalog page exposes all three cursor-paginated source collections", () =>
   assert.match(html, /Data catalog/);
   assert.match(html, /Chemicals/);
   assert.match(html, /Species/);
-  assert.match(html, /Publications/);
+  assert.doesNotMatch(html, /Publications|kind=publications/);
   assert.match(html, /including chemicals and species that are not joined/);
   assert.doesNotMatch(html, /page=1/);
+});
+
+test("direct publication catalog links are unavailable rather than opening a source catalog", () => {
+  const html = renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: ["/catalog?kind=publications&cursor=old"] }, createElement(catalog.default)));
+  assert.match(html, /Catalog unavailable/);
+  assert.match(html, /Browse chemicals and species/);
+  assert.doesNotMatch(html, /Loading|catalog-tabs|catalog-grid|kind=publications/);
 });
 
 test("catalog entity cards use stable ID routes", async () => {
