@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ChevronRight, ArrowUpRightFromSquare } from "@gravity-ui/icons";
+import { ChevronRight } from "@gravity-ui/icons";
 import { compactStructureQuery } from "./StructureOptions";
 import { QueryInput } from "./QueryInput";
 
@@ -81,10 +81,9 @@ export function SearchLink({ path, text, disabled = false }: { path: string; tex
           pathname: path,
           search: searchParams.toString() ? `?${searchParams.toString()}` : "",
         }}
-        target="_blank"
       >
         {text}
-        <ArrowUpRightFromSquare />
+        <ChevronRight />
       </Link>}
     </div>
   );

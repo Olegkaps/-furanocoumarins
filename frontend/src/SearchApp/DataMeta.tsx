@@ -1,4 +1,5 @@
 import React from "react";
+import { Link as RouterLink } from "react-router-dom";
 import { ArrowUpRightFromSquare, Copy } from "@gravity-ui/icons";
 import { TruncatedText } from "../shared/ui/TruncatedText";
 import { CitationRefList } from "../shared/ui/CitationPopover";
@@ -78,6 +79,15 @@ function generateRandomString(length: number): string {
 }
 
 let ignore_link_prefixes = ["fuco", "NoIPNI", "NoKew"];
+
+function MetadataLink({ href, children }: { href: string; children: React.ReactNode }) {
+  const url = href.startsWith("https://") ? new URL(href) : null;
+  const internal = !url || (typeof window !== "undefined" && url.origin === window.location.origin);
+  if (internal) {
+    return <RouterLink className="meta-link" to={url ? `${url.pathname}${url.search}${url.hash}` : href}>{children}</RouterLink>;
+  }
+  return <a className="meta-link" href={href} target="_blank" rel="noopener noreferrer">{children}<ArrowUpRightFromSquare className="meta-link__icon" width={14} height={14} aria-hidden /></a>;
+}
 
 class Link {
   id: string;
@@ -193,12 +203,8 @@ class DataMeta {
             <React.Fragment key={`${link.id}-${i}`}>
               {i > 0 && <span>, </span>}
               {href ? (
-                <span className="meta-link-list__item"><a
-                    className="meta-link"
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  ><span className="meta-link__text">{link.text.length > 70 ? `${link.text.slice(0, 70)}…` : link.text}</span><ArrowUpRightFromSquare className="meta-link__icon" width={14} height={14} aria-hidden /></a>
+                <span className="meta-link-list__item"><MetadataLink href={href}>
+                    <span className="meta-link__text">{link.text.length > 70 ? `${link.text.slice(0, 70)}…` : link.text}</span></MetadataLink>
                   {link.text.length > 70 && <TruncatedText text={link.text} maxLength={70} controlOnly />}
                 </span>
               ) : (

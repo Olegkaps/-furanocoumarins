@@ -15,6 +15,7 @@ const server = await createServer({
 });
 after(() => server.close());
 const catalog = await server.ssrLoadModule("/src/Catalog/CatalogPage.tsx");
+const { default: DataMeta } = await server.ssrLoadModule("/src/SearchApp/DataMeta.tsx");
 const model = await import("../src/Catalog/catalogModel.mjs");
 
 const columns = [
@@ -114,11 +115,13 @@ test("catalog entity cards use stable ID routes", async () => {
   assert.doesNotMatch(source, /substancePagePath\(smiles\)/);
 });
 
-test("full-value controls are outside metadata anchors", async () => {
-  const source = await readFile(fileURLToPath(new URL("../src/SearchApp/DataMeta.tsx", import.meta.url)), "utf8");
-  const anchor = source.slice(source.indexOf("<a\n                    className=\"meta-link\""), source.indexOf("</a>"));
-  assert.doesNotMatch(anchor, /TruncatedText/);
-  assert.match(source, /controlOnly/);
+test("full-value controls are outside metadata anchors", () => {
+  const column = new DataMeta("link", "cid", "CID", "", "https://pubchem.ncbi.nlm.nih.gov/compound/%s", "chemical");
+  const html = renderToStaticMarkup(column.render_link(`${"Long chemical name ".repeat(6)}: 42`));
+  const anchor = html.match(/<a\b[^>]*>[\s\S]*?<\/a>/)?.[0];
+  assert.ok(anchor);
+  assert.doesNotMatch(anchor, /<button/);
+  assert.match(html.slice(html.indexOf("</a>") + 4), /aria-label="Show full value"/);
 });
 
 test("catalog totals use a separate request that is independent of cursor navigation", async () => {

@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   FileArrowUp,
-  ArrowUpRightFromSquare,
   Molecule,
   BranchesRight,
   BookOpen,
@@ -828,12 +827,10 @@ function SidePanel({
             <p style={{ textAlign: "center", marginTop: 8, marginBottom: 12 }}>
               <Link
                 to={entityID ? `/chemical/${encodeURIComponent(entityID)}` : substancePagePath(smilesLink)}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="link-button"
               >
                 Open substance page
-                <ArrowUpRightFromSquare />
+                <ChevronRight />
               </Link>
             </p>
           )}
@@ -841,12 +838,10 @@ function SidePanel({
             <p style={{ textAlign: "center", marginTop: 8, marginBottom: 12 }}>
               <Link
                 to={entityID ? `/species/${encodeURIComponent(entityID)}` : taxonPath(taxonLink)}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="link-button"
               >
                 Open species page
-                <ArrowUpRightFromSquare />
+                <ChevronRight />
               </Link>
             </p>
           )}
@@ -974,33 +969,6 @@ function ResultsWorkspace({
     setCurrentChemical,
     setCurrentSpecie,
   ]);
-
-  // Selection validity uses committed filters only — hover must not clear picks.
-  // Include values from all compare series (union), not only the primary query.
-  const selectedRows = resolveCompareRowSets(rows, seriesRowSets);
-  const selectedSpeciesValuesKey = JSON.stringify(
-    [...entityValues(selectedRows, "specie", currentChemical)],
-  );
-  const selectedChemicalsValuesKey = JSON.stringify(
-    [...entityValues(selectedRows, "chemical", currentSpecie)],
-  );
-  useEffect(() => {
-    if (
-      currentSpecie !== "" &&
-      !JSON.parse(selectedSpeciesValuesKey).includes(currentSpecie)
-    ) {
-      setCurrentSpecie("");
-    }
-  }, [currentSpecie, selectedSpeciesValuesKey, setCurrentSpecie]);
-
-  useEffect(() => {
-    if (
-      currentChemical !== "" &&
-      !JSON.parse(selectedChemicalsValuesKey).includes(currentChemical)
-    ) {
-      setCurrentChemical("");
-    }
-  }, [currentChemical, selectedChemicalsValuesKey, setCurrentChemical]);
 
   const resolvedSeries = resolveCompareRowSets(rows, seriesRowSets);
   const previewFilteredBySeries = resolvedSeries.map(({ color, rows: srows }) => ({
@@ -1276,7 +1244,7 @@ function TableStateBar({
   currentSpecie: string;
   currentChemical: string;
   countMode: CountMode;
-  setCountMode: React.Dispatch<React.SetStateAction<CountMode>>;
+  setCountMode: (value: CountMode) => void;
   countModeLocked: boolean;
   speciesCount: number;
   chemicalCount: number;
@@ -1392,6 +1360,7 @@ function ResultTableWrapper({
   colorsByQuery = {},
   primaryQuery = "",
   compareBarPrimaryQuery = primaryQuery,
+  loading = false,
 }: {
   rows: Array<DataRows>;
   meta: Array<DataMeta>;
@@ -1403,6 +1372,7 @@ function ResultTableWrapper({
   colorsByQuery?: Record<string, string>;
   primaryQuery?: string;
   compareBarPrimaryQuery?: string;
+  loading?: boolean;
 }) {
   const refColumns = useMemo(() => meta
     .filter((m) => m.type === "reference")
@@ -1411,13 +1381,24 @@ function ResultTableWrapper({
   const allSpecies = useMemo(() => [...entityValues([{ rows }], "specie")], [rows]);
   const allChemicals = useMemo(() => [...entityValues([{ rows }], "chemical")], [rows]);
 
-  const [countMode, setCountMode] = useState<CountMode>("chemicals");
-  const [currentSpecie, setCurrentSpecie] = useState(
-    allSpecies.length === 1 ? allSpecies[0] : "",
-  );
-  const [currentChemical, setCurrentChemical] = useState(
-    allChemicals.length === 1 ? allChemicals[0] : "",
-  );
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Keep panel choices on this history entry so Back restores the workspace.
+  const saved = location.state?.resultTable;
+  const countMode: CountMode = saved?.countMode ?? "chemicals";
+  const currentSpecie: string = saved?.currentSpecie ?? (allSpecies.length === 1 ? allSpecies[0] : "");
+  const currentChemical: string = saved?.currentChemical ?? (allChemicals.length === 1 ? allChemicals[0] : "");
+  const updateWorkspace = useCallback((changes: {
+    countMode?: CountMode; currentSpecie?: string; currentChemical?: string;
+  }) => {
+    void navigate(location, {
+      replace: true,
+      state: { ...location.state, resultTable: { countMode, currentSpecie, currentChemical, ...changes } },
+    });
+  }, [navigate, location, countMode, currentSpecie, currentChemical]);
+  const setCountMode = useCallback((value: CountMode) => updateWorkspace({ countMode: value }), [updateWorkspace]);
+  const setCurrentSpecie = useCallback((value: string) => updateWorkspace({ currentSpecie: value }), [updateWorkspace]);
+  const setCurrentChemical = useCallback((value: string) => updateWorkspace({ currentChemical: value }), [updateWorkspace]);
 
   const countModeLocked = currentSpecie !== "" || currentChemical !== "";
   const effectiveCountMode: CountMode = countModeLocked ? "articles" : countMode;
@@ -1443,6 +1424,15 @@ function ResultTableWrapper({
     [chemicalCountKey, chemKey, compareSeries, meta, rows, specieKey, speciesCountKey],
   );
   const resolvedSeries = resolveCompareRowSets(rows, seriesRowSets);
+  const validSpecies = currentSpecie === "" || entityValues(resolvedSeries, "specie", currentChemical).has(currentSpecie);
+  const validChemical = currentChemical === "" || entityValues(resolvedSeries, "chemical", currentSpecie).has(currentChemical);
+  useEffect(() => {
+    // Wait for the complete comparison union before clearing restored picks.
+    // Clear both together so one replacement cannot restore the other stale pick.
+    if (!loading && (!validSpecies || !validChemical)) {
+      updateWorkspace({ currentSpecie: validSpecies ? currentSpecie : "", currentChemical: validChemical ? currentChemical : "" });
+    }
+  }, [loading, validSpecies, validChemical, currentSpecie, currentChemical, updateWorkspace]);
 
   const filteredBySeries = resolvedSeries.map(({ color, rows: srows }) => ({
     color,
@@ -1552,6 +1542,7 @@ function ResultTableOrNull({
   colorsByQuery = {},
   primaryQuery = "",
   compareBarPrimaryQuery = primaryQuery,
+  loading = false,
   ...response
 }: {
   compareSeries?: CompareSeries[];
@@ -1680,6 +1671,7 @@ function ResultTableOrNull({
       colorsByQuery={colorsByQuery}
       primaryQuery={primaryQuery}
       compareBarPrimaryQuery={compareBarPrimaryQuery}
+      loading={loading}
     />
   );
 }

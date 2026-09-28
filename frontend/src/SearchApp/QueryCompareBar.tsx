@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import {
   ChevronDown,
   ChevronRight,
@@ -171,6 +171,7 @@ export function useCompareSeries(primaryQuery: string): {
     Record<string, string>
   >({});
   const [loading, setLoading] = useState(false);
+  const [loadedQueriesKey, setLoadedQueriesKey] = useState("");
   const prevQueriesRef = useRef<string[]>([]);
 
   useEffect(() => {
@@ -186,6 +187,7 @@ export function useCompareSeries(primaryQuery: string): {
       setRawByQuery({});
       setFetchedAtByQuery({});
       setLoading(false);
+      setLoadedQueriesKey(queriesKey);
       return;
     }
 
@@ -193,7 +195,10 @@ export function useCompareSeries(primaryQuery: string): {
     return subscribeCompareLoad(allQueries, (snap, done) => {
       setRawByQuery(snap.raw);
       setFetchedAtByQuery(snap.at);
-      if (done) setLoading(false);
+      if (done) {
+        setLoading(false);
+        setLoadedQueriesKey(queriesKey);
+      }
     });
   }, [queriesKey]);
 
@@ -241,7 +246,7 @@ export function useCompareSeries(primaryQuery: string): {
     primaryRaw,
     hiddenQueries,
     minusQueries,
-    loading,
+    loading: loading || loadedQueriesKey !== queriesKey,
   };
 }
 
@@ -387,6 +392,7 @@ export function QueryCompareBar({
   colorsByQuery: Record<string, string>;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { state } = useLocation();
   const extras = readCompareQueriesFromParams(searchParams);
   const hiddenQueries = readHiddenCompareQueriesFromParams(searchParams);
   const minusQueries = readMinusCompareQueriesFromParams(searchParams);
@@ -404,7 +410,7 @@ export function QueryCompareBar({
       setDraft("");
       return;
     }
-    setSearchParams((prev) => writeCompareQueriesToParams(prev, [...extras, q]));
+    setSearchParams((prev) => writeCompareQueriesToParams(prev, [...extras, q]), { state });
     setDraft("");
   };
 
@@ -414,6 +420,7 @@ export function QueryCompareBar({
         prev,
         extras.filter((x) => x !== q),
       ),
+      { state },
     );
   };
 
@@ -426,7 +433,7 @@ export function QueryCompareBar({
           : [...current, q];
         return writeHiddenCompareQueriesToParams(prev, nextHidden);
       },
-      { replace: true },
+      { replace: true, state },
     );
   };
   const toggleMinus = (q: string) => {
@@ -438,7 +445,7 @@ export function QueryCompareBar({
           : [...current, q];
         return writeMinusCompareQueriesToParams(prev, nextMinus);
       },
-      { replace: true },
+      { replace: true, state },
     );
   };
 

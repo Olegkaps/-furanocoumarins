@@ -16,7 +16,7 @@ import { canShowPhylogeneticTree } from "./treeTaxonomy";
 export function AppResultTable() {
   const [searchParams] = useSearchParams();
   const primaryQuery = searchParams.get("query") ?? "";
-  const { series, colorsByQuery, primaryRaw, hiddenQueries, minusQueries } =
+  const { series, colorsByQuery, primaryRaw, hiddenQueries, minusQueries, loading } =
     useCompareSeries(primaryQuery);
   const { minusResponses, plusSeries } = useMemo(
     () => subtractMinusFromCompareSeries(series, hiddenQueries),
@@ -70,6 +70,7 @@ export function AppResultTable() {
         colorsByQuery={colorsByQuery}
         primaryQuery={displayQuery}
         compareBarPrimaryQuery={primaryQuery}
+        loading={loading}
       />
       <br />
     </>

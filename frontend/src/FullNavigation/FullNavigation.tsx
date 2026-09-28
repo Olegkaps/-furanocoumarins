@@ -45,7 +45,6 @@ function NavIcon({
   return (
     <Link
       to={to}
-      target="_blank"
       className={cls}
       title={title}
       aria-label={title}
