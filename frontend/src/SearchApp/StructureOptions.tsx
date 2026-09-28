@@ -72,3 +72,9 @@ export function compactStructureQuery(query: string) {
   return query.replace(/'(?:[^']|'')*'?|\bSUBSTRUCTURE\[bond_multiplicity=(?:true|false),hetero_atoms=(?:true|false),stereochemistry=(?:true|false)\]/g,
     token => token.startsWith("'") ? token : structureOperator(parseStructureOptions(token)));
 }
+
+/** Read predicate literals without interpreting operator-like text inside values. */
+export function substructureQuerySmiles(query: string) {
+  const matches = query.matchAll(/'(?:[^']|'')*'?|\b[A-Za-z][A-Za-z0-9_]*\s*SUBSTRUCTURE(?:\[[^\]\s']*\])?\s*'((?:[^']|'')*)'/g);
+  return [...new Set([...matches].flatMap(match => match[1] === undefined ? [] : [match[1].replace(/''/g, "'")]))];
+}

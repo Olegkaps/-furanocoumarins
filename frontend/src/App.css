@@ -1302,9 +1302,23 @@ tfoot td {
   border: 1px solid color-mix(in srgb, var(--color-ink) 20%, transparent);
 }
 
-.query-compare-bar__text {
+.query-compare-bar__content {
   flex: 1;
   min-width: 0;
+}
+
+.query-compare-bar__molecules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.query-compare-bar__molecules .molecule-preview {
+  max-width: 100%;
+}
+
+.query-compare-bar__text {
   overflow-wrap: anywhere;
   word-break: break-word;
   white-space: pre-wrap;

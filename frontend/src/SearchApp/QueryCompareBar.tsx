@@ -26,6 +26,8 @@ import { isEmpty } from "../shared/api";
 import { recordQueryHistory } from "../shared/queryHistory";
 import { guardComparePayloads } from "../shared/schemaGuard";
 import { QueryInput } from "./QueryInput";
+import { MoleculePreview } from "./MoleculePreview";
+import { substructureQuerySmiles } from "./StructureOptions";
 
 export type CompareSeries = {
   query: string;
@@ -250,6 +252,16 @@ export function useCompareSeries(primaryQuery: string): {
   };
 }
 
+function CompareQueryContent({ query }: { query: string }) {
+  const smiles = substructureQuerySmiles(query);
+  return <div className="query-compare-bar__content">
+    <span className="query-compare-bar__text" title={query}>{query}</span>
+    {smiles.length > 0 && <div className="query-compare-bar__molecules">
+      {smiles.map(value => <MoleculePreview key={value} smiles={value} />)}
+    </div>}
+  </div>;
+}
+
 export function CompareQueriesDisplay({
   queries,
   colorsByQuery,
@@ -345,9 +357,7 @@ export function CompareQueriesDisplay({
             className="query-compare-bar__swatch"
             style={{ background: colorsByQuery[primary] }}
           />
-          <span className="query-compare-bar__text" title={primary}>
-            {primary}
-          </span>
+          <CompareQueryContent query={primary} />
           <span className="query-compare-bar__tag">primary</span>
           <RoleButton query={primary} />
           <HiddenButton query={primary} />
@@ -362,9 +372,7 @@ export function CompareQueriesDisplay({
             className="query-compare-bar__swatch"
             style={{ background: colorsByQuery[q] }}
           />
-          <span className="query-compare-bar__text" title={q}>
-            {q}
-          </span>
+          <CompareQueryContent query={q} />
           <RoleButton query={q} />
           <HiddenButton query={q} />
           {onRemove && (
