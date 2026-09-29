@@ -144,7 +144,8 @@ test("configured hidden count keys deduplicate whole nonblank counterpart values
   const countData = [
     { chemical_id: "c1", chemical_name: "One", chemical_family: "A,B", species_id: "s1", species: "one", accepted_name: "A,B", referenceid: "r1" },
     { chemical_id: "c1", chemical_name: "One", chemical_family: "A,B", species_id: "s2", species: "two", accepted_name: "A,B", referenceid: "r2" },
-    { chemical_id: "c2", chemical_name: "Two", chemical_family: "", species_id: "s3", species: "three", accepted_name: "No  Value", referenceid: "r3" },
+    { chemical_id: "c2", chemical_name: "Two", chemical_family: "A,B", species_id: "s3", species: "three", accepted_name: "No  Value", referenceid: "r3" },
+    { chemical_id: "c3", chemical_name: "Three", chemical_family: "", species_id: "s3", species: "three", accepted_name: "No  Value", referenceid: "r4" },
   ];
   const html = renderToStaticMarkup(createElement(MemoryRouter, {}, createElement(ResultTable, {
     metadata: countMetadata, data: countData,
@@ -154,9 +155,35 @@ test("configured hidden count keys deduplicate whole nonblank counterpart values
   assert.match(html, />Two</);
   assert.match(html, /class="ranked-select-list__value">One<\/span><span class="ranked-select-list__count" title="species" aria-label="species: 1">1<\/span>/,
     "distinct species rows sharing the same whole count key count once for chemical One");
-  assert.match(html, /class="ranked-select-list__value">Two<\/span><span class="ranked-select-list__count" title="species" aria-label="species: 0">0<\/span>/,
-    "a No Value counterpart count key contributes zero for chemical Two");
-  assert.match(html, /Species \(3\)/, "selection continues to use the primary entity identity");
+  assert.match(html, /class="ranked-select-list__value">Three<\/span><span class="ranked-select-list__count" title="species" aria-label="species: 0">0<\/span>/,
+    "a No Value counterpart count key contributes zero for chemical Three");
+  assert.equal((html.match(/Species \(1\)/g) ?? []).length, 2, "toolbar and side panel deduplicate configured species values");
+  assert.equal((html.match(/Chemical \(1\)/g) ?? []).length, 2, "toolbar and side panel deduplicate configured chemical values");
+  assert.match(html, /Rows in selection:\s*<b>4<\/b>/, "observation rows remain unchanged");
+  assert.match(html, /Reference \(4\)/, "article counting remains unchanged");
+  assert.match(html, />One</);
+  assert.match(html, />Two</);
+  assert.match(html, />Three</);
+
+  const selected = renderToStaticMarkup(createElement(MemoryRouter, {
+    initialEntries: [{ pathname: "/table", state: { resultTable: { currentChemical: "c3", currentSpecie: "" } } }],
+  }, createElement(ResultTable, { metadata: countMetadata, data: countData })));
+  assert.match(selected, /Chemical \(0\)/, "a selected primary ID with no count value contributes zero");
+  assert.match(selected, /Species \(0\)/, "the selected chemical's missing species count value contributes zero");
+  assert.match(selected, /Rows in selection:\s*<b>1<\/b>/);
+
+  const primaryCompareData = [countData[0], countData[3]];
+  const secondaryCompareData = [{ ...countData[1], chemical_id: "c2", chemical_name: "Two" }];
+  const compared = renderToStaticMarkup(createElement(MemoryRouter, {}, createElement(ResultTable, {
+    metadata: countMetadata,
+    data: primaryCompareData,
+    compareSeries: [
+      { query: "first", mode: "plus", color: "red", response: { metadata: countMetadata, data: primaryCompareData } },
+      { query: "second", mode: "plus", color: "blue", response: { metadata: countMetadata, data: secondaryCompareData } },
+    ],
+  })));
+  assert.match(compared, /Chemical \(1\)/, "compare union counts one shared configured value across distinct IDs");
+  assert.match(compared, />Two</, "the second identity remains selectable");
 });
 
 test("a selected species with a source keycolumn links to its canonical ID page", () => {

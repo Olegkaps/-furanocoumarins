@@ -205,6 +205,22 @@ export function entityValues(
   return values;
 }
 
+function countedEntityValues(
+  series: Array<{ rows: DataRows[] }>,
+  kind: "specie" | "chemical",
+): Set<string> {
+  const values = new Set<string>();
+  for (const { rows } of series) {
+    for (const row of rows) {
+      const value = kind === "specie" ? row.specie_count_val : row.chemical_count_val;
+      if (isConfiguredCountValue(value)) {
+        values.add(value);
+      }
+    }
+  }
+  return values;
+}
+
 function chemicalListLabel(value: string | undefined, fallback: string): string {
   if (!value) return fallback;
   return value.split("=")[0]?.trim() || fallback;
@@ -1115,7 +1131,10 @@ function ResultsWorkspace({
       <SidePanel
         kind="chemical"
         title="Chemical"
-        listCount={currentChemical === "" ? chemicalsOptions.length : 1}
+        listCount={countedEntityValues(
+          resolvedSeries.map(({ rows: srows }) => ({ rows: filterRows(srows, previewSpecie, currentChemical) })),
+          "chemical",
+        ).size}
         selected={currentChemical}
         onClear={() => setCurrentChemical("")}
         options={chemicalsOptions}
@@ -1185,7 +1204,10 @@ function ResultsWorkspace({
       <SidePanel
         kind="specie"
         title="Species"
-        listCount={currentSpecie === "" ? speciesOptions.length : 1}
+        listCount={countedEntityValues(
+          resolvedSeries.map(({ rows: srows }) => ({ rows: filterRows(srows, currentSpecie, previewChemical) })),
+          "specie",
+        ).size}
         selected={currentSpecie}
         onClear={() => setCurrentSpecie("")}
         options={speciesOptions}
@@ -1524,12 +1546,8 @@ function ResultTableWrapper({
     color,
     rows: filterRows(srows, currentSpecie, currentChemical),
   }));
-  const speciesCount = currentSpecie === ""
-    ? entityValues(resolvedSeries, "specie", currentChemical).size
-    : 1;
-  const chemicalCount = currentChemical === ""
-    ? entityValues(resolvedSeries, "chemical", currentSpecie).size
-    : 1;
+  const speciesCount = countedEntityValues(filteredBySeries, "specie").size;
+  const chemicalCount = countedEntityValues(filteredBySeries, "chemical").size;
   const referenceCount = uniqueArticleCountInRows(
     flattenFilteredDataRows(
       currentSpecie === "" && currentChemical === ""
