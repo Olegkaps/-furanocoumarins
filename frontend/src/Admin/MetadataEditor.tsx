@@ -3,6 +3,7 @@ import { api, getToken, isTokenExists } from "./utils";
 import { Navigate } from "react-router-dom";
 import "./MetadataEditor.css";
 import MetadataPreview from "./MetadataPreview";
+import MetadataJsonEditor from "./MetadataJsonEditor";
 import { columnDomain, copyCommonColumn, entityPageDefaults } from "./metadataPreviewModel";
 import type { MetadataColumn as Column, MetadataSheet as Sheet, MetadataDocument as Document, PreviewColumn } from "./metadataPreviewModel";
 type Version = { version: number; document: Document; created_at: string; created_by: string; provenance: string; published: boolean };
@@ -59,13 +60,8 @@ export default function MetadataEditor() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [columnRequest, setColumnRequest] = useState<Pick<PreviewColumn, "sheet" | "name"> | null>(null);
   const editor = useRef<HTMLElement>(null);
-  const jsonEditor = useRef<HTMLTextAreaElement>(null);
-  const jsonFindInput = useRef<HTMLInputElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
-  const [jsonFind, setJsonFind] = useState("");
-  const [jsonFindOpen, setJsonFindOpen] = useState(false);
-  const [jsonFindStatus, setJsonFindStatus] = useState("");
   const [validation, setValidation] = useState<{ raw: string; valid: boolean; message: string; resolved?: Document }>({ raw: "", valid: false, message: "Loading definition…" });
 
   const openEditor = (column?: PreviewColumn) => {
@@ -105,18 +101,6 @@ export default function MetadataEditor() {
       target.scrollIntoView({ block: "center", behavior: "instant" });
     } else closeButton.current?.focus();
   }, [editorOpen, columnRequest]);
-  useEffect(() => {
-    if (!editorOpen || mode !== "json") return;
-    const onFind = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        setJsonFindOpen(true);
-        window.setTimeout(() => jsonFindInput.current?.focus(), 0);
-      }
-    };
-    window.addEventListener("keydown", onFind);
-    return () => window.removeEventListener("keydown", onFind);
-  }, [editorOpen, mode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -164,24 +148,7 @@ export default function MetadataEditor() {
     if (next === "ui") {
       try { parseDraft(raw); } catch (error) { setNotice((error as Error).message); return; }
     }
-    setMode(next); setJsonFindOpen(false); setNotice("");
-  };
-  const selectJsonMatch = (backward = false) => {
-    const textarea = jsonEditor.current;
-    const query = jsonFind;
-    if (!textarea || !query) return;
-    const text = raw.toLocaleLowerCase();
-    const needle = query.toLocaleLowerCase();
-    const start = backward ? textarea.selectionStart - 1 : textarea.selectionEnd;
-    let index = backward ? text.lastIndexOf(needle, start) : text.indexOf(needle, start);
-    if (index < 0) index = backward ? text.lastIndexOf(needle) : text.indexOf(needle);
-    if (index >= 0) {
-      textarea.setSelectionRange(index, index + query.length);
-      setJsonFindStatus("");
-    } else {
-      setJsonFindStatus(`No matches for “${query}”.`);
-    }
-    jsonFindInput.current?.focus();
+    setMode(next); setNotice("");
   };
   const loadVersion = (id: string) => {
     if (dirty && !window.confirm("Replace your unsaved metadata draft?")) return;
@@ -239,21 +206,7 @@ export default function MetadataEditor() {
     <p role="status" className={`metadata-validation ${validated ? "is-valid" : ""}`}>{validation.raw === raw ? validation.message : "Checking JSON and group rules…"}</p>
     {resolved && <JoinSummary document={resolved} />}
     {doc?.importable === false && <p role="alert">This historical snapshot is incomplete and cannot be used for imports. Its original declarations are retained in JSON. Supply the worksheet mappings and column definitions, then set importable to true before publishing.</p>}
-    {mode === "json" ? <>
-      {jsonFindOpen && <div className="metadata-json-find" role="search" aria-label="Find in metadata JSON">
-        <label>Find in JSON<input ref={jsonFindInput} value={jsonFind} onChange={e => { setJsonFind(e.target.value); setJsonFindStatus(""); }} onKeyDown={e => {
-          if (e.key === "Enter") { e.preventDefault(); selectJsonMatch(e.shiftKey); }
-          if (e.key === "Escape") { e.preventDefault(); setJsonFindOpen(false); jsonEditor.current?.focus(); }
-        }} /></label>
-        <button className="btn" type="button" onClick={() => selectJsonMatch(true)} disabled={!jsonFind}>Previous</button>
-        <button className="btn" type="button" onClick={() => selectJsonMatch()} disabled={!jsonFind}>Next</button>
-        <button className="btn" type="button" aria-label="Close JSON search" onClick={() => { setJsonFindOpen(false); jsonEditor.current?.focus(); }}>Close</button>
-        <p role="status" className="metadata-json-find-status">{jsonFindStatus}</p>
-      </div>}
-      <label className="metadata-json-label">Metadata JSON
-        <textarea ref={jsonEditor} className="metadata-json" spellCheck={false} value={raw} onChange={e => { setRaw(e.target.value); setDirty(true); }} />
-      </label>
-    </> : doc && <div>
+    {mode === "json" ? <MetadataJsonEditor value={raw} enabled={editorOpen && !busy} onChange={value => { setRaw(value); setDirty(true); }} /> : doc && <div>
       {doc.sheets.map((sheet, si) => <details className="metadata-sheet" key={si} open={doc.sheets.length === 1 ? true : undefined}>
         <summary>{sheet.name || "Unnamed sheets group"} <span>· {sheet.columns.length} columns · {sheet.source_sheets.join(", ")}</span></summary>
         <div className="metadata-fields">

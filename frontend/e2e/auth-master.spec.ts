@@ -266,7 +266,7 @@ test("metadata editors preserve invalid drafts, conflicts, and in-flight saves",
 	expect(JSON.parse(await json.inputValue())).toEqual(importMetadata);
 });
 
-test("metadata JSON finder stays local, wraps matches, and reports misses", async ({ page }) => {
+test("metadata JSON finder highlights live matches, wraps, and replaces only the draft", async ({ page }) => {
 	await openMockedAdmin(page);
 	await page.getByRole("link", { name: "Import metadata", exact: true }).click();
 	await page.getByRole("button", { name: "Open editor", exact: true }).click();
@@ -274,22 +274,40 @@ test("metadata JSON finder stays local, wraps matches, and reports misses", asyn
 	const json = page.getByLabel("Metadata JSON", { exact: true });
 	await json.fill("Alpha alpha BETA");
 	await json.focus();
+	const editorBounds = await json.boundingBox();
 	await page.keyboard.press("Control+f");
 	const find = page.getByRole("textbox", { name: "Find in JSON", exact: true });
 	await expect(find).toBeFocused();
+	expect(await json.boundingBox()).toEqual(editorBounds);
+	const widget = page.getByRole("search", { name: "Find in metadata JSON", exact: true });
+	const widgetBounds = await widget.boundingBox();
+	expect(widgetBounds!.x).toBeGreaterThanOrEqual(editorBounds!.x);
+	expect(widgetBounds!.x + widgetBounds!.width).toBeLessThanOrEqual(editorBounds!.x + editorBounds!.width);
 	await find.fill("alpha");
-	await find.press("Enter");
 	expect(await json.evaluate((element: HTMLTextAreaElement) => [element.selectionStart, element.selectionEnd])).toEqual([0, 5]);
+	await expect(page.locator(".metadata-json-find-status")).toHaveText("1 of 2");
+	await expect(page.locator(".metadata-json-highlights mark")).toHaveCount(2);
 	await expect(find).toBeFocused();
 	await find.press("Enter");
 	expect(await json.evaluate((element: HTMLTextAreaElement) => [element.selectionStart, element.selectionEnd])).toEqual([6, 11]);
 	await find.press("Enter");
 	expect(await json.evaluate((element: HTMLTextAreaElement) => [element.selectionStart, element.selectionEnd])).toEqual([0, 5]);
+	await find.press("Shift+Enter");
+	expect(await json.evaluate((element: HTMLTextAreaElement) => [element.selectionStart, element.selectionEnd])).toEqual([6, 11]);
+	await page.getByRole("button", { name: "Toggle replace", exact: true }).click();
+	expect(await json.boundingBox()).toEqual(editorBounds);
+	await page.getByRole("textbox", { name: "Replace with", exact: true }).fill("alpha-two");
+	await page.getByRole("button", { name: "Replace", exact: true }).click();
+	await expect(json).toHaveValue("Alpha alpha-two BETA");
+	await page.getByRole("textbox", { name: "Replace with", exact: true }).fill("new");
+	await page.getByRole("button", { name: "Replace all", exact: true }).click();
+	await expect(json).toHaveValue("new new-two BETA");
+	await expect(page.locator(".metadata-toolbar").first()).toContainText("Unsaved draft");
 	await find.fill("absent");
-	await find.press("Enter");
-	await expect(page.locator(".metadata-json-find-status")).toContainText("No matches for “absent”.");
+	await expect(page.locator(".metadata-json-find-status")).toHaveText("No results");
 	await find.press("Escape");
 	await expect(json).toBeFocused();
+	await expect(page.locator("#metadata-side-editor")).toBeVisible();
 });
 
 test("metadata group controls enforce one key and scoped entity options", async ({ page }) => {
