@@ -8,6 +8,10 @@ import {
   Xmark,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  ArrowUpArrowDown,
+  Funnel,
 } from "@gravity-ui/icons";
 import { isEmpty } from "../shared/api";
 import { Container, ScrollableContainer } from "../shared/ui";
@@ -131,11 +135,10 @@ function buildOptions(
           : mode === "articles"
             ? agg.articles.size
             : agg.total,
-    }))
-    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+    }));
 }
 
-/** Union of values across all compare series; sort by sum of per-query counts. */
+/** Union of values across all compare series, with summed per-query counts. */
 function buildOptionsWithSeries(
   primaryRows: DataRows[],
   kind: "specie" | "chemical",
@@ -181,8 +184,7 @@ function buildOptionsWithSeries(
         count: seriesCounts.reduce((acc, s) => acc + s.n, 0),
         seriesCounts,
       };
-    })
-    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+    });
 }
 
 /** Counts and selection validity need entity keys, not sorted display options. */
@@ -662,41 +664,119 @@ function ResultTable({
   );
 }
 
+type EntityListView = {
+  sortBy: "name" | "count" | null;
+  direction: "asc" | "desc";
+  filter: string;
+};
+
+const defaultEntityListView: EntityListView = { sortBy: "count", direction: "desc", filter: "" };
+
 export function RankedSelectList({
   options,
   countModeLabel,
   onSelect,
   onHover,
+  entityLabel = "entity",
+  view: controlledView,
+  onViewChange,
 }: {
   options: SelectOption[];
   countModeLabel: string;
   onSelect: (value: string) => void;
   onHover?: (value: string | null) => void;
+  entityLabel?: string;
+  view?: EntityListView;
+  onViewChange?: (view: EntityListView) => void;
 }) {
+  const [localView, setLocalView] = useState(defaultEntityListView);
+  const view = controlledView ?? localView;
   const [page, setPage] = useState(0);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterButton = useRef<HTMLButtonElement>(null);
+  const closeFilter = () => {
+    setFilterOpen(false);
+    filterButton.current?.focus();
+  };
+  const visibleOptions = useMemo(() => {
+    const query = view.filter.trim().toLocaleLowerCase();
+    const filtered = options.filter(option => option.label.toLocaleLowerCase().includes(query));
+    if (view.sortBy === null) return filtered;
+    const direction = view.direction === "asc" ? 1 : -1;
+    return filtered.sort((a, b) => {
+        const names = a.label.localeCompare(b.label);
+        const primary = view.sortBy === "name" ? names : a.count - b.count;
+        return primary * direction || names || a.value.localeCompare(b.value);
+      });
+  }, [options, view]);
+  const changeView = (next: EntityListView) => {
+    (onViewChange ?? setLocalView)(next);
+    setPage(0);
+    onHover?.(null);
+  };
   const pageSize = 100;
-  const lastPage = Math.max(0, Math.ceil(options.length / pageSize) - 1);
+  const lastPage = Math.max(0, Math.ceil(visibleOptions.length / pageSize) - 1);
   const currentPage = Math.min(page, lastPage);
   const start = currentPage * pageSize;
   if (options.length === 0) {
     return <p className="empty-state" style={{ padding: 12 }}>No items</p>;
   }
   return (
-    <>
-    {options.length > pageSize && (
+    <div className="ranked-select-list__layout">
+    {visibleOptions.length > pageSize && (
       <nav aria-label="Entity list pages" style={{ display: "flex", alignItems: "center", gap: 8, padding: 8 }}>
         <button type="button" className="btn" title="Previous page" aria-label="Previous page" disabled={currentPage === 0}
           onClick={() => { setPage(currentPage - 1); onHover?.(null); }}><ChevronLeft width={16} height={16} /></button>
-        <span>{start + 1}-{Math.min(start + pageSize, options.length)} of {options.length}</span>
+        <span>{start + 1}-{Math.min(start + pageSize, visibleOptions.length)} of {visibleOptions.length}</span>
         <button type="button" className="btn" title="Next page" aria-label="Next page" disabled={currentPage === lastPage}
           onClick={() => { setPage(currentPage + 1); onHover?.(null); }}><ChevronRight width={16} height={16} /></button>
       </nav>
     )}
+    <div className="ranked-select-list__controls"
+      onKeyDown={event => { if (event.key === "Escape" && filterOpen) { event.preventDefault(); closeFilter(); } }}
+      onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setFilterOpen(false); }}>
+        {(["name", "count"] as const).map(sortBy => {
+          const label = sortBy === "name" ? "Name" : "Count";
+          return <div key={sortBy} className={`ranked-select-list__column ranked-select-list__column--${sortBy}`}>
+            <span title={sortBy === "count" ? countModeLabel : undefined}
+              aria-label={sortBy === "count" ? `Count (${countModeLabel})` : undefined}>{label}</span>
+            <div className="ranked-select-list__sort" role="group" aria-label={`Sort ${entityLabel} by ${sortBy}`}>
+              {(() => {
+                const active = view.sortBy === sortBy;
+                const nextDirection = !active ? "asc" : view.direction === "asc" ? "desc" : null;
+                const CurrentIcon = !active ? ArrowUpArrowDown : view.direction === "asc" ? ChevronUp : ChevronDown;
+                const state = !active ? "not sorted" : view.direction === "asc" ? "ascending" : "descending";
+                const next = nextDirection === null ? "clear sorting" : `sort ${nextDirection === "asc" ? "ascending" : "descending"}`;
+                return <button type="button" aria-pressed={active}
+                  aria-label={`Sort by ${sortBy}: ${state}; next click will ${next}`}
+                  title={`Currently ${state}; next click will ${next}`}
+                  onClick={() => changeView({ ...view, sortBy: nextDirection === null ? null : sortBy, direction: nextDirection ?? "asc" })}>
+                  <CurrentIcon width={14} height={14} aria-hidden />
+                </button>;
+              })()}
+              {sortBy === "name" && <button ref={filterButton} type="button" aria-label={`Filter ${entityLabel} names`}
+                title="Filter names" aria-expanded={filterOpen} aria-haspopup="dialog"
+                className={view.filter.trim() ? "ranked-select-list__filter-active" : undefined}
+                onClick={() => setFilterOpen(!filterOpen)}><Funnel width={14} height={14} aria-hidden /></button>}
+            </div>
+          </div>;
+        })}
+      {filterOpen && <div className="ranked-select-list__filter" role="dialog" aria-label={`Filter ${entityLabel} names`}>
+        <input autoFocus type="search" value={view.filter} placeholder="Filter names…"
+          aria-label={`Filter ${entityLabel} names`}
+          onChange={event => changeView({ ...view, filter: event.target.value })} />
+        <div className="ranked-select-list__filter-actions">
+          <button type="button" onClick={() => { changeView({ ...view, filter: "" }); closeFilter(); }}>Clear</button>
+          <button type="button" onClick={closeFilter}>Close</button>
+        </div>
+      </div>}
+      {view.filter.trim() && <span className="ranked-select-list__matches" role="status">{visibleOptions.length} of {options.length} names</span>}
+    </div>
     <ol
       className="ranked-select-list"
       onMouseLeave={() => onHover?.(null)}
     >
-      {options.slice(start, start + pageSize).map((opt, i) => (
+      {visibleOptions.slice(start, start + pageSize).map((opt, i) => (
         <li key={opt.value}>
           <button
             type="button"
@@ -708,7 +788,8 @@ export function RankedSelectList({
           >
             <span className="ranked-select-list__index">{start + i + 1}.</span>
             <span className="ranked-select-list__value">{opt.label}</span>
-            <span className="ranked-select-list__count">
+            <span className="ranked-select-list__count" title={countModeLabel}
+              aria-label={(opt.seriesCounts?.length ?? 0) > 1 ? undefined : `${countModeLabel}: ${opt.count}`}>
               {(() => {
                 const visible = (opt.seriesCounts ?? []).filter((s) => s.n > 0);
                 if ((opt.seriesCounts?.length ?? 0) > 1 && visible.length > 0) {
@@ -732,7 +813,7 @@ export function RankedSelectList({
                 }
                 return (
                   <>
-                    {countModeLabel}: {opt.count}
+                    {opt.count}
                   </>
                 );
               })()}
@@ -741,7 +822,8 @@ export function RankedSelectList({
         </li>
       ))}
     </ol>
-    </>
+    {visibleOptions.length === 0 && <p className="empty-state" style={{ padding: 12 }}>No matching names</p>}
+    </div>
   );
 }
 
@@ -780,6 +862,7 @@ function SidePanel({
   taxonLink?: TaxonLink;
   entityID?: string;
 }) {
+  const [listView, setListView] = useState(defaultEntityListView);
   const BadgeIcon = kind === "chemical" ? Molecule : BranchesRight;
   const badgeClass =
     kind === "chemical" ? "badge badge-chemical" : "badge badge-species";
@@ -820,6 +903,9 @@ function SidePanel({
           countModeLabel={countModeLabel}
           onSelect={onSelect}
           onHover={onHover}
+          entityLabel={kind === "chemical" ? "chemical" : "species"}
+          view={listView}
+          onViewChange={setListView}
         />
       ) : detailRow ? (
         <>

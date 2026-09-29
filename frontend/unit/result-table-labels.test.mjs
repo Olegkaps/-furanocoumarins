@@ -152,9 +152,10 @@ test("configured hidden count keys deduplicate whole nonblank counterpart values
 
   assert.match(html, />One</);
   assert.match(html, />Two</);
-  assert.match(html, /species: 1/);
-  assert.match(html, /species: 0/);
-  assert.doesNotMatch(html, /species: 2/);
+  assert.match(html, /class="ranked-select-list__value">One<\/span><span class="ranked-select-list__count" title="species" aria-label="species: 1">1<\/span>/,
+    "distinct species rows sharing the same whole count key count once for chemical One");
+  assert.match(html, /class="ranked-select-list__value">Two<\/span><span class="ranked-select-list__count" title="species" aria-label="species: 0">0<\/span>/,
+    "a No Value counterpart count key contributes zero for chemical Two");
   assert.match(html, /Species \(3\)/, "selection continues to use the primary entity identity");
 });
 
