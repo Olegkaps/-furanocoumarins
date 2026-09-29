@@ -55,7 +55,13 @@ func (i *postgresImporter) ReserveTable(t *Table) (bool, error) { return i.store
 func (i *postgresImporter) CreateAndBatchInsert(n string, d, k []string, rows [][]any) error {
 	return i.store.pgCreateAndBatchInsert(n, d, k, rows)
 }
-func (i *postgresImporter) SetTableOk(t *Table) error                 { return i.store.pgSetTableOk(t) }
+func (i *postgresImporter) SetTableOk(t *Table) error {
+	err := i.store.pgSetTableOk(t)
+	if err == nil {
+		i.store.scheduleAutocomplete(&t.Timestamp)
+	}
+	return err
+}
 func (i *postgresImporter) GetArticleIds() (map[string]string, error) { return i.store.pgArticleIDs() }
 func (i *postgresImporter) CreateSASIIndex(n, c string) error {
 	return i.store.pgCreateSearchIndex(n, c)

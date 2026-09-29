@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -49,7 +50,7 @@ func (s *Store) withAutocompleteDataset(ctx context.Context, columns []string, e
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	data, meta, key, err := s.autocompleteVersion(ctx)
+	data, _, key, err := s.autocompleteVersion(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -59,31 +60,8 @@ func (s *Store) withAutocompleteDataset(ctx context.Context, columns []string, e
 	s.autocompleteMu.RLock()
 	if s.autocompleteIndex == nil || s.autocompleteKey != key {
 		s.autocompleteMu.RUnlock()
-		if !s.autocompleteBuild.TryLock() {
-			return nil, chemistry.ErrBusy
-		}
-		defer s.autocompleteBuild.Unlock()
-		s.autocompleteMu.Lock()
-		if s.autocompleteIndex == nil || s.autocompleteKey != key {
-			if s.autocompleteIndex != nil {
-				_ = s.autocompleteIndex.Close()
-				s.autocompleteIndex = nil
-			}
-			entries, allColumns, loadErr := s.autocompleteEntries(ctx, data, meta)
-			if loadErr != nil {
-				s.autocompleteMu.Unlock()
-				return nil, loadErr
-			}
-			index, buildErr := autocomplete.New(ctx, entries, allColumns)
-			if buildErr != nil {
-				s.autocompleteMu.Unlock()
-				return nil, buildErr
-			}
-			s.autocompleteIndex = index
-			s.autocompleteKey = key
-		}
-		s.autocompleteMu.Unlock()
-		s.autocompleteMu.RLock()
+		s.WarmAutocomplete()
+		return nil, chemistry.ErrBusy
 	}
 	defer s.autocompleteMu.RUnlock()
 	if err = s.autocompleteIndex.ValidateColumns(columns); err != nil {
@@ -102,6 +80,140 @@ func (s *Store) withAutocompleteDataset(ctx context.Context, columns []string, e
 	}
 	return result, nil
 }
+
+// WarmAutocomplete prepares the active dataset without tying the rebuild to an
+// HTTP deadline. Imports retain only the latest inactive dataset alongside it.
+// The channel closes when queued work drains; build failures are logged.
+func (s *Store) WarmAutocomplete() <-chan struct{} { return s.scheduleAutocomplete(nil) }
+
+func (s *Store) scheduleAutocomplete(stamp *time.Time) <-chan struct{} {
+	if s.db == nil {
+		done := make(chan struct{})
+		close(done)
+		return done
+	}
+	s.autocompleteMu.Lock()
+	defer s.autocompleteMu.Unlock()
+	if s.autocompleteClosed {
+		done := make(chan struct{})
+		close(done)
+		return done
+	}
+	if stamp == nil {
+		s.autocompleteActivePending = true
+	} else {
+		copy := *stamp
+		s.autocompletePending = &copy
+	}
+	if s.autocompleteDone != nil {
+		return s.autocompleteDone
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.autocompleteCancel = cancel
+	s.autocompleteDone = make(chan struct{})
+	go s.buildAutocomplete(ctx)
+	return s.autocompleteDone
+}
+
+func (s *Store) buildAutocomplete(ctx context.Context) {
+	for {
+		s.autocompleteMu.Lock()
+		stamp := s.autocompletePending
+		s.autocompletePending = nil
+		active := s.autocompleteActivePending
+		if stamp == nil {
+			s.autocompleteActivePending = false
+		}
+		if s.autocompleteClosed || (stamp == nil && !active) {
+			close(s.autocompleteDone)
+			s.autocompleteDone = nil
+			s.autocompleteCancel = nil
+			s.autocompleteMu.Unlock()
+			return
+		}
+		s.autocompleteMu.Unlock()
+		started := time.Now()
+		buildCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+		err := s.prepareAutocomplete(buildCtx, stamp)
+		cancel()
+		if err != nil && !errors.Is(err, sql.ErrNoRows) && !errors.Is(err, context.Canceled) {
+			log.Printf("autocomplete build failed dataset=%v after %s: %v", stamp, time.Since(started), err)
+		}
+	}
+}
+
+func (s *Store) autocompleteTarget(ctx context.Context, stamp *time.Time) (string, string, string, error) {
+	if stamp == nil {
+		return s.autocompleteVersion(ctx)
+	}
+	var data, meta, key string
+	err := s.db.QueryRowContext(ctx, `SELECT table_data,table_meta,created_at::text || ':' || version || ':' || (SELECT generation::text FROM chemdb.autocomplete_generation WHERE id=1) FROM chemdb.tables WHERE created_at=$1 AND is_ok`, *stamp).Scan(&data, &meta, &key)
+	return data, meta, key, err
+}
+
+func (s *Store) prepareAutocomplete(ctx context.Context, stamp *time.Time) error {
+	data, meta, key, err := s.autocompleteTarget(ctx, stamp)
+	if err != nil {
+		return err
+	}
+	s.autocompleteMu.Lock()
+	if s.autocompleteKey == key && s.autocompleteIndex != nil {
+		s.autocompleteMu.Unlock()
+		return nil
+	}
+	index := s.autocompletePrepared
+	if s.autocompletePreparedKey == key && index != nil {
+		s.autocompletePrepared = nil
+	} else {
+		index = nil
+	}
+	s.autocompleteMu.Unlock()
+	if index == nil {
+		entries, columns, err := s.autocompleteEntries(ctx, data, meta)
+		if err != nil {
+			return err
+		}
+		index, err = autocomplete.New(ctx, entries, columns)
+		if err != nil {
+			return err
+		}
+	}
+	_, _, current, err := s.autocompleteTarget(ctx, stamp)
+	if err != nil || current != key {
+		_ = index.Close()
+		if err != nil {
+			return err
+		}
+		s.WarmAutocomplete()
+		return chemistry.ErrBusy
+	}
+	_, _, active, err := s.autocompleteVersion(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		_ = index.Close()
+		return err
+	}
+	s.autocompleteMu.Lock()
+	defer s.autocompleteMu.Unlock()
+	if s.autocompleteClosed {
+		return index.Close()
+	}
+	if active == key {
+		if s.autocompleteIndex != nil {
+			_ = s.autocompleteIndex.Close()
+		}
+		s.autocompleteIndex, s.autocompleteKey = index, key
+	} else {
+		if s.autocompletePrepared != nil {
+			_ = s.autocompletePrepared.Close()
+		}
+		s.autocompletePrepared, s.autocompletePreparedKey = index, key
+		if stamp == nil {
+			s.autocompleteActivePending = true
+		}
+	}
+	return nil
+}
+
 func (s *Store) autocompleteEntries(ctx context.Context, data, meta string) ([]autocomplete.Entry, []string, error) {
 	dataName, err := pgTable(data)
 	if err != nil {
@@ -234,11 +346,25 @@ func autocompleteGroup(t string) string {
 // CloseAutocomplete releases the disposable index during application shutdown.
 func (s *Store) CloseAutocomplete() error {
 	s.autocompleteMu.Lock()
-	defer s.autocompleteMu.Unlock()
-	if s.autocompleteIndex == nil {
-		return nil
+	s.autocompleteClosed = true
+	done := s.autocompleteDone
+	if s.autocompleteCancel != nil {
+		s.autocompleteCancel()
 	}
-	err := s.autocompleteIndex.Close()
+	s.autocompleteMu.Unlock()
+	if done != nil {
+		<-done
+	}
+	s.autocompleteMu.Lock()
+	defer s.autocompleteMu.Unlock()
+	var err error
+	if s.autocompleteIndex != nil {
+		err = s.autocompleteIndex.Close()
+	}
+	if s.autocompletePrepared != nil {
+		err = errors.Join(err, s.autocompletePrepared.Close())
+	}
 	s.autocompleteIndex = nil
+	s.autocompletePrepared = nil
 	return err
 }

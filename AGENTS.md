@@ -283,6 +283,12 @@ The active dataset and persisted bibliography generation identify a rebuildable
 index. Recheck that identity before returning results; never serve suggestions
 from a previously active dataset. Cold rebuilds are bounded and exclusive; warm
 text searches can run concurrently. PostgreSQL remains the scientific source.
+Successful imports prebuild autocomplete without activating the dataset. Keep
+only the active index and the latest prepared inactive index; activation reuses
+the matching prepared generation. Startup and bibliography changes warm the
+active index. Cold requests schedule the bounded background build and return
+retryable Busy instead of building under their HTTP deadline. Index failures do
+not change scientific import readiness; shutdown cancels and joins the builder.
 
 `internal/chemistry` calls native RDKit through cgo. Production and test images
 use Debian and compile with the `rdkit` build tag. A build without native RDKit

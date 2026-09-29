@@ -34,6 +34,7 @@ func main() {
 	if err := container.Cassandra.EnsureActivationSchema(startupCtx); err != nil {
 		logging.Fatal("initialize PostgreSQL data schema: %s", err)
 	}
+	container.Cassandra.WarmAutocomplete()
 
 	http.Handle("/metrics", promhttp.Handler())
 	presentation.StartMetricsServer()

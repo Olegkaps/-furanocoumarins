@@ -3,6 +3,7 @@
 package cassandra
 
 import (
+	"admin/internal/chemistry"
 	"context"
 	"fmt"
 	"github.com/stretchr/testify/require"
@@ -44,6 +45,9 @@ func TestAutocompletePostgresBibliographyInvalidation(t *testing.T) {
 	require.NoError(t, store.pgSetTableOk(table))
 	require.NoError(t, store.pgActivateTable(stamp))
 	for _, s := range []*Store{store, replica} {
+		_, err = s.Autocomplete(ctx, "phototoxic", []string{"reference"}, 20)
+		require.ErrorIs(t, err, chemistry.ErrBusy)
+		awaitAutocompleteBuild(t, s)
 		got, err := s.Autocomplete(ctx, "phototxic", []string{"reference"}, 20)
 		require.NoError(t, err)
 		require.Len(t, got, 1)
@@ -53,6 +57,9 @@ func TestAutocompletePostgresBibliographyInvalidation(t *testing.T) {
 	_, err = db.Exec(`UPDATE chemdb.bibtex SET bibtex_text=$2 WHERE article_id=$1`, ref, "@article{x,title={Botanical fluorescence},author={Doe}}")
 	require.NoError(t, err)
 	for _, s := range []*Store{store, replica} {
+		_, err = s.Autocomplete(ctx, "phototoxic", []string{"reference"}, 20)
+		require.ErrorIs(t, err, chemistry.ErrBusy)
+		awaitAutocompleteBuild(t, s)
 		old, err := s.Autocomplete(ctx, "phototoxic", []string{"reference"}, 20)
 		require.NoError(t, err)
 		require.Empty(t, old)

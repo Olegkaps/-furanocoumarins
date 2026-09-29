@@ -13,7 +13,17 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
+
+func awaitAutocompleteWarmup(t *testing.T, store *cassandra.Store) {
+	t.Helper()
+	select {
+	case <-store.WarmAutocomplete():
+	case <-time.After(5 * time.Second):
+		t.Fatal("autocomplete warmup did not complete")
+	}
+}
 
 func TestAutocompleteRequestValidation(t *testing.T) {
 	app := fiber.New()
@@ -44,6 +54,7 @@ func TestAutocompleteHTTPContracts(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 	store := cassandra.NewPostgresStore(db)
+	defer func() { require.NoError(t, store.CloseAutocomplete()) }()
 	h := NewHandler(&app.Container{Cassandra: store})
 	server := fiber.New()
 	server.Get("/autocomplete", h.Autocomplete)
@@ -57,6 +68,10 @@ func TestAutocompleteHTTPContracts(t *testing.T) {
 	mock.ExpectQuery("SELECT article_id,bibtex_text").WillReturnRows(sqlmock.NewRows([]string{"id", "text"}))
 	mock.ExpectQuery("SELECT DISTINCT member.value").WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("Angelica archangelica"))
 	mock.ExpectCommit()
+	version()
+	version()
+	awaitAutocompleteWarmup(t, store)
+	version()
 	version()
 	resp, err := server.Test(httptest.NewRequest("GET", "/autocomplete?value=angelca", nil))
 	require.NoError(t, err)
@@ -91,6 +106,7 @@ func TestAutocompleteSearchScopeIncludesReferenceColumns(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 	store := cassandra.NewPostgresStore(db)
+	defer func() { require.NoError(t, store.CloseAutocomplete()) }()
 	h := NewHandler(&app.Container{Cassandra: store})
 	server := fiber.New()
 	server.Get("/autocomplete", h.Autocomplete)
@@ -103,6 +119,10 @@ func TestAutocompleteSearchScopeIncludesReferenceColumns(t *testing.T) {
 	mock.ExpectQuery("SELECT article_id,bibtex_text").WillReturnRows(sqlmock.NewRows([]string{"id", "text"}).AddRow("paper-1", "title={Phototoxic coumarins}"))
 	mock.ExpectQuery("SELECT DISTINCT member.value").WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("paper-1"))
 	mock.ExpectCommit()
+	version()
+	version()
+	awaitAutocompleteWarmup(t, store)
+	version()
 	version()
 	resp, err := server.Test(httptest.NewRequest("GET", "/autocomplete?scope=search&value=phototoxic", nil))
 	require.NoError(t, err)

@@ -17,13 +17,19 @@ var ErrNotConfigured = errors.New("cassandra is not configured")
 
 // Store owns Cassandra session lifecycle.
 type Store struct {
-	cluster           *gocql.ClusterConfig
-	db                *sql.DB
-	autocompleteMu    sync.RWMutex
-	autocompleteBuild sync.Mutex
-	structureBuild    sync.Mutex
-	autocompleteIndex *autocomplete.Index
-	autocompleteKey   string
+	cluster                   *gocql.ClusterConfig
+	db                        *sql.DB
+	autocompleteMu            sync.RWMutex
+	autocompletePrepared      *autocomplete.Index
+	autocompletePreparedKey   string
+	autocompletePending       *time.Time
+	autocompleteActivePending bool
+	autocompleteDone          chan struct{}
+	autocompleteCancel        context.CancelFunc
+	autocompleteClosed        bool
+	structureBuild            sync.Mutex
+	autocompleteIndex         *autocomplete.Index
+	autocompleteKey           string
 }
 
 func NewStore(cluster *gocql.ClusterConfig) *Store {
@@ -96,7 +102,11 @@ func (s *Store) GetAllTables() ([]*Table, error) {
 
 func (s *Store) ActivateTable(timestamp time.Time) error {
 	if s.db != nil {
-		return s.pgActivateTable(timestamp)
+		err := s.pgActivateTable(timestamp)
+		if err == nil {
+			s.WarmAutocomplete()
+		}
+		return err
 	}
 	return s.withSession(func(session *gocql.Session) error {
 		return ActivateTable(session, timestamp)
@@ -221,7 +231,11 @@ func (s *Store) SetPageKey(name, s3Key string) error {
 
 func (s *Store) BatchInsertBibtex(rows [][]any) error {
 	if s.db != nil {
-		return s.pgBatchInsertBibtex(rows)
+		err := s.pgBatchInsertBibtex(rows)
+		if err == nil {
+			s.WarmAutocomplete()
+		}
+		return err
 	}
 	return s.withSession(func(session *gocql.Session) error {
 		return BatchInsertData(session, "chemdb.bibtex", []string{"article_id", "bibtex_text"}, rows, 10)
