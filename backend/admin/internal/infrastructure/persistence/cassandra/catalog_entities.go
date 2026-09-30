@@ -229,14 +229,12 @@ func chemicalObservationCounts(ctx context.Context, tx *sql.Tx, dataTable, chemi
 	for columnRows.Next() {
 		var name string
 		if err := columnRows.Scan(&name); err != nil {
-			columnRows.Close()
-			return nil, err
+			return nil, errors.Join(err, columnRows.Close())
 		}
 		columns[name] = true
 	}
 	if err := columnRows.Err(); err != nil {
-		columnRows.Close()
-		return nil, err
+		return nil, errors.Join(err, columnRows.Close())
 	}
 	if err := columnRows.Close(); err != nil {
 		return nil, err
