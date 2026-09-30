@@ -31,10 +31,20 @@ type MetadataResponse struct {
 
 // SearchResponse is the result of /search.
 type SearchResponse struct {
-	Metadata       []ColumnMeta     `json:"metadata"`
-	Data           []map[string]any `json:"data"`
-	TableTimestamp time.Time        `json:"timestamp"`
-	Truncated      *bool            `json:"truncated,omitempty"`
+	Metadata       []ColumnMeta           `json:"metadata"`
+	Data           []map[string]any       `json:"data"`
+	TableTimestamp time.Time              `json:"timestamp"`
+	Truncated      *bool                  `json:"truncated,omitempty"`
+	EntityGroups   map[string]EntityGroup `json:"entity_groups,omitempty"`
+}
+
+// EntityGroup contains canonical, unjoined source rows for the count identities
+// present in a search result. Item keys remain the original source columns.
+type EntityGroup struct {
+	PrimaryColumn string           `json:"primary_column"`
+	CountColumn   string           `json:"count_column"`
+	Columns       []ColumnMeta     `json:"columns"`
+	Items         []map[string]any `json:"items"`
 }
 
 // Reader loads search and metadata data from persistence.

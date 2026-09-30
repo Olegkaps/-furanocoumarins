@@ -3,6 +3,7 @@ import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { createServer } from "vite";
 
 const server = await createServer({
@@ -12,6 +13,46 @@ const server = await createServer({
 after(() => server.close());
 const { entityPageColumns, entityPageProjectionChunks, fetchEntityPageDetails, mergeEntityPageRows, rowFromEntitySearch, sourceEntityPageDetails } = await server.ssrLoadModule("/src/SearchApp/entityPageDetails.ts");
 const { EntityDetailTable, classificationRowsForSource } = await server.ssrLoadModule("/src/SearchApp/EntityDetailTable.tsx");
+const { ChemicalFamilyPanel } = await server.ssrLoadModule("/src/SubstancePage/SubstancePage.tsx");
+
+test("stereoisomer cards show observed coverage, source identities, and counts without raw SMILES", () => {
+  const html = renderToStaticMarkup(createElement(MemoryRouter, {}, createElement(ChemicalFamilyPanel, {
+    family: {
+      timestamp: "now", primary_column: "pubchemcid", count_column: "planar_pubchemcid", group_value: "150888",
+      species_count_column: "accepted_name", publication_columns: ["referenceid"],
+      columns: [{ column: "names", name: "Names", type: "search chemical" }, { column: "smiles", name: "SMILES", type: "SMILES chemical" }],
+      items: [
+        { id: "150888", item: { names: "Columbianetin=Zosimol", smiles: "CO" }, species_count: 4, publication_count: 5, has_observations: true },
+        { id: "442104", item: { names: "Columbianetin=Zosimol (-),2'R", smiles: "C@O" }, species_count: 2, publication_count: 0, has_observations: true },
+        { id: "blank-evidence", item: { names: "Observed with blank evidence", smiles: "CCO" }, species_count: 0, publication_count: 0, has_observations: true },
+        { id: "unjoined", item: {}, species_count: 0, publication_count: 0, has_observations: false },
+      ],
+    },
+  })));
+  assert.match(html, /Stereoisomers · Found 3 of 4/);
+  assert.match(html, /title="Records with observations \/ stored family records"/);
+  assert.doesNotMatch(html, /chemical-family__coverage/);
+  assert.match(html, /href="\/chemical\/150888"/);
+  assert.match(html, /href="\/chemical\/442104"/);
+  assert.match(html, /Source ID: 442104/);
+  assert.match(html, /title="Columbianetin=Zosimol \(-\),2&#x27;R"/);
+  assert.equal((html.match(/class="chemical-family__card"/g) ?? []).length, 3);
+  assert.equal((html.match(/class="molecule-preview molecule-preview--large"/g) ?? []).length, 3);
+  assert.doesNotMatch(html, /SMILES:|C@O|accepted_name|info-tip/i);
+  assert.match(html, /Species: 4 · Publications: 5/);
+  assert.match(html, /Species: 2 · Publications: 0/);
+  assert.doesNotMatch(html, /Species: 0 · Publications: 0/);
+  assert.equal((html.match(/class="chemical-family__counts"/g) ?? []).length, 2);
+  assert.match(html, /href="\/chemical\/blank-evidence"/);
+  assert.doesNotMatch(html, /href="\/chemical\/unjoined"/);
+});
+
+test("an empty stored chemical family reports zero observed records", () => {
+  const html = renderToStaticMarkup(createElement(MemoryRouter, {}, createElement(ChemicalFamilyPanel, {
+    family: { timestamp: "now", primary_column: "id", count_column: "id", group_value: "missing", columns: [], items: [] },
+  })));
+  assert.match(html, /Found 0 of 0/);
+});
 
 test("entity page projections reject missing and ambiguous records", () => {
   const metadata = [{ column: "name", name: "Name", description: "", type: "chemical_page chemical" }];

@@ -36,7 +36,7 @@ export default function MetadataPreview({ document, validating = false, onEditCo
       {view === "Chemical page" && <EntityPagePreview kind="chemical" columns={model.chemicalPage} smilesColumn={model.structures[0]} />}
       {view === "Species page" && <EntityPagePreview kind="species" columns={model.speciesPage} />}
       {view === "Classification" && <ClassificationPreview columns={model.classification} />}
-      {(view === "Results table" || view === "Classification") && <p>Count by: species — {model.countColumns.species || "primary key"}; chemicals — {model.countColumns.chemical || "primary key"}. Counts here use synthetic examples, not live records.</p>}
+      {(view === "Results table" || view === "Classification") && <p>Count by: species — {model.countColumns.species || "primary key"}; chemicals — {model.countColumns.chemical || "primary key"}. Equal count values form one result-list entry; its source row supplies the displayed details. Counts here use synthetic examples, not live records.</p>}
       {model.warnings.length > 0 && <ul className="metadata-preview-warnings">{model.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
       {model.sourceOnly.length > 0 && <p>Preserved source-only sheets (not joined into public views): {model.sourceOnly.join(", ")}.</p>}
     </>}

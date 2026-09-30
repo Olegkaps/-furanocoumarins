@@ -105,6 +105,20 @@ func (h *Handler) Get(c *fiber.Ctx) error {
 	return response.JSON(c, record)
 }
 
+func (h *Handler) Stereoisomers(c *fiber.Ctx) error {
+	result, err := h.Container.Cassandra.ChemicalStereoisomers(c.UserContext(), c.Params("id"))
+	if errors.Is(err, cassandra.ErrCatalogUnavailable) {
+		return c.Status(fiber.StatusConflict).JSON(response.ErrorResponse{Error: err.Error()})
+	}
+	if err != nil {
+		return response.RespErr(c, err)
+	}
+	if result == nil {
+		return response.Resp404(c)
+	}
+	return response.JSON(c, result)
+}
+
 func boundedPositiveInt(raw string, min, max int, name string) (int, error) {
 	value, err := strconv.Atoi(raw)
 	if err != nil || value < min || value > max {

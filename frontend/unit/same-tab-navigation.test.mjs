@@ -27,6 +27,10 @@ const server = await createServer({
         export const writes = [];
         export const useNavigate = () => (to, options) => writes.push({ to, options });
       `;
+      if (id === "virtual:navigation-actions") return `
+        export const actions = [];
+        export const captureAction = (name, callback) => { actions.push({ name, callback }); return callback; };
+      `;
       if (id === "virtual:navigation-comparison") return `
         let states, params, cursor;
         export const setFixture = (search, values) => { params = new URLSearchParams(search); states = values; cursor = 0; };
@@ -40,7 +44,7 @@ const server = await createServer({
       if (id.endsWith("/useAboutSubpages.ts")) return "export const useAboutSubpages = () => ({ pages: [] });";
     },
     transform(code, id) {
-      if (id.endsWith("/ResultTable.tsx")) return code.replace('from "react"', 'from "virtual:navigation-hooks"').replace('from "react-router-dom"', 'from "virtual:navigation-router"');
+      if (id.endsWith("/ResultTable.tsx")) return `import { captureAction } from "virtual:navigation-actions";\n` + code.replace('from "react"', 'from "virtual:navigation-hooks"').replace('from "react-router-dom"', 'from "virtual:navigation-router"').replace('onClick: () => setChemicalIdentityMode(mode)', 'onClick: captureAction(mode, () => setChemicalIdentityMode(mode))');
       if (id.endsWith("/QueryCompareBar.tsx?readiness-test")) return code.replace('from "react"', 'from "virtual:navigation-comparison"').replace('from "react-router-dom"', 'from "virtual:navigation-comparison"');
     },
   }],
@@ -52,6 +56,7 @@ const { default: DataMeta } = await server.ssrLoadModule("/src/SearchApp/DataMet
 const { SearchLink } = await server.ssrLoadModule("/src/SearchApp/SearchLine.tsx");
 const { effects } = await server.ssrLoadModule("virtual:navigation-hooks");
 const { writes } = await server.ssrLoadModule("virtual:navigation-router");
+const { actions } = await server.ssrLoadModule("virtual:navigation-actions");
 const { useCompareSeries } = await server.ssrLoadModule("/src/SearchApp/QueryCompareBar.tsx?readiness-test");
 const { setFixture } = await server.ssrLoadModule("virtual:navigation-comparison");
 
@@ -63,7 +68,7 @@ const metadata = [
 ];
 const row = (chemical, species) => ({ chemical, species, smiles: "CCO", ref: "paper-1" });
 const data = [row("one", "first"), row("two", "second")];
-const workspace = { countMode: "all", currentChemical: "two", currentSpecie: "second" };
+const workspace = { countMode: "all", currentChemical: "two", currentSpecie: "second", chemicalIdentityMode: "all" };
 const path = "/table?query=primary&cmp=%5B%22extra%22%5D&cmp_minus=%5B%22minus%22%5D&tag=accepted";
 const render = (component, entry = "/table") => renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: [entry] }, component));
 const anchor = html => html.match(/<a\b[^>]*>[\s\S]*?<\/a>/g) ?? [];
@@ -122,6 +127,7 @@ test("Back restores both selected panels and count mode on the originating histo
   assert.equal(router.state.location.pathname + router.state.location.search, path);
   const html = renderToStaticMarkup(createElement(RouterProvider, { router }));
   assert.match(html, /Chemical \(1\)/);
+  assert.match(html, /aria-pressed="true">All<\/button>/, "Back restores the chemical identity regime independently of observation count mode");
   assert.match(html, /Species \(1\)/);
   assert.equal(anchor(html).filter(link => /Open (substance|species) page/.test(link)).length, 2);
   for (const link of anchor(html).filter(link => /Open (substance|species) page/.test(link))) assert.doesNotMatch(link, /target=/);
@@ -152,6 +158,21 @@ test("comparison-only restored selections survive loading; invalid picks clear t
     assert.equal(writes[0].options.replace, true);
     assert.deepEqual(writes[0].options.state, { unrelated: "kept", resultTable: { ...workspace, currentChemical: "", currentSpecie: "" } });
   } finally { globalThis.window = oldWindow; }
+});
+
+test("switching chemical identity clears the chemical pick while preserving species and observation count mode", () => {
+  for (const mode of ["all", "planar"]) {
+    actions.length = 0; writes.length = 0;
+    const saved = { ...workspace, chemicalIdentityMode: mode };
+    render(createElement(ResultTable, { metadata, data }), { pathname: "/table", state: { unrelated: "kept", resultTable: saved } });
+    actions.find(action => action.name === mode).callback();
+    assert.equal(writes.length, 0, "clicking the active regime preserves the selection");
+    const next = mode === "all" ? "planar" : "all";
+    actions.find(action => action.name === next).callback();
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].options.replace, true);
+    assert.deepEqual(writes[0].options.state, { unrelated: "kept", resultTable: { ...saved, currentChemical: "", chemicalIdentityMode: next } });
+  }
 });
 
 test("a changed comparison list is pending before its loading effect executes", () => {

@@ -134,10 +134,17 @@ export function inspectSearchPayload(payload: unknown): string | null {
   return null;
 }
 
-/** Flag when several compare payloads disagree on metadata schema. */
+/** Flag when compared search snapshots cannot belong to one dataset. */
 export function inspectComparePayloads(
   payloads: unknown[],
 ): string | null {
+  const timestamps = payloads.map(payloadTimestamp).filter(Boolean);
+  if (timestamps.length > 0 && timestamps.length !== payloads.length) {
+    return "Compared queries are missing a dataset version — cached results may be out of date.";
+  }
+  if (new Set(timestamps).size > 1) {
+    return "Compared queries use different dataset versions — cached results may be out of date.";
+  }
   const fps = payloads
     .map((p) =>
       metadataFingerprint(

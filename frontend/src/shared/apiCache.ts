@@ -411,13 +411,14 @@ function isNonEmptyArticle(data: unknown): boolean {
  * Persists in IndexedDB (localStorage only mirrors small entries).
  */
 export async function cachedSearch(query: string): Promise<AxiosResponse> {
-  const id = entryId("s", query);
-  const hit = await readEntry(id, query);
+  const cacheKey = `entity-groups-v1:${query}`;
+  const id = entryId("s", cacheKey);
+  const hit = await readEntry(id, cacheKey);
   if (hit != null) {
     return asAxiosOk("/search", hit);
   }
 
-  const inflightKey = `s:${query}`;
+  const inflightKey = `s:${cacheKey}`;
   const existing = inflight.get(inflightKey);
   if (existing) return existing;
 
@@ -425,7 +426,7 @@ export async function cachedSearch(query: string): Promise<AxiosResponse> {
     .get("/search", { params: { q: query } })
     .then(async (response) => {
       if (response.status === 200 && isNonEmptySearch(response.data)) {
-        await writeEntry(id, query, response.data);
+        await writeEntry(id, cacheKey, response.data);
       }
       return response;
     })

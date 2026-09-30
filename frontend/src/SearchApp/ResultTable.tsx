@@ -26,6 +26,8 @@ import { taxonPath, type TaxonLink } from "../TaxonPage/taxonPage";
 import { QueryCompareBar, type CompareSeries } from "./QueryCompareBar";
 import { CitationPopover } from "../shared/ui/CitationPopover";
 import { compareMetadataResultTypes, getMetadataTypeModifier, hasMetadataTypeToken } from "../shared/metadataType";
+import { detailMeta, type Metadata } from "./entityPageDetails";
+import { inspectComparePayloads } from "../shared/schemaGuard";
 import { resultGroupIdentity, resultRowIdentity } from "./resultRowIdentity";
 import * as XLSX from "xlsx";
 
@@ -61,8 +63,8 @@ function uniqueArticleCountInRows(
 }
 
 function isConfiguredCountValue(value: string): boolean {
-  const normalized = value.replaceAll(" ", "");
-  return normalized !== "" && normalized !== "NoValue";
+  const normalized = value.replaceAll(" ", "").toLowerCase();
+  return normalized !== "" && normalized !== "novalue";
 }
 
 type SelectOption = {
@@ -80,15 +82,56 @@ type OptionAggregate = {
   articles: Set<string>;
 };
 
+type EntityGroup = { primary_column: string; count_column: string; columns: Metadata[]; items: Array<Record<string, unknown>> };
+type EntityGroups = { chemical?: EntityGroup; species?: EntityGroup };
+type Grouping = {
+  chemical: boolean;
+  specie: boolean;
+  chemicalOriginal?: boolean;
+  representatives: { chemical: Map<string, Map<string, string>>; specie: Map<string, Map<string, string>> };
+  metadata: { chemical: DataMeta[]; specie: DataMeta[] };
+};
+
+const rowValue = (value: unknown) => Array.isArray(value) ? value.join(", ") : String(value ?? "");
+function groupValue(row: DataRows, kind: "chemical" | "specie", grouping: Grouping): string {
+  const count = groupCount(row, kind, grouping);
+  const id = kind === "chemical" ? row.chemical_val : row.specie_val;
+  return count ? grouping[kind] ? `count:${count}` : id : "";
+}
+function groupCount(row: DataRows, kind: "chemical" | "specie", grouping: Grouping): string {
+  const count = kind === "chemical" ? grouping.chemicalOriginal ? row.chemical_val : row.chemical_count_val : row.specie_count_val;
+  return isConfiguredCountValue(count) ? count : "";
+}
+function groupRepresentative(value: string, kind: "chemical" | "specie", grouping: Grouping): Map<string, string> | null {
+  return grouping[kind] && value.startsWith("count:") ? grouping.representatives[kind].get(value.slice(6)) ?? null : null;
+}
+function groupingFromResponses(responses: Array<{ entity_groups?: EntityGroups }>, chemicalCountKey: string, chemKey: string, speciesCountKey: string, specieKey: string): Grouping {
+  const representatives = { chemical: new Map<string, Map<string, string>>(), specie: new Map<string, Map<string, string>>() };
+  const metadata = { chemical: [] as DataMeta[], specie: [] as DataMeta[] };
+  for (const response of responses) {
+    for (const kind of ["chemical", "specie"] as const) {
+      const group = kind === "chemical" ? response.entity_groups?.chemical : response.entity_groups?.species;
+      if (!group) continue;
+      if (metadata[kind].length === 0) metadata[kind] = group.columns.map(detailMeta);
+      for (const item of group.items) {
+        const id = rowValue(item[group.primary_column]).trim();
+        if (id && !representatives[kind].has(id)) representatives[kind].set(id, new Map(Object.entries(item).map(([key, value]) => [key, rowValue(value)])));
+      }
+    }
+  }
+  return { chemical: Boolean(chemicalCountKey && chemicalCountKey !== chemKey), specie: Boolean(speciesCountKey && speciesCountKey !== specieKey), representatives, metadata };
+}
+
 function filterRows(
   rows: DataRows[],
   specie: string,
   chemical: string,
+  grouping: Grouping,
 ): DataRows[] {
   return rows.filter(
     (dr) =>
-      (specie === "" || dr.specie_val === specie) &&
-      (chemical === "" || dr.chemical_val === chemical),
+      (specie === "" || groupValue(dr, "specie", grouping) === specie) &&
+      (chemical === "" || groupValue(dr, "chemical", grouping) === chemical),
   );
 }
 
@@ -98,26 +141,28 @@ function buildOptions(
   mode: CountMode,
   refColumns: string[],
   meta: DataMeta[],
+  grouping: Grouping,
 ): SelectOption[] {
   const aggregates = new Map<string, OptionAggregate>();
   rows.forEach((dr) => {
-    const v = kind === "specie" ? dr.specie_val : dr.chemical_val;
+    const v = groupValue(dr, kind, grouping);
+    if (!v) return;
     let agg = aggregates.get(v);
     if (!agg) {
       agg = {
         value: v,
-        label: labelForDataRow(dr, meta, kind) || v,
+        label: labelForGroup(dr, meta, kind, v, grouping),
         total: 0,
         counterparts: new Set<string>(),
         articles: new Set<string>(),
       };
       aggregates.set(v, agg);
     } else if (agg.label === v) {
-      const label = labelForDataRow(dr, meta, kind);
+      const label = labelForGroup(dr, meta, kind, v, grouping);
       if (label) agg.label = label;
     }
     agg.total += dr.total_length;
-    const counterpart = kind === "specie" ? dr.chemical_count_val : dr.specie_count_val;
+    const counterpart = groupCount(dr, kind === "specie" ? "chemical" : "specie", grouping);
     if (isConfiguredCountValue(counterpart)) agg.counterparts.add(counterpart);
     if (mode === "articles") {
       dr.value_rows.forEach((row) =>
@@ -146,9 +191,10 @@ function buildOptionsWithSeries(
   refColumns: string[],
   meta: DataMeta[],
   series: Array<{ color: string; rows: DataRows[] | "primary" }>,
+  grouping: Grouping,
 ): SelectOption[] {
   if (series.length <= 1) {
-    return buildOptions(primaryRows, kind, mode, refColumns, meta);
+    return buildOptions(primaryRows, kind, mode, refColumns, meta, grouping);
   }
   const resolved = series.map(({ color, rows: srows }) => ({
     color,
@@ -156,7 +202,7 @@ function buildOptionsWithSeries(
   }));
   const optionsBySeries = resolved.map(({ color, rows }) => ({
     color,
-    options: buildOptions(rows, kind, mode, refColumns, meta),
+    options: buildOptions(rows, kind, mode, refColumns, meta, grouping),
   }));
   const optionMaps = optionsBySeries.map(({ color, options }) => ({
     color,
@@ -192,13 +238,15 @@ export function entityValues(
   series: Array<{ rows: DataRows[] }>,
   kind: "specie" | "chemical",
   counterpart = "",
+  grouping?: Grouping,
 ): Set<string> {
   const values = new Set<string>();
   for (const { rows } of series) {
     for (const row of rows) {
-      const other = kind === "specie" ? row.chemical_val : row.specie_val;
+      const other = grouping ? groupValue(row, kind === "specie" ? "chemical" : "specie", grouping) : kind === "specie" ? row.chemical_val : row.specie_val;
       if (counterpart === "" || other === counterpart) {
-        values.add(kind === "specie" ? row.specie_val : row.chemical_val);
+        const value = grouping ? groupValue(row, kind, grouping) : kind === "specie" ? row.specie_val : row.chemical_val;
+        if (value) values.add(value);
       }
     }
   }
@@ -208,17 +256,9 @@ export function entityValues(
 function countedEntityValues(
   series: Array<{ rows: DataRows[] }>,
   kind: "specie" | "chemical",
+  grouping: Grouping,
 ): Set<string> {
-  const values = new Set<string>();
-  for (const { rows } of series) {
-    for (const row of rows) {
-      const value = kind === "specie" ? row.specie_count_val : row.chemical_count_val;
-      if (isConfiguredCountValue(value)) {
-        values.add(value);
-      }
-    }
-  }
-  return values;
+  return entityValues(series, kind, "", grouping);
 }
 
 function chemicalListLabel(value: string | undefined, fallback: string): string {
@@ -256,6 +296,20 @@ function labelForDataRow(
     );
   }
   return speciesListLabel(dr.specie_row, meta, "");
+}
+
+function labelForGroup(dr: DataRows, meta: DataMeta[], kind: "specie" | "chemical", value: string, grouping: Grouping): string {
+  const representative = groupRepresentative(value, kind, grouping);
+  if (representative) {
+    const sourceMeta = grouping.metadata[kind];
+    return kind === "chemical"
+      ? chemicalListLabel(representative.get(sourceMeta.find(column => column.is_list_name)?.name ?? "") ?? representative.get("names"), value.slice(6))
+      : speciesListLabel(representative, sourceMeta, value.slice(6));
+  }
+  // A count key without a source representative cannot identify a canonical
+  // stereoisomer. Use the stable group value rather than a random joined row.
+  if (grouping[kind] && value.startsWith("count:")) return value.slice(6);
+  return labelForDataRow(dr, meta, kind) || (value.startsWith("id:") ? value.slice(3) : value);
 }
 
 /** Build DataRows from raw search rows using already-parsed meta + key columns. */
@@ -402,13 +456,17 @@ function findChemicalRow(
   seriesSets: SeriesRowSet[],
   chemical: string,
   smilesKey = "",
+  grouping: Grouping,
 ): Map<string, string> | null {
   if (!chemical) return null;
+  const representative = groupRepresentative(chemical, "chemical", grouping);
+  if (representative) return representative;
+  if (grouping.chemical && chemical.startsWith("count:")) return null;
   let fallback: Map<string, string> | null = null;
   const pools = [primaryRows, ...seriesSets.map((s) => s.rows)];
   for (const rows of pools) {
     for (const dr of rows) {
-      if (dr.chemical_val !== chemical) continue;
+      if (groupValue(dr, "chemical", grouping) !== chemical) continue;
       const row = dr.chemical_row;
       if (!fallback) fallback = row;
       if (smilesKey && (row.get(smilesKey) ?? "").trim() !== "") {
@@ -423,13 +481,17 @@ function findSpecieRow(
   primaryRows: DataRows[],
   seriesSets: SeriesRowSet[],
   specie: string,
+  grouping: Grouping,
 ): Map<string, string> | null {
   if (!specie) return null;
+  const representative = groupRepresentative(specie, "specie", grouping);
+  if (representative) return representative;
+  if (grouping.specie && specie.startsWith("count:")) return null;
   for (const dr of primaryRows) {
-    if (dr.specie_val === specie) return dr.specie_row;
+    if (groupValue(dr, "specie", grouping) === specie) return dr.specie_row;
   }
   for (const { rows } of seriesSets) {
-    const found = rows.find((dr) => dr.specie_val === specie);
+    const found = rows.find((dr) => groupValue(dr, "specie", grouping) === specie);
     if (found) return found.specie_row;
   }
   return null;
@@ -469,6 +531,7 @@ function buildChemicalSmilesMap(
   primaryRows: DataRows[],
   seriesSets: SeriesRowSet[],
   smilesKey: string,
+  grouping: Grouping,
 ): Map<string, string> {
   const map = new Map<string, string>();
   if (!smilesKey) return map;
@@ -481,9 +544,13 @@ function buildChemicalSmilesMap(
           if (smiles) break;
         }
       }
+      const value = groupValue(dr, "chemical", grouping);
+      const representative = groupRepresentative(value, "chemical", grouping);
+      if (grouping.chemical && value.startsWith("count:") && !representative) return;
+      if (representative) smiles = (representative.get(smilesKey) ?? "").trim();
       if (!smiles) return;
-      if (!map.has(dr.chemical_val) || map.get(dr.chemical_val) === "") {
-        map.set(dr.chemical_val, smiles);
+      if (smiles && (!map.has(value) || map.get(value) === "")) {
+        map.set(value, smiles);
       }
     });
   };
@@ -925,10 +992,10 @@ function SidePanel({
         />
       ) : detailRow ? (
         <>
-          {smilesLink != null && smilesLink !== "" && (
+          {kind === "chemical" && (Boolean(entityID) || Boolean(smilesLink)) && (
             <p style={{ textAlign: "center", marginTop: 8, marginBottom: 12 }}>
               <Link
-                to={entityID ? `/chemical/${encodeURIComponent(entityID)}` : substancePagePath(smilesLink)}
+                to={entityID ? `/chemical/${encodeURIComponent(entityID)}` : substancePagePath(smilesLink ?? "")}
                 className="link-button"
               >
                 Open substance page
@@ -964,6 +1031,7 @@ function ResultsWorkspace({
   countMode,
   refColumns,
   seriesRowSets,
+  grouping,
 }: {
   rows: DataRows[];
   meta: DataMeta[];
@@ -974,6 +1042,7 @@ function ResultsWorkspace({
   countMode: CountMode;
   refColumns: string[];
   seriesRowSets: CompareRowSetInput[];
+  grouping: Grouping;
 }) {
   const smilesMeta = meta.find((m) => m.type === "smiles");
   const smilesKey = smilesMeta?.name ?? "";
@@ -989,11 +1058,11 @@ function ResultsWorkspace({
   const rowsForSpeciesList =
     previewChemical === ""
       ? rows
-      : rows.filter((dr) => dr.chemical_val === previewChemical);
+      : rows.filter((dr) => groupValue(dr, "chemical", grouping) === previewChemical);
   const rowsForChemicalList =
     previewSpecie === ""
       ? rows
-      : rows.filter((dr) => dr.specie_val === previewSpecie);
+      : rows.filter((dr) => groupValue(dr, "specie", grouping) === previewSpecie);
 
   const speciesCountMode: CountMode =
     hoveredChemical !== "" ? "articles" : countMode;
@@ -1013,8 +1082,9 @@ function ResultsWorkspace({
           ? "primary"
           : previewChemical === ""
             ? srows
-            : srows.filter((dr) => dr.chemical_val === previewChemical),
+            : srows.filter((dr) => groupValue(dr, "chemical", grouping) === previewChemical),
     })),
+    grouping,
   );
   const chemicalsOptions = buildOptionsWithSeries(
     rowsForChemicalList,
@@ -1029,13 +1099,15 @@ function ResultsWorkspace({
           ? "primary"
           : previewSpecie === ""
             ? srows
-            : srows.filter((dr) => dr.specie_val === previewSpecie),
+            : srows.filter((dr) => groupValue(dr, "specie", grouping) === previewSpecie),
     })),
+    grouping,
   );
   const chemicalSmiles = buildChemicalSmilesMap(
     rows,
     resolveCompareRowSets(rows, seriesRowSets),
     smilesKey,
+    grouping,
   );
 
   const tourRestoreRef = useRef<"chemical" | "specie" | null>(null);
@@ -1075,7 +1147,7 @@ function ResultsWorkspace({
   const resolvedSeries = resolveCompareRowSets(rows, seriesRowSets);
   const previewFilteredBySeries = resolvedSeries.map(({ color, rows: srows }) => ({
     color,
-    rows: filterRows(srows, previewSpecie, previewChemical),
+    rows: filterRows(srows, previewSpecie, previewChemical, grouping),
   }));
   const showPublications = previewSpecie !== "" || previewChemical !== "";
   const valueRows = showPublications
@@ -1095,8 +1167,9 @@ function ResultsWorkspace({
     resolvedSeries,
     currentChemical,
     smilesKey,
+    grouping,
   );
-  const specieDetail = findSpecieRow(rows, resolvedSeries, currentSpecie);
+  const specieDetail = findSpecieRow(rows, resolvedSeries, currentSpecie, grouping);
 
   const selectedSmiles =
     currentChemical !== "" && chemicalDetail && smilesKey
@@ -1112,7 +1185,7 @@ function ResultsWorkspace({
       : "");
 
   const speciesCountLabel =
-    speciesCountMode === "chemicals" ? "chemicals" : speciesCountMode;
+    speciesCountMode === "chemicals" ? grouping.chemicalOriginal ? "chemicals" : "planar" : speciesCountMode;
   const chemicalCountLabel =
     chemicalsCountMode === "chemicals" ? "species" : chemicalsCountMode;
 
@@ -1130,10 +1203,11 @@ function ResultsWorkspace({
     >
       <SidePanel
         kind="chemical"
-        title="Chemical"
+        title={grouping.chemicalOriginal ? "Chemical" : "Planar"}
         listCount={countedEntityValues(
-          resolvedSeries.map(({ rows: srows }) => ({ rows: filterRows(srows, previewSpecie, currentChemical) })),
+          resolvedSeries.map(({ rows: srows }) => ({ rows: filterRows(srows, previewSpecie, currentChemical, grouping) })),
           "chemical",
+          grouping,
         ).size}
         selected={currentChemical}
         onClear={() => setCurrentChemical("")}
@@ -1147,14 +1221,14 @@ function ResultsWorkspace({
           setHoveredChemical(value ?? "");
         }}
         detailRow={chemicalDetail}
-        meta={meta}
+        meta={grouping.chemical && currentChemical.startsWith("count:") ? grouping.metadata.chemical : meta}
         smilesLink={
           selectedSmiles ||
           (currentChemical !== ""
             ? chemicalSmiles.get(currentChemical) ?? ""
             : "")
         }
-        entityID={entityID(chemicalDetail, meta, "chemical")}
+        entityID={grouping.chemical && currentChemical.startsWith("count:") && chemicalDetail ? currentChemical.slice(6) : entityID(chemicalDetail, meta, "chemical")}
       />
 
       <div
@@ -1205,8 +1279,9 @@ function ResultsWorkspace({
         kind="specie"
         title="Species"
         listCount={countedEntityValues(
-          resolvedSeries.map(({ rows: srows }) => ({ rows: filterRows(srows, currentSpecie, previewChemical) })),
+          resolvedSeries.map(({ rows: srows }) => ({ rows: filterRows(srows, currentSpecie, previewChemical, grouping) })),
           "specie",
+          grouping,
         ).size}
         selected={currentSpecie}
         onClear={() => setCurrentSpecie("")}
@@ -1220,9 +1295,9 @@ function ResultsWorkspace({
           setHoveredSpecie(value ?? "");
         }}
         detailRow={specieDetail}
-        meta={meta}
+        meta={grouping.specie && currentSpecie.startsWith("count:") ? grouping.metadata.specie : meta}
         taxonLink={speciesTaxonLink(specieDetail, meta)}
-        entityID={entityID(specieDetail, meta, "specie")}
+        entityID={grouping.specie && currentSpecie.startsWith("count:") && specieDetail ? currentSpecie.slice(6) : entityID(specieDetail, meta, "specie")}
       />
     </div>
   );
@@ -1345,6 +1420,10 @@ function TableStateBar({
   primaryQuery = "",
   compareBarPrimaryQuery = primaryQuery,
   colorsByQuery = {},
+  grouping,
+  countColumns,
+  chemicalIdentityMode,
+  setChemicalIdentityMode,
 }: {
   rows: DataRows[];
   downloadSheets: DownloadSheet[];
@@ -1360,25 +1439,33 @@ function TableStateBar({
   primaryQuery?: string;
   compareBarPrimaryQuery?: string;
   colorsByQuery?: Record<string, string>;
+  grouping: Grouping;
+  countColumns: { chemical: string; specie: string };
+  chemicalIdentityMode: "planar" | "all";
+  setChemicalIdentityMode: (value: "planar" | "all") => void;
 }) {
   let total_rows = 0;
   rows.forEach((data_rows) => {
-    if (currentChemical !== "" && data_rows.chemical_val !== currentChemical) {
+    if (currentChemical !== "" && groupValue(data_rows, "chemical", grouping) !== currentChemical) {
       return;
     }
-    if (currentSpecie !== "" && data_rows.specie_val !== currentSpecie) {
+    if (currentSpecie !== "" && groupValue(data_rows, "specie", grouping) !== currentSpecie) {
       return;
     }
     total_rows += data_rows.total_length;
   });
 
   const displayMode: CountMode = countModeLocked ? "articles" : countMode;
+  const chemicalLabel = chemicalIdentityMode === "planar" ? "Planar" : "Chemical";
+  const countDescription = (kind: string, column: string) => `${kind} total counts distinct nonempty values of ${column} (${meta.find(item => item.name === column)?.show_name ?? column}).`;
+  const referenceFields = meta.filter(item => item.type === "reference").map(item => `${item.name} (${item.show_name})`).join(", ") || "none configured";
 
   return (
     <div className="panel panel-toolbar" data-tour="table-toolbar">
       <div className="count-mode-block" data-tour="table-count-mode">
         <div className="count-mode-block__row">
           <span>Count in lists: </span>
+          <InfoTip text={`${chemicalLabel} identity: ${countColumns.chemical} (${meta.find(item => item.name === countColumns.chemical)?.show_name ?? countColumns.chemical}); species identity: ${countColumns.specie} (${meta.find(item => item.name === countColumns.specie)?.show_name ?? countColumns.specie}). Articles count distinct references from ${referenceFields}. All counts observation rows. Each distinct nonempty identity counts once.`} />
           {(["chemicals", "articles", "all"] as const).map((mode) => (
             <button
               key={mode}
@@ -1394,9 +1481,17 @@ function TableStateBar({
                 if (!countModeLocked) setCountMode(mode);
               }}
             >
-              {filterCountMode(mode, "chemicals", "chemicals / species")}
+              {filterCountMode(mode, "chemicals", chemicalIdentityMode === "planar" ? "Planar / species" : "chemicals / species")}
             </button>
           ))}
+          <div className="count-mode-block__row" role="group" aria-label="Chemical identity" style={{ marginLeft: 16 }}>
+            <span>Chemicals: </span>
+            {(["planar", "all"] as const).map(mode => (
+              <button key={mode} type="button" className={`btn-toggle${mode === chemicalIdentityMode ? " is-active" : ""}`} aria-pressed={mode === chemicalIdentityMode} onClick={() => setChemicalIdentityMode(mode)}>
+                {mode === "planar" ? "Planar" : "All"}
+              </button>
+            ))}
+          </div>
         </div>
         <p className="count-mode-block__hint" aria-hidden={!countModeLocked}>
           {countModeLocked ? "(by articles while an item is selected)" : "\u00A0"}
@@ -1435,11 +1530,13 @@ function TableStateBar({
 
       <span className="badge badge-chemical" style={{ fontSize: "0.85rem" }}>
         <Molecule width={14} height={14} aria-hidden />
-        Chemical ({chemicalCount})
+        {chemicalLabel} ({chemicalCount})
+        <InfoTip text={countDescription(chemicalLabel, countColumns.chemical)} />
       </span>
       <span className="badge badge-species" style={{ fontSize: "0.85rem" }}>
         <BranchesRight width={14} height={14} aria-hidden />
         Species ({speciesCount})
+        <InfoTip text={countDescription("Species", countColumns.specie)} />
       </span>
       <span
         className="badge"
@@ -1469,6 +1566,7 @@ function ResultTableWrapper({
   primaryQuery = "",
   compareBarPrimaryQuery = primaryQuery,
   loading = false,
+  grouping: planarGrouping,
 }: {
   rows: Array<DataRows>;
   meta: Array<DataMeta>;
@@ -1481,32 +1579,40 @@ function ResultTableWrapper({
   primaryQuery?: string;
   compareBarPrimaryQuery?: string;
   loading?: boolean;
+  grouping: Grouping;
 }) {
   const refColumns = useMemo(() => meta
     .filter((m) => m.type === "reference")
     .map((m) => m.name), [meta]);
 
-  const allSpecies = useMemo(() => [...entityValues([{ rows }], "specie")], [rows]);
-  const allChemicals = useMemo(() => [...entityValues([{ rows }], "chemical")], [rows]);
-
   const location = useLocation();
   const navigate = useNavigate();
   // Keep panel choices on this history entry so Back restores the workspace.
   const saved = location.state?.resultTable;
+  const identityParam = new URLSearchParams(location.search).get("chemical_identity");
+  const chemicalIdentityMode: "planar" | "all" = identityParam === "all" ? "all" : identityParam === "planar" ? "planar" : saved?.chemicalIdentityMode ?? "planar";
+  const grouping = useMemo(() => chemicalIdentityMode === "all" ? { ...planarGrouping, chemical: false, chemicalOriginal: true } : planarGrouping, [chemicalIdentityMode, planarGrouping]);
+  const allSpecies = useMemo(() => [...entityValues([{ rows }], "specie", "", grouping)], [rows, grouping]);
+  const allChemicals = useMemo(() => [...entityValues([{ rows }], "chemical", "", grouping)], [rows, grouping]);
   const countMode: CountMode = saved?.countMode ?? "chemicals";
-  const currentSpecie: string = saved?.currentSpecie ?? (allSpecies.length === 1 ? allSpecies[0] : "");
-  const currentChemical: string = saved?.currentChemical ?? (allChemicals.length === 1 ? allChemicals[0] : "");
+  const currentSpecie: string = saved?.currentSpecie ?? (allSpecies.length === 1 && rows.every(row => groupValue(row, "specie", grouping)) ? allSpecies[0] : "");
+  const currentChemical: string = saved?.currentChemical ?? (allChemicals.length === 1 && rows.every(row => groupValue(row, "chemical", grouping)) ? allChemicals[0] : "");
   const updateWorkspace = useCallback((changes: {
-    countMode?: CountMode; currentSpecie?: string; currentChemical?: string;
+    countMode?: CountMode; currentSpecie?: string; currentChemical?: string; chemicalIdentityMode?: "planar" | "all";
   }) => {
-    void navigate(location, {
+    const params = new URLSearchParams(location.search);
+    if (changes.chemicalIdentityMode) params.set("chemical_identity", changes.chemicalIdentityMode);
+    void navigate({ ...location, search: params.toString() }, {
       replace: true,
-      state: { ...location.state, resultTable: { countMode, currentSpecie, currentChemical, ...changes } },
+      state: { ...location.state, resultTable: { countMode, currentSpecie, currentChemical, chemicalIdentityMode, ...changes } },
     });
-  }, [navigate, location, countMode, currentSpecie, currentChemical]);
+  }, [navigate, location, countMode, currentSpecie, currentChemical, chemicalIdentityMode]);
   const setCountMode = useCallback((value: CountMode) => updateWorkspace({ countMode: value }), [updateWorkspace]);
   const setCurrentSpecie = useCallback((value: string) => updateWorkspace({ currentSpecie: value }), [updateWorkspace]);
   const setCurrentChemical = useCallback((value: string) => updateWorkspace({ currentChemical: value }), [updateWorkspace]);
+  const setChemicalIdentityMode = useCallback((value: "planar" | "all") => {
+    if (value !== chemicalIdentityMode) updateWorkspace({ chemicalIdentityMode: value, currentChemical: "" });
+  }, [chemicalIdentityMode, updateWorkspace]);
 
   const countModeLocked = currentSpecie !== "" || currentChemical !== "";
   const effectiveCountMode: CountMode = countModeLocked ? "articles" : countMode;
@@ -1532,8 +1638,8 @@ function ResultTableWrapper({
     [chemicalCountKey, chemKey, compareSeries, meta, rows, specieKey, speciesCountKey],
   );
   const resolvedSeries = resolveCompareRowSets(rows, seriesRowSets);
-  const validSpecies = currentSpecie === "" || entityValues(resolvedSeries, "specie", currentChemical).has(currentSpecie);
-  const validChemical = currentChemical === "" || entityValues(resolvedSeries, "chemical", currentSpecie).has(currentChemical);
+  const validSpecies = currentSpecie === "" || entityValues(resolvedSeries, "specie", currentChemical, grouping).has(currentSpecie);
+  const validChemical = currentChemical === "" || entityValues(resolvedSeries, "chemical", currentSpecie, grouping).has(currentChemical);
   useEffect(() => {
     // Wait for the complete comparison union before clearing restored picks.
     // Clear both together so one replacement cannot restore the other stale pick.
@@ -1544,10 +1650,10 @@ function ResultTableWrapper({
 
   const filteredBySeries = resolvedSeries.map(({ color, rows: srows }) => ({
     color,
-    rows: filterRows(srows, currentSpecie, currentChemical),
+    rows: filterRows(srows, currentSpecie, currentChemical, grouping),
   }));
-  const speciesCount = countedEntityValues(filteredBySeries, "specie").size;
-  const chemicalCount = countedEntityValues(filteredBySeries, "chemical").size;
+  const speciesCount = countedEntityValues(filteredBySeries, "specie", grouping).size;
+  const chemicalCount = countedEntityValues(filteredBySeries, "chemical", grouping).size;
   const referenceCount = uniqueArticleCountInRows(
     flattenFilteredDataRows(
       currentSpecie === "" && currentChemical === ""
@@ -1565,7 +1671,7 @@ function ResultTableWrapper({
           query: s.query,
           color: s.color,
           fetchedAt: s.fetchedAt,
-          rows: filterRows(srows, currentSpecie, currentChemical),
+          rows: filterRows(srows, currentSpecie, currentChemical, grouping),
         };
       });
     }
@@ -1578,7 +1684,7 @@ function ResultTableWrapper({
         query: primaryQuery || compareSeries[0]?.query || "(primary)",
         color,
         fetchedAt: compareSeries[0]?.fetchedAt ?? new Date().toISOString(),
-        rows: filterRows(rows, currentSpecie, currentChemical),
+        rows: filterRows(rows, currentSpecie, currentChemical, grouping),
       },
     ];
   })();
@@ -1600,6 +1706,10 @@ function ResultTableWrapper({
         primaryQuery={primaryQuery}
         compareBarPrimaryQuery={compareBarPrimaryQuery}
         colorsByQuery={colorsByQuery}
+        grouping={grouping}
+        countColumns={{ chemical: chemicalIdentityMode === "all" ? chemKey : chemicalCountKey, specie: speciesCountKey }}
+        chemicalIdentityMode={chemicalIdentityMode}
+        setChemicalIdentityMode={setChemicalIdentityMode}
       />
     );
   }
@@ -1625,8 +1735,13 @@ function ResultTableWrapper({
         primaryQuery={primaryQuery}
         compareBarPrimaryQuery={compareBarPrimaryQuery}
         colorsByQuery={colorsByQuery}
+        grouping={grouping}
+        countColumns={{ chemical: chemicalIdentityMode === "all" ? chemKey : chemicalCountKey, specie: speciesCountKey }}
+        chemicalIdentityMode={chemicalIdentityMode}
+        setChemicalIdentityMode={setChemicalIdentityMode}
       />
       <ResultsWorkspace
+        key={chemicalIdentityMode}
         rows={rows}
         meta={meta}
         currentSpecie={currentSpecie}
@@ -1636,6 +1751,7 @@ function ResultTableWrapper({
         countMode={effectiveCountMode}
         refColumns={refColumns}
         seriesRowSets={seriesRowSets}
+        grouping={grouping}
       />
     </>
   );
@@ -1655,6 +1771,7 @@ function ResultTableOrNull({
   compareBarPrimaryQuery?: string;
   [key: string]: any;
 }) {
+  const compareIssue = inspectComparePayloads([response, ...compareSeries.map(series => series.response)]);
   const model = useMemo(() => {
     if (isEmpty(response)) return null;
     const data_meta: Array<DataMeta> = [];
@@ -1760,8 +1877,13 @@ function ResultTableOrNull({
       model.speciesCountKey,
     )
     : [], [response.data, model]);
+  const grouping = useMemo(() => model ? groupingFromResponses(
+    [response, ...compareSeries.map(series => series.response)],
+    model.chemicalCountKey, model.chemKey, model.speciesCountKey, model.specieKey,
+  ) : null, [response.entity_groups, compareSeries, model]);
 
-  if (!model) return <div></div>;
+  if (compareIssue) return <p className="empty-state" role="alert">{compareIssue} Clear the API cache and reload this page.</p>;
+  if (!model || !grouping) return <div></div>;
 
   return (
     <ResultTableWrapper
@@ -1776,6 +1898,7 @@ function ResultTableOrNull({
       primaryQuery={primaryQuery}
       compareBarPrimaryQuery={compareBarPrimaryQuery}
       loading={loading}
+      grouping={grouping}
     />
   );
 }

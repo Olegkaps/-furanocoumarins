@@ -147,9 +147,29 @@ Species (`classification`) and chemicals (`structures`) may set one group-level
 primary key. Use the pinned dataset definition, not the latest unpublished or
 unimported metadata, for runtime counts. Entity-count modes count distinct
 non-empty selected values; observation and article counts remain unchanged.
-Count columns do not replace selection IDs, page-link identities, or grouping
-keys, and hidden count columns must remain available for counting without being
-displayed automatically.
+Results lists group matching observations by the configured count value. Source
+rows whose primary key equals that value supply the representative name,
+structure, details, and page link, including representatives absent from the
+joined results. Keep original observation identities for exports and per-member
+counts; selecting a group includes all its matching members. Missing count
+values are excluded from selectable entity lists without dropping observations
+from unfiltered exports. Missing representatives must not borrow another member's
+structure. Chemical results default to Planar (configured count column); All
+uses original chemical primary keys, names and structures. This choice affects
+chemical totals and counterpart counts independently of article/observation
+count mode. Hidden count columns remain available without being displayed.
+
+Normal search responses carry optional `entity_groups` representative catalogs
+from the same pinned dataset; compact column projections omit this enrichment.
+Chemical-page families follow the pinned chemical count column. Their source
+members retain individual chemical-page IDs and show distinct publication and
+configured species counts across the complete active observations, including
+zero for unjoined records. Family cards report Found k of n using the server's
+actual observation-presence flag and total stored family records, not inferred
+presence from nonzero species/reference counts. This is stored chemical coverage, not enumeration of
+every chemically possible stereoisomer. The site's machine-readable dataset
+description warns that stereochemistry may be partial or unspecified and that
+SMILES must be inspected when counting stereochemical entities.
 
 Startup and scientific-data migration backfill historical dataset definitions
 idempotently without rewriting scientific rows. Source catalogs can recover

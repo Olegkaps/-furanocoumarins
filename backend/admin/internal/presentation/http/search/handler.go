@@ -61,6 +61,11 @@ func (h *Handler) SearchMainApp(c *fiber.Ctx) error {
 		if err != nil {
 			return response.RespErr(c, err)
 		}
+	} else {
+		result.EntityGroups, err = h.Container.Cassandra.SearchEntityGroups(c.UserContext(), result.TableTimestamp, result.Data)
+		if err != nil {
+			return response.RespErr(c, err)
+		}
 	}
 	return response.JSON(c, result)
 }

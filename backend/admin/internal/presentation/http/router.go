@@ -73,6 +73,7 @@ func NewApp(container *app.Container) *fiber.App {
 	app.Get("/catalog/:kind/record", catalog.Record)
 	app.Get("/catalog/:kind/count", catalog.Count)
 	app.Get("/catalog/:kind", catalog.List)
+	app.Get("/catalog/chemicals/:id/stereoisomers", catalog.Stereoisomers)
 	app.Get("/catalog/:kind/:id", catalog.Get)
 	app.Get("/pages/:name", pages.GetPage)
 	app.Get("/taxa/:rank", pages.GetTaxon)

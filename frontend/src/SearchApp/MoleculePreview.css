@@ -19,3 +19,4 @@
   .molecule-preview { width: 100px; height: 76px; }
   .unified-search__input li:has(.molecule-preview), .query-input__suggestions li:has(.molecule-preview) { gap: 8px; padding: 8px; }
 }
+.molecule-preview--large { width: 100%; height: 224px; border: 0; border-radius: 0; }

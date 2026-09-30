@@ -43,10 +43,10 @@ export function filterResponse(searchResponse: { [index: string]: any }) {
   }
 
   try {
-    const resultResponse: { [index: string]: any } = {};
+    const resultResponse: { [index: string]: any } = { ...searchResponse };
     resultResponse["metadata"] = [];
     searchResponse["metadata"]?.forEach((meta_item: { [index: string]: any }) => {
-      if (!hasMetadataTypeToken(String(meta_item["type"]), "invisible")) {
+      if (!hasMetadataTypeToken(String(meta_item["type"]), "invisible") || meta_item["entity_count_key"] || hasMetadataTypeToken(String(meta_item["type"]), "keycolumn")) {
         resultResponse["metadata"].push(meta_item);
       }
     });
@@ -81,7 +81,8 @@ export function filterResponse(searchResponse: { [index: string]: any }) {
       meta_defaults[default_col]["custom"].push(meta_item["column"]);
     });
 
-    searchResponse["data"]?.forEach((row: { [index: string]: string }) => {
+    searchResponse["data"]?.forEach((sourceRow: { [index: string]: string }) => {
+      const row = { ...sourceRow };
       Object.values(meta_defaults).forEach((obj: { default: string; custom: string[] }) => {
         const default_col = obj["default"];
         obj["custom"].forEach((col: string) => {

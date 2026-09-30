@@ -17,6 +17,7 @@ const server = await createServer({
 after(() => server.close());
 const { default: Tree, buildUniquesByClades, countAtPrefix } =
   await server.ssrLoadModule("/src/SearchApp/PhylogeneticTree.tsx");
+const { subtractMinusResponses } = await server.ssrLoadModule("/src/SearchApp/compareMinus.ts");
 const ranks = ["__root__", "family", "genus", "species"];
 const rows = [
   { family: "F", genus: "G", species: "a", smiles: "C", ref: "r" },
@@ -144,4 +145,62 @@ test("configured chemical count key uses whole nonblank values instead of SMILES
 
   assert.match(html, /title="1 chemicals">1</);
   assert.doesNotMatch(html, /title="4 chemicals">4</);
+});
+
+test("Planar and All switch chemical identities independently of articles and observations, including cached comparisons and minus rows", () => {
+  const identityMetadata = [
+    { column: "family", name: "Family", type: "clas[1]" },
+    { column: "species", name: "Species", type: "table_specie keycolumn clas[0]" },
+    { column: "chemical_id", name: "Chemical ID", type: "invisible external[structures] keycolumn" },
+    { column: "planar_id", name: "Planar ID", type: "invisible", entity_count_key: "chemical" },
+    { column: "smiles", name: "SMILES", type: "SMILES" },
+    { column: "ref", name: "Reference", type: "ref[]" },
+  ];
+  const identityRows = [
+    { family: "F", species: "one", chemical_id: "c1", planar_id: "A", smiles: "C", ref: "r1" },
+    { family: "F", species: "two", chemical_id: "c2", planar_id: "A", smiles: "C", ref: "r2" },
+    { family: "F", species: "three", chemical_id: "c3", planar_id: " ", smiles: "C", ref: "r3" },
+    { family: "F", species: "four", chemical_id: "c4", planar_id: "NO VALUE", smiles: "C", ref: "r4" },
+    { family: "F", species: "five", chemical_id: "c5", planar_id: "a", smiles: "C", ref: "r5" },
+  ];
+  identityRows.push(identityRows[0]);
+  const response = { metadata: identityMetadata, data: identityRows };
+  const series = [
+    { query: "first", color: "#123456", response },
+    { query: "second", color: "#abcdef", response: { metadata: identityMetadata, data: identityRows.slice(0, 2) } },
+  ];
+  const planar = render(series);
+  assert.match(planar, /color:#123456[^>]*title="2 chemicals">2</);
+  assert.match(planar, /color:#abcdef[^>]*title="1 chemicals">1</);
+  assert.match(planar, /aria-pressed="true">Planar<\/button>/);
+  assert.match(planar, /Chemical identity: planar_id/);
+  const all = render(series, "count=chemicals&chemical_identity=all&to=0");
+  assert.match(all, /color:#123456[^>]*title="5 chemicals">5</);
+  assert.match(all, /color:#abcdef[^>]*title="2 chemicals">2</);
+  assert.match(all, /aria-pressed="true">All<\/button>/);
+  assert.match(all, /Chemical identity: chemical_id/);
+  assert.equal(render(series), planar, "switching back reuses the correct immutable snapshot");
+  for (const identity of ["planar", "all"]) {
+    assert.match(render(series, `count=articles&chemical_identity=${identity}&to=0`), /color:#123456[^>]*title="5 articles">5</);
+    assert.match(render(series, `count=all&chemical_identity=${identity}&to=0`), /color:#123456[^>]*title="6 records">6</);
+  }
+  const remaining = subtractMinusResponses(response, [{ metadata: identityMetadata, data: [identityRows[0]] }]);
+  const remainingSeries = [{ ...series[0], response: remaining }];
+  assert.match(render(remainingSeries), /title="2 chemicals">2</);
+  assert.match(render(remainingSeries, "count=chemicals&chemical_identity=all&to=0"), /title="4 chemicals">4</);
+  assert.equal(response.data.length, 6, "minus leaves original observations intact");
+});
+
+test("chemical primary key is the default when no custom count column exists, while legacy responses retain SMILES counting", () => {
+  const response = { metadata: [
+    ...metadata,
+    { column: "chemical_id", name: "Chemical ID", type: "table_chemical keycolumn" },
+  ], data: [
+    { family: "F", genus: "G", species: "one", smiles: "C", chemical_id: "c1" },
+    { family: "F", genus: "G", species: "two", smiles: "C", chemical_id: "c2" },
+    { family: "F", genus: "G", species: "three", smiles: "C", chemical_id: "" },
+  ] };
+  assert.match(render([{ response }]), /title="2 chemicals">2</);
+  assert.match(render([{ response }], "count=chemicals&chemical_identity=all&to=0"), /title="2 chemicals">2</);
+  assert.match(render([{ response: { metadata, data: response.data } }]), /title="1 chemicals">1</);
 });

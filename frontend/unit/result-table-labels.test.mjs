@@ -66,11 +66,11 @@ test("ranked lists bound initial markup and expose pagination only above the bou
 
 test("disabled tree link has no navigation target while enabled link preserves query parameters", () => {
   const render = disabled => renderToStaticMarkup(createElement(MemoryRouter, {
-    initialEntries: ["/table?query=a&tag=accepted&cmp_minus=b"],
+    initialEntries: ["/table?query=a&tag=accepted&cmp_minus=b&chemical_identity=all"],
   }, createElement(SearchLink, { path: "/tree", text: "Phylogenetic Tree", disabled })));
   assert.match(render(true), /role="link" aria-disabled="true"/);
   assert.doesNotMatch(render(true), /href=/);
-  assert.match(render(false), /href="\/tree\?query=a&amp;tag=accepted&amp;cmp_minus=b"/);
+  assert.match(render(false), /href="\/tree\?query=a&amp;tag=accepted&amp;cmp_minus=b&amp;chemical_identity=all"/);
 });
 
 const metadata = [
@@ -115,7 +115,7 @@ test("empty primary still displays later plus entities with their original keys"
   assert.match(html, />Angelica dahurica</);
   assert.match(html, />Ruta graveolens</);
   assert.match(html, /Species \(2\)/);
-  assert.match(html, /Chemical \(2\)/);
+  assert.match(html, /Planar \(2\)/);
 });
 
 test("results side lists display configured names instead of entity ids", () => {
@@ -131,7 +131,7 @@ test("results side lists display configured names instead of entity ids", () => 
   assert.doesNotMatch(html, /5-O-Methyl isogosferol</);
 });
 
-test("configured hidden count keys deduplicate whole nonblank counterpart values without changing entity selection", () => {
+test("configured count keys group entity lists while retaining blank-key observations", () => {
   const countMetadata = [
     { column: "chemical_id", name: "Chemical ID", type: "table_chemical keycolumn", description: "" },
     { column: "chemical_name", name: "Chemical", type: "table_chemical list_name", description: "" },
@@ -151,25 +151,21 @@ test("configured hidden count keys deduplicate whole nonblank counterpart values
     metadata: countMetadata, data: countData,
   })));
 
-  assert.match(html, />One</);
-  assert.match(html, />Two</);
-  assert.match(html, /class="ranked-select-list__value">One<\/span><span class="ranked-select-list__count" title="species" aria-label="species: 1">1<\/span>/,
-    "distinct species rows sharing the same whole count key count once for chemical One");
-  assert.match(html, /class="ranked-select-list__value">Three<\/span><span class="ranked-select-list__count" title="species" aria-label="species: 0">0<\/span>/,
-    "a No Value counterpart count key contributes zero for chemical Three");
-  assert.equal((html.match(/Species \(1\)/g) ?? []).length, 2, "toolbar and side panel deduplicate configured species values");
-  assert.equal((html.match(/Chemical \(1\)/g) ?? []).length, 2, "toolbar and side panel deduplicate configured chemical values");
+  assert.match(html, /ranked-select-list__value">A,B<\/span>/, "unresolved group uses its stable count value");
+  assert.doesNotMatch(html, /ranked-select-list__value">Three<\/span>/, "blank count key is not selectable");
+  assert.equal((html.match(/Species \(1\)/g) ?? []).length, 2);
+  assert.equal((html.match(/Planar \(1\)/g) ?? []).length, 2);
   assert.match(html, /Rows in selection:\s*<b>4<\/b>/, "observation rows remain unchanged");
   assert.match(html, /Reference \(4\)/, "article counting remains unchanged");
-  assert.match(html, />One</);
-  assert.match(html, />Two</);
-  assert.match(html, />Three</);
+  assert.match(html, /Planar identity: chemical_family \(Chemical family\); species identity: accepted_name \(Accepted name\)/);
+  assert.match(html, /Articles count distinct references from referenceid \(Reference\)\. All counts observation rows/);
+  assert.doesNotMatch(html, /Missing values|missing values/);
 
   const selected = renderToStaticMarkup(createElement(MemoryRouter, {
-    initialEntries: [{ pathname: "/table", state: { resultTable: { currentChemical: "c3", currentSpecie: "" } } }],
+    initialEntries: [{ pathname: "/table", state: { resultTable: { currentChemical: "c3", currentSpecie: "", chemicalIdentityMode: "all" } } }],
   }, createElement(ResultTable, { metadata: countMetadata, data: countData })));
-  assert.match(selected, /Chemical \(0\)/, "a selected primary ID with no count value contributes zero");
-  assert.match(selected, /Species \(0\)/, "the selected chemical's missing species count value contributes zero");
+  assert.match(selected, /Chemical \(1\)/, "All identities use the original chemical key even without a planar value");
+  assert.match(selected, /Species \(0\)/);
   assert.match(selected, /Rows in selection:\s*<b>1<\/b>/);
 
   const primaryCompareData = [countData[0], countData[3]];
@@ -182,8 +178,127 @@ test("configured hidden count keys deduplicate whole nonblank counterpart values
       { query: "second", mode: "plus", color: "blue", response: { metadata: countMetadata, data: secondaryCompareData } },
     ],
   })));
-  assert.match(compared, /Chemical \(1\)/, "compare union counts one shared configured value across distinct IDs");
-  assert.match(compared, />Two</, "the second identity remains selectable");
+  assert.match(compared, /Planar \(1\)/, "compare union counts the shared configured value once");
+  assert.match(compared, />A,B</, "the shared group remains selectable");
+});
+
+test("count-key selection uses the unjoined representative and unions member publications across comparisons", () => {
+  const groupedMetadata = [
+    { column: "chemical_id", name: "Source ID", type: "table_chemical keycolumn", description: "" },
+    { column: "names", name: "Names", type: "table_chemical list_name", description: "" },
+    { column: "smiles", name: "SMILES", type: "table_chemical SMILES", description: "" },
+    { column: "planar_pubchemcid", name: "Planar CID", type: "invisible", entity_count_key: "chemical", description: "" },
+    { column: "species_id", name: "Species ID", type: "table_specie keycolumn", description: "" },
+    { column: "referenceid", name: "Reference", type: "table_0 ref[]", description: "" },
+  ];
+  const first = { chemical_id: "442104", names: "Isomer minus", smiles: "C@O", planar_pubchemcid: "150888", species_id: "s1", referenceid: "p1" };
+  const second = { chemical_id: "92201", names: "Isomer plus", smiles: "C@@O", planar_pubchemcid: "150888", species_id: "s2", referenceid: "p2" };
+  const representative = { primary_column: "chemical_id", count_column: "planar_pubchemcid", columns: groupedMetadata, items: [{ chemical_id: "150888", names: "Columbianetin=alias", smiles: "CO", planar_pubchemcid: "150888" }] };
+  const entity_groups = { chemical: representative };
+  const render = (state, compareSeries) => renderToStaticMarkup(createElement(MemoryRouter, { initialEntries: [{ pathname: "/table", state: { resultTable: state } }] }, createElement(ResultTable, {
+    metadata: groupedMetadata, data: [first], entity_groups, compareSeries,
+  })));
+  const series = [
+    { query: "first", mode: "plus", color: "red", response: { metadata: groupedMetadata, data: [first], entity_groups } },
+    { query: "second", mode: "plus", color: "blue", response: { metadata: groupedMetadata, data: [second], entity_groups } },
+  ];
+  const unselected = render({ currentChemical: "", currentSpecie: "" }, series);
+  assert.equal((unselected.match(/ranked-select-list__value">Columbianetin<\/span>/g) ?? []).length, 1);
+  assert.match(unselected, /Planar \(1\)/);
+  assert.match(unselected, /aria-label="Chemical identity"/);
+  assert.match(unselected, /aria-pressed="true">Planar<\/button>/);
+  const all = render({ currentChemical: "", currentSpecie: "", chemicalIdentityMode: "all" }, series);
+  assert.match(all, /Chemical \(2\)/, "All counts both original chemical source identities");
+  assert.match(all, /ranked-select-list__value">Isomer minus<\/span>/);
+  assert.match(all, /ranked-select-list__value">Isomer plus<\/span>/);
+  assert.doesNotMatch(all, /ranked-select-list__value">Columbianetin<\/span>/);
+  assert.match(all, /Chemical identity: chemical_id \(Source ID\)/);
+  assert.match(all, /aria-pressed="true">All<\/button>/);
+  const urlAll = renderToStaticMarkup(createElement(MemoryRouter, {
+    initialEntries: [{ pathname: "/table", search: "?chemical_identity=all", state: { resultTable: { chemicalIdentityMode: "planar", currentChemical: "", currentSpecie: "" } } }],
+  }, createElement(ResultTable, { metadata: groupedMetadata, data: [first, second], entity_groups })));
+  assert.match(urlAll, /Chemical \(2\)/, "tree-to-table identity choice takes precedence over table history");
+  assert.match(urlAll, /aria-pressed="true">All<\/button>/);
+  const sharedSpecies = mode => renderToStaticMarkup(createElement(MemoryRouter, {
+    initialEntries: [{ pathname: "/table", state: { resultTable: { currentChemical: "", currentSpecie: "", chemicalIdentityMode: mode } } }],
+  }, createElement(ResultTable, { metadata: groupedMetadata, data: [first, { ...second, species_id: "s1" }], entity_groups })));
+  assert.match(sharedSpecies("planar"), /aria-label="planar: 1"/, "species list counts one planar counterpart");
+  assert.match(sharedSpecies("all"), /aria-label="chemicals: 2"/, "species list counts both original counterparts in All");
+  const member = render({ currentChemical: "442104", currentSpecie: "", chemicalIdentityMode: "all" }, series);
+  assert.match(member, /href="\/chemical\/442104"/);
+  assert.match(member, /data-smiles="C@O"/);
+  assert.match(member, /Reference \(1\)/);
+  assert.match(member, /Rows in selection:\s*<b>1<\/b>/);
+  assert.doesNotMatch(member, /data-row-chemical="92201"/);
+  const selected = render({ currentChemical: "count:150888", currentSpecie: "" }, series);
+  assert.match(selected, /href="\/chemical\/150888"/);
+  assert.match(selected, /data-smiles="CO"/);
+  assert.doesNotMatch(selected, /data-smiles="C@O"|data-smiles="C@@O"/);
+  assert.match(selected, /Reference \(2\)/);
+  assert.match(selected, /Rows in selection:\s*<b>2<\/b>/);
+  assert.match(selected, /data-row-chemical="442104"/);
+  assert.match(selected, /data-row-chemical="92201"/);
+  const unresolved = renderToStaticMarkup(createElement(MemoryRouter, {
+    initialEntries: [{ pathname: "/table", state: { resultTable: { currentChemical: "count:150888", currentSpecie: "" } } }],
+  }, createElement(ResultTable, { metadata: groupedMetadata, data: [first, second] })));
+  assert.match(unresolved, /Planar \(1\)/);
+  assert.match(unresolved, /Rows in selection:\s*<b>2<\/b>/);
+  assert.match(unresolved, /Reference \(2\)/);
+  assert.doesNotMatch(unresolved, /data-smiles="C@O"|data-smiles="C@@O"|href="\/chemical\/150888"/);
+});
+
+test("filtered search copies cached rows and retains count metadata and representative enrichment", () => {
+  const metadata = [
+    { column: "chemical_id", type: "chemical keycolumn invisible" },
+    { column: "planar_cid", type: "invisible", entity_count_key: "chemical" },
+    { column: "species", type: "specie clas[0]" },
+    { column: "species_powo", type: "specie clas[0][powo]" },
+  ];
+  const row = Object.freeze({ chemical_id: "one", planar_cid: "two", species: "original", species_powo: "NoValue" });
+  const payload = { metadata, data: [row], timestamp: "now", entity_groups: { chemical: { items: [] } } };
+  const filtered = filterResponse(payload);
+  assert.equal(filtered.timestamp, "now");
+  assert.equal(filtered.entity_groups, payload.entity_groups);
+  assert.equal(filtered.metadata.length, 4);
+  assert.equal(filtered.data[0].species_powo, "original");
+  assert.equal(row.species_powo, "NoValue");
+});
+
+test("case variants of missing count sentinels keep unrelated source records separate", () => {
+  const columns = [
+    { column: "chemical_id", name: "ID", type: "table_chemical keycolumn", description: "" },
+    { column: "names", name: "Name", type: "table_chemical list_name", description: "" },
+    { column: "planar", name: "Planar", type: "invisible", entity_count_key: "chemical", description: "" },
+    { column: "species_id", name: "Species", type: "table_specie keycolumn", description: "" },
+    { column: "referenceid", name: "Reference", type: "table_0 ref[]", description: "" },
+  ];
+  const data = [
+    { chemical_id: "a", names: "Alpha", planar: "novalue", species_id: "s", referenceid: "p1" },
+    { chemical_id: "b", names: "Beta", planar: "NO VALUE", species_id: "s", referenceid: "p2" },
+  ];
+  const render = selected => renderToStaticMarkup(createElement(MemoryRouter, {
+    initialEntries: [{ pathname: "/table", state: { resultTable: { currentChemical: selected, currentSpecie: "" } } }],
+  }, createElement(ResultTable, { metadata: columns, data })));
+  const listed = render("");
+  assert.doesNotMatch(listed, />Alpha</);
+  assert.doesNotMatch(listed, />Beta</);
+  assert.match(listed, /Planar \(0\)/);
+  assert.match(listed, /Rows in selection:\s*<b>2<\/b>/);
+  assert.match(listed, /Reference \(2\)/);
+});
+
+test("same-schema compare snapshots from different datasets are rejected before rendering groups", () => {
+  const first = { metadata, data: [data[0]], timestamp: "dataset-a" };
+  const second = { metadata, data: [data[1]], timestamp: "dataset-b" };
+  const html = renderToStaticMarkup(createElement(MemoryRouter, {}, createElement(ResultTable, {
+    ...first, compareSeries: [
+      { query: "a", mode: "plus", color: "red", response: first },
+      { query: "b", mode: "plus", color: "blue", response: second },
+    ],
+  })));
+  assert.match(html, /role="alert"/);
+  assert.match(html, /different dataset versions/);
+  assert.doesNotMatch(html, /Neobyakangelicol|Bergapten|Rows in selection/);
 });
 
 test("a selected species with a source keycolumn links to its canonical ID page", () => {

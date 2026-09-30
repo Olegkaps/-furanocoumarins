@@ -12,24 +12,27 @@ import ResultTableOrNull from "./ResultTable";
 import { useCompareSeries } from "./QueryCompareBar";
 import { PageTour } from "../shared/tour/PageTour";
 import { canShowPhylogeneticTree } from "./treeTaxonomy";
+import { inspectComparePayloads } from "../shared/schemaGuard";
 
 export function AppResultTable() {
   const [searchParams] = useSearchParams();
   const primaryQuery = searchParams.get("query") ?? "";
   const { series, colorsByQuery, primaryRaw, hiddenQueries, minusQueries, loading } =
     useCompareSeries(primaryQuery);
+  const compareIssue = inspectComparePayloads(series.map(item => item.response));
   const { minusResponses, plusSeries } = useMemo(
-    () => subtractMinusFromCompareSeries(series, hiddenQueries),
-    [series, hiddenQueries],
+    () => compareIssue ? { minusResponses: [], plusSeries: [] } : subtractMinusFromCompareSeries(series, hiddenQueries),
+    [series, hiddenQueries, compareIssue],
   );
   const fallbackResponse = useMemo(
     () =>
-      plusSeries.length > 0 || hiddenQueries.includes(primaryQuery.trim()) ||
+      compareIssue || plusSeries.length > 0 || hiddenQueries.includes(primaryQuery.trim()) ||
       minusQueries.includes(primaryQuery.trim())
         ? {}
         : subtractMinusResponses(filterResponse(primaryRaw), minusResponses),
     [
       plusSeries,
+      compareIssue,
       primaryRaw,
       hiddenQueries,
       minusQueries,
@@ -54,6 +57,7 @@ export function AppResultTable() {
   return (
     <>
       <FullNavigation />
+      {compareIssue ? <p role="alert" className="empty-state">{compareIssue} Clear the API cache and reload this page.</p> : <>
       <PageTour tourId="table" />
       <div className="page-toolbar">
         <SearchLine tourTarget="table-query" />
@@ -73,6 +77,7 @@ export function AppResultTable() {
         loading={loading}
       />
       <br />
+      </>}
     </>
   );
 }

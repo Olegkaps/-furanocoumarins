@@ -1,0 +1,19 @@
+.chemical-family { clear: both; margin-top: 24px; }
+.chemical-family > summary { cursor: pointer; font-size: 18px; font-weight: 600; }
+.chemical-family__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
+  padding: 0;
+  list-style: none;
+}
+.chemical-family__card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--color-border, #d8dfe6);
+  border-radius: 12px;
+}
+.chemical-family__name { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.chemical-family__id { display: block; margin: 4px 0 12px; color: var(--color-muted); overflow-wrap: anywhere; }
+.chemical-family__counts { margin-top: 12px; font-size: 14px; }
+.chemical-family__unavailable { height: 224px; display: grid; place-items: center; color: var(--color-muted); }

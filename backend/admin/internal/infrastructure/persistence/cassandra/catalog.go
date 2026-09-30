@@ -242,13 +242,21 @@ func (s *Store) pgSourceCatalogRecord(ctx context.Context, table *Table, kind, c
 }
 
 func (s *Store) sourceCatalog(ctx context.Context, table *Table, kind string) (*sourceCatalog, error) {
+	return sourceCatalogQuery(ctx, s.db, table, kind)
+}
+
+type catalogQuerier interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func sourceCatalogQuery(ctx context.Context, db catalogQuerier, table *Table, kind string) (*sourceCatalog, error) {
 	catalogName := SourceCatalogName(table.TableData)
 	catalogTable, err := pgTable(catalogName)
 	if err != nil {
 		return nil, err
 	}
 	var exists bool
-	if err = s.db.QueryRowContext(ctx, `SELECT to_regclass($1) IS NOT NULL`, catalogTable).Scan(&exists); err != nil {
+	if err = db.QueryRowContext(ctx, `SELECT to_regclass($1) IS NOT NULL`, catalogTable).Scan(&exists); err != nil {
 		return nil, err
 	}
 	if !exists {
@@ -256,7 +264,7 @@ func (s *Store) sourceCatalog(ctx context.Context, table *Table, kind string) (*
 	}
 	virtual := map[string]string{"chemicals": "structures", "species": "classification"}[kind]
 	var physical, entityKind, primary, columnsJSON, nameOrder string
-	err = s.db.QueryRowContext(ctx, `SELECT physical_table,entity_kind,primary_column,columns_json,COALESCE(to_jsonb(source_catalog)->>'name_order','') FROM `+catalogTable+` source_catalog WHERE virtual_name=$1`, virtual).
+	err = db.QueryRowContext(ctx, `SELECT physical_table,entity_kind,primary_column,columns_json,COALESCE(to_jsonb(source_catalog)->>'name_order','') FROM `+catalogTable+` source_catalog WHERE virtual_name=$1`, virtual).
 		Scan(&physical, &entityKind, &primary, &columnsJSON, &nameOrder)
 	if err == sql.ErrNoRows {
 		return nil, ErrCatalogUnavailable

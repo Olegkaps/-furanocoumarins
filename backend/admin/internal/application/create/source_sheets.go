@@ -87,7 +87,12 @@ func saveSourceSheets(imp cassandra.TableImporter, table *cassandra.Table, sheet
 		}
 	}
 	if indexedNames {
-		return indexer.CreateCatalogNameIndexes(cassandra.SourceCatalogName(table.TableData))
+		if err := indexer.CreateCatalogNameIndexes(cassandra.SourceCatalogName(table.TableData)); err != nil {
+			return err
+		}
+	}
+	if indexer, ok := imp.(interface{ CreateSourceCountIndexes(*cassandra.Table) error }); ok {
+		return indexer.CreateSourceCountIndexes(table)
 	}
 	return nil
 }

@@ -74,3 +74,20 @@ test("pages omit result navigation when every visible plus response is empty", (
   assert.doesNotMatch(render(AppResultTable), /href="\/tree\?/);
   assert.doesNotMatch(render(AppPhilogeneticTree), /href="\/table\?/);
 });
+
+test("table page blocks mixed dataset compare snapshots before minus subtraction", () => {
+  setFixture({
+    series: [
+      { query: "first", mode: "plus", color: "red", response: { ...extra, timestamp: "dataset-a" } },
+      { query: "minus", mode: "minus", color: "blue", response: { ...extra, timestamp: "dataset-b" } },
+    ],
+    colorsByQuery: {}, primaryRaw: extra, hiddenQueries: [], minusQueries: ["minus"], loading: false,
+  });
+  const html = render(AppResultTable);
+  assert.match(html, /role="alert"/);
+  assert.match(html, /different dataset versions/);
+  assert.doesNotMatch(html, /Rows in selection|ranked-select-list/);
+  const tree = render(AppPhilogeneticTree);
+  assert.match(tree, /different dataset versions/);
+  assert.doesNotMatch(tree, /phylogenetic-tree|href="\/table/);
+});

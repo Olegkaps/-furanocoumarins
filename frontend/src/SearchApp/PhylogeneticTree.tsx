@@ -13,7 +13,7 @@ import {
 } from "@gravity-ui/icons";
 import { InfoTip } from "../shared/ui/InfoTip";
 import { QueryCompareBar, type CompareSeries } from "./QueryCompareBar";
-import { hasMetadataTypeToken } from "../shared/metadataType";
+import { getMetadataTypeModifier, hasMetadataTypeToken } from "../shared/metadataType";
 import { normalizeTreeClade, selectTreeTaxonomy } from "./treeTaxonomy";
 import { usePublicConfig } from "../shared/publicConfig";
 import {
@@ -35,8 +35,8 @@ class Specie {
 const PATH_SEP = "›";
 
 function isConfiguredCountValue(value: unknown): boolean {
-  const normalized = String(value).replaceAll(" ", "");
-  return normalized !== "" && normalized !== "NoValue";
+  const normalized = String(value).replaceAll(" ", "").toLowerCase();
+  return normalized !== "" && normalized !== "novalue";
 }
 
 type TreeViewCtx = {
@@ -1538,6 +1538,7 @@ function PhilogeneticTreeOrNull({
 
   const tag = searchParams.get("tag") || "original";
   const countMode = parseCountMode(searchParams.get("count"));
+  const chemicalIdentityMode = searchParams.get("chemical_identity") === "all" ? "all" : "planar";
   const displayFrom = parseOptionalInt(searchParams.get("from")) ?? 0;
   const displayTo = parseOptionalInt(searchParams.get("to"));
 
@@ -1575,14 +1576,19 @@ function PhilogeneticTreeOrNull({
     const configuredChemicalColumn = (response["metadata"] ?? []).find(
       (m: { [index: string]: unknown }) => m["entity_count_key"] === "chemical",
     )?.["column"];
-    const smilesColumns = typeof configuredChemicalColumn === "string" && configuredChemicalColumn !== ""
-      ? [configuredChemicalColumn]
+    const chemicalKeyColumn = (response["metadata"] ?? []).find(
+      (m: { type: string }) => hasMetadataTypeToken(m.type, "keycolumn") &&
+        (hasMetadataTypeToken(m.type, "chemical") || getMetadataTypeModifier(m.type, "external")?.[0] === "structures"),
+    )?.["column"];
+    const chemicalColumn = chemicalIdentityMode === "all" ? chemicalKeyColumn : configuredChemicalColumn ?? chemicalKeyColumn;
+    const smilesColumns = typeof chemicalColumn === "string" && chemicalColumn !== ""
+      ? [chemicalColumn]
       : (
       (response["metadata"] ?? []) as Array<{ [index: string]: string }>
     )
       .filter((m) => hasMetadataTypeToken(String(m["type"]), "SMILES"))
       .map((m) => m["column"]);
-    const skipBlankChemicalValues = Boolean(configuredChemicalColumn);
+    const skipBlankChemicalValues = Boolean(chemicalColumn);
     const refColumns = (
       (response["metadata"] ?? []) as Array<{ [index: string]: string }>
     )
@@ -1636,7 +1642,7 @@ function PhilogeneticTreeOrNull({
     });
     return { taxonomy, species_meta, meta_names, cladeLevels, smilesColumns,
       refColumns, uniquesByClades, seriesForTree, species };
-  }, [response, tag, compareSeries, countMode]);
+  }, [response, tag, compareSeries, countMode, chemicalIdentityMode]);
 
   const maxLevel = Math.max(0, cladeLevels.length - 1);
   const effectiveFrom = Math.min(displayFrom, maxLevel);
@@ -1688,7 +1694,10 @@ function PhilogeneticTreeOrNull({
       <div className="tree-toolbar__divider" aria-hidden />
 
       <div className="tree-toolbar__group" data-tour="tree-count-mode">
-        <span className="tree-toolbar__label">Number of</span>
+        <span className="tree-toolbar__label">
+          Number of
+          <InfoTip text={`Chemical identity: ${smilesColumns.join(", ") || "none configured"}. Articles count distinct references from ${refColumns.join(", ") || "none configured"}. All counts observation rows. Each distinct nonempty chemical identity counts once per comparison series.`} />
+        </span>
         <div className="tree-toolbar__buttons">
           {(["chemicals", "articles", "all"] as const).map((mode) => (
             <button
@@ -1700,6 +1709,19 @@ function PhilogeneticTreeOrNull({
               }}
             >
               {mode}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="tree-toolbar__divider" aria-hidden />
+
+      <div className="tree-toolbar__group" role="group" aria-label="Chemical identity">
+        <span className="tree-toolbar__label">Chemicals</span>
+        <div className="tree-toolbar__buttons">
+          {(["planar", "all"] as const).map(mode => (
+            <button key={mode} type="button" className={`btn-toggle${mode === chemicalIdentityMode ? " is-active" : ""}`} aria-pressed={mode === chemicalIdentityMode} onClick={() => patchParams({ chemical_identity: mode })}>
+              {mode === "planar" ? "Planar" : "All"}
             </button>
           ))}
         </div>

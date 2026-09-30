@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import "./MoleculePreview.css";
 
-/** Small, local depictions; only visible suggestions incur parsing/layout work. */
-export function MoleculePreview({ smiles }: { smiles: string }) {
+/** Local depictions; only visible molecules incur parsing/layout work. */
+export function MoleculePreview({ smiles, size = "small" }: { smiles: string; size?: "small" | "large" }) {
   const host = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
   const [rendered, setRendered] = useState<string>();
@@ -21,7 +21,7 @@ export function MoleculePreview({ smiles }: { smiles: string }) {
         const { default: SmilesDrawer } = await import("smiles-drawer");
         if (cancelled) return;
         SmilesDrawer.parse(smiles, tree => {
-          new SmilesDrawer.SvgDrawer({ width: 160, height: 104, padding: 8 }).draw(tree, target, "light");
+          new SmilesDrawer.SvgDrawer({ width: size === "large" ? 320 : 160, height: size === "large" ? 224 : 104, padding: 8 }).draw(tree, target, "light");
           if (!cancelled) setRendered(smiles);
         }, () => { if (!cancelled) setFailed(smiles); });
       } catch {
@@ -36,9 +36,9 @@ export function MoleculePreview({ smiles }: { smiles: string }) {
     });
     observer.observe(host.current);
     return () => { cancelled = true; observer.disconnect(); target.replaceChildren(); };
-  }, [smiles, bounded]);
+  }, [smiles, bounded, size]);
 
-  return <div ref={host} className="molecule-preview" role={ready ? "img" : undefined}
+  return <div ref={host} className={`molecule-preview${size === "large" ? " molecule-preview--large" : ""}`} role={ready ? "img" : undefined}
     aria-label={ready ? `Molecule structure: ${smiles}` : undefined}>
     <svg ref={svg} aria-hidden="true" focusable="false" style={{ visibility: ready ? "visible" : "hidden" }} />
     {!ready && <span className="molecule-preview__status">{unavailable ? "Preview unavailable" : "Molecule preview"}</span>}
