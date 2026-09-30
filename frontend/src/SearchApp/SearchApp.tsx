@@ -369,6 +369,45 @@ export function SearchForm({ metadataColumns, fetchSuggestions, onSearch, classi
             }} />}
           </>
         )}
+        {conditions.length > 0 && (
+          <>
+            <fieldset className="unified-search__combination">
+              <legend>Match selected values</legend>
+              {(["OR", "AND"] as const).map((operator) => (
+                <label key={operator}>
+                  <input
+                    type="radio"
+                    name={`${id}-combination`}
+                    value={operator}
+                    checked={combination === operator}
+                    onChange={() => setCombination(operator)}
+                  />
+                  {operator === "OR" ? "Any (OR)" : "All (AND)"}
+                </label>
+              ))}
+            </fieldset>
+            <ul
+              className="unified-search__conditions"
+              aria-label="Search conditions"
+            >
+              {conditions.map((s, i) => (
+                <li key={suggestionKey(s)}>
+                  {i > 0 && <strong>{combination} </strong>}
+                  {s.show_name || s.column}: {s.value}{" "}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${s.value}`}
+                    onClick={() =>
+                      setConditions(conditions.filter((_, index) => index !== i))
+                    }
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
         {!structure && <details data-tour="search-section-species">
           <summary>Choose columns ({selectedColumns.length})</summary>
           <button type="button" onClick={() => setFilter(null)}>
@@ -439,45 +478,6 @@ export function SearchForm({ metadataColumns, fetchSuggestions, onSearch, classi
             },
           )}
         </details>}
-        {conditions.length > 0 && (
-          <>
-            <fieldset className="unified-search__combination">
-              <legend>Match selected values</legend>
-              {(["OR", "AND"] as const).map((operator) => (
-                <label key={operator}>
-                  <input
-                    type="radio"
-                    name={`${id}-combination`}
-                    value={operator}
-                    checked={combination === operator}
-                    onChange={() => setCombination(operator)}
-                  />
-                  {operator === "OR" ? "Any (OR)" : "All (AND)"}
-                </label>
-              ))}
-            </fieldset>
-            <ul
-              className="unified-search__conditions"
-              aria-label="Search conditions"
-            >
-              {conditions.map((s, i) => (
-                <li key={suggestionKey(s)}>
-                  {i > 0 && <strong>{combination} </strong>}
-                  {s.show_name || s.column}: {s.value}{" "}
-                  <button
-                    type="button"
-                    aria-label={`Remove ${s.value}`}
-                    onClick={() =>
-                      setConditions(conditions.filter((_, index) => index !== i))
-                    }
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
         {(externalError || error) && <p role="alert">{externalError || error}</p>}
 
       </form>
